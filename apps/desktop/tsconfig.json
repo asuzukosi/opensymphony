@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "types": ["node", "vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["../../packages/core/src/*"],
+      "@db/*": ["../../packages/db/src/*"],
+      "@ui/*": ["../../packages/ui/src/*"],
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts"]
+}

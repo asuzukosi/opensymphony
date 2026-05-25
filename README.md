@@ -1,41 +1,84 @@
-# Symphony
+# Symphony (TypeScript Monorepo)
 
-Symphony turns project work into isolated, autonomous implementation runs, allowing teams to manage
-work instead of supervising coding agents.
+This repository contains a Bun + Turbo + TypeScript implementation of Symphony in a React + Electron format.
 
-[![Symphony demo video preview](.github/media/symphony-demo-poster.jpg)](.github/media/symphony-demo.mp4)
+## Current Scope
 
-_In this [demo video](.github/media/symphony-demo.mp4), Symphony monitors a Linear board for work and spawns agents to handle the tasks. The agents complete the tasks and provide proof of work: CI status, PR review feedback, complexity analysis, and walkthrough videos. When accepted, the agents land the PR safely. Engineers do not need to supervise Codex; they can manage the work at a higher level._
+- UI-first desktop orchestration runtime (Electron main + renderer).
+- No non-UI control plane/server in this implementation.
+- Pluggable tracker adapter boundary (`db` active, `linear` interface shape present).
+- Agent runtime adapter boundary (`mock-acp`, `acp-cli`).
 
-> [!WARNING]
-> Symphony is a low-key engineering preview for testing in trusted environments.
+## Monorepo Layout
 
-## Running Symphony
+- `apps/desktop`: Electron app shell, orchestration runtime loop, IPC, React UI routes.
+- `packages/core`: orchestration domain/services (config parsing, selection, retries, lifecycle, adapters, logging, restart recovery).
+- `packages/db`: SQLite schema/migrations + repository/store layer.
+- `packages/ui`: shared UI primitives and styles used by desktop renderer.
+- `tests/e2e`: Playwright harness for end-to-end acceptance checks.
 
-### Requirements
+## Architecture Summary
 
-Symphony works best in codebases that have adopted
-[harness engineering](https://openai.com/index/harness-engineering/). Symphony is the next step --
-moving from managing coding agents to managing work that needs to get done.
+1. `WORKFLOW.md` is parsed into typed runtime config.
+2. Runtime config selects:
+- tracker provider (`db` or `linear`)
+- runtime adapter (`mock-acp` or `acp-cli`)
+- workspace/hook behavior
+3. Orchestrator tick performs:
+- candidate selection
+- bounded dispatch
+- run/session lifecycle updates
+- retry scheduling/backoff
+- reconciliation against tracker state
+4. Workspace manager applies hooks:
+- `after_create`
+- `before_agent_run`
+- `after_run`
+- `before_remove`
+5. Structured logger emits JSON-line events for runtime operations.
+6. Restart recovery marks stale in-flight runs as failed and schedules retries on startup.
 
-### Option 1. Make your own
+## Tracker Adapter Model
 
-Tell your favorite coding agent to build Symphony in a programming language of your choice:
+Tracker access is behind a provider boundary in `@symphony/core`:
 
-> Implement Symphony according to the following spec:
-> https://github.com/openai/symphony/blob/main/SPEC.md
+- `DbTrackerAdapter`: active local provider used in current runtime.
+- `LinearTrackerAdapter`: provider interface shape for Linear-backed integration (not yet wired to live API calls in this repo).
 
-### Option 2. Use our experimental reference implementation
+All orchestrator read/write interactions flow through this adapter boundary.
 
-Check out [elixir/README.md](elixir/README.md) for instructions on how to set up your environment
-and run the Elixir-based Symphony implementation. You can also ask your favorite coding agent to
-help with the setup:
+## Running
 
-> Set up Symphony for my repository based on
-> https://github.com/openai/symphony/blob/main/elixir/README.md
+Install:
 
----
+```bash
+bun install
+```
+
+Main commands:
+
+```bash
+bun run dev
+bun run test
+bun run check-types
+bun run build
+bun run test:e2e
+```
+
+## Validation Status
+
+The implemented slices include:
+
+- monorepo/tooling baseline
+- orchestrator runtime loop + UI controls
+- runtime adapter selection + `acp-cli` subprocess path
+- workflow reload/re-apply
+- workspace lifecycle + terminal cleanup
+- structured logging
+- first-class tracker write APIs
+- restart recovery semantics
+- executable E2E orchestration scenarios
 
 ## License
 
-This project is licensed under the [Apache License 2.0](LICENSE).
+Apache-2.0 (see `LICENSE`).

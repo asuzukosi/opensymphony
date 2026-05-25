@@ -29,8 +29,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top, rgba(16, 163, 127, 0.12) 0%, rgba(16, 163, 127, 0) 30%),
+  background: radial-gradient(circle at top, rgba(16, 163, 127, 0.12) 0%, rgba(16, 163, 127, 0) 30%),
     linear-gradient(180deg, var(--page-soft) 0%, var(--page) 24%, #f3f4f6 100%);
   color: var(--ink);
   font-family: "Sohne", "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
@@ -59,11 +58,8 @@ button {
   font-weight: 600;
   letter-spacing: -0.01em;
   box-shadow: 0 8px 20px rgba(16, 163, 127, 0.18);
-  transition:
-    transform 140ms ease,
-    box-shadow 140ms ease,
-    background 140ms ease,
-    border-color 140ms ease;
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, border-color 140ms
+    ease;
 }
 
 button:hover {
@@ -95,10 +91,7 @@ button.secondary:hover {
   font-weight: 600;
   letter-spacing: 0.01em;
   box-shadow: none;
-  transition:
-    background 140ms ease,
-    border-color 140ms ease,
-    color 140ms ease;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .subtle-button:hover {
