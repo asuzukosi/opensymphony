@@ -8,6 +8,10 @@ import "@fontsource/jetbrains-mono/400.css";
 import "@symphony/ui/styles.css";
 import { AppRouter } from "@/renderer/app-router";
 
+document.documentElement.classList.add("dark");
+document.documentElement.classList.remove("light");
+document.documentElement.style.colorScheme = "dark";
+
 const container = document.getElementById("root");
 if (!container) {
   throw new Error("Missing root container");

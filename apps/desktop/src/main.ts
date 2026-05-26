@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, nativeTheme } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -92,6 +92,7 @@ export function createMainWindow(): BrowserWindow {
 
 export function bootstrap(): void {
   registerIpcHandlers();
+  nativeTheme.themeSource = "dark";
 
   app.whenReady().then(() => {
     createMainWindow();
