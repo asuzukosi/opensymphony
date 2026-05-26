@@ -6,8 +6,9 @@ retry_max_backoff_ms: 300000
 workspace:
   root: .symphony-workspaces
 acp:
-  mode: mock
-  mock_completion_delay_ms: 1200
+  mode: subprocess
+  command: /Users/kosisochukwuasuzu/Developer/interfaces/symphony/run-hermes.sh
+  args: []
 hooks:
   timeout_ms: 60000
 ---
