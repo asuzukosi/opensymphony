@@ -3,48 +3,25 @@ import { IPC_CHANNELS, type SymphonyDesktopApi } from "@/ipc";
 
 export function createDesktopApi(): SymphonyDesktopApi {
   return {
-    async getSystemInfo() {
-      return ipcRenderer.invoke(IPC_CHANNELS.getSystemInfo);
+    async getRuntimeState(eventLimit?: number) {
+      return ipcRenderer.invoke(IPC_CHANNELS.getRuntimeState, eventLimit);
     },
-    async getOrchestratorStatus() {
-      return ipcRenderer.invoke(IPC_CHANNELS.getOrchestratorStatus);
+    async getProjectBoard() {
+      return ipcRenderer.invoke(IPC_CHANNELS.getProjectBoard);
     },
-    async getOrchestratorSnapshot() {
-      return ipcRenderer.invoke(IPC_CHANNELS.getOrchestratorSnapshot);
+    async getIssue(issueId: string, attemptLimit?: number) {
+      return ipcRenderer.invoke(IPC_CHANNELS.getIssue, issueId, attemptLimit);
     },
-    async getOrchestratorIssueQueues() {
-      return ipcRenderer.invoke(IPC_CHANNELS.getOrchestratorIssueQueues);
+    async mutateIssue(request) {
+      return ipcRenderer.invoke(IPC_CHANNELS.mutateIssue, request);
     },
-    async getRecentAuditEvents(limit?: number) {
-      return ipcRenderer.invoke(IPC_CHANNELS.getRecentAuditEvents, limit);
+    async controlRuntime(request) {
+      return ipcRenderer.invoke(IPC_CHANNELS.controlRuntime, request);
     },
-    async getIssueRunHistory(issueId: string, limit?: number) {
-      return ipcRenderer.invoke(IPC_CHANNELS.getIssueRunHistory, issueId, limit);
-    },
-    async startOrchestratorRuntime() {
-      return ipcRenderer.invoke(IPC_CHANNELS.startOrchestratorRuntime);
-    },
-    async stopOrchestratorRuntime() {
-      return ipcRenderer.invoke(IPC_CHANNELS.stopOrchestratorRuntime);
-    },
-    async runOrchestratorTick() {
-      return ipcRenderer.invoke(IPC_CHANNELS.runOrchestratorTick);
-    },
-    async setOrchestratorPollIntervalMs(pollIntervalMs: number) {
-      return ipcRenderer.invoke(IPC_CHANNELS.setOrchestratorPollIntervalMs, pollIntervalMs);
-    },
-    async clearOrchestratorPollIntervalOverride() {
-      return ipcRenderer.invoke(IPC_CHANNELS.clearOrchestratorPollIntervalOverride);
-    },
-    async transitionIssue(issueId: string, targetStateId: string, actor?: string) {
-      return ipcRenderer.invoke(IPC_CHANNELS.transitionIssue, issueId, targetStateId, actor);
-    },
-    async addIssueComment(issueId: string, body: string, authorId?: string) {
-      return ipcRenderer.invoke(IPC_CHANNELS.addIssueComment, issueId, body, authorId);
+    async getSettings() {
+      return ipcRenderer.invoke(IPC_CHANNELS.getSettings);
     },
   };
 }
 
-const desktopApi = createDesktopApi();
-
-contextBridge.exposeInMainWorld("symphonyDesktop", desktopApi);
+contextBridge.exposeInMainWorld("symphonyDesktop", createDesktopApi());

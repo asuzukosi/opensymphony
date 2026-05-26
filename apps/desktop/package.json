@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "bun run rebuild:native && concurrently -k \"vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && NODE_OPTIONS=--import=tsx VITE_DEV_SERVER_URL=http://127.0.0.1:5173 SYMPHONY_DESKTOP_BOOTSTRAP=1 electron src/main.ts\"",
+    "dev": "bun run rebuild:native && node scripts/dev-desktop.mjs",
     "dev:web": "vite",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3 -m .",
     "build": "tsc -p tsconfig.json --noEmit",
@@ -16,17 +16,17 @@
     "@symphony/core": "workspace:*",
     "@symphony/db": "workspace:*",
     "@symphony/ui": "workspace:*",
+    "lucide-react": "^1.16.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.15.1"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
     "@electron/rebuild": "^3.7.1",
+    "esbuild": "^0.28.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "electron": "^37.4.0",
-    "tsx": "^4.20.6",
-    "vite": "^7.1.10",
-    "wait-on": "^8.0.3"
+    "vite": "^7.1.10"
   }
 }

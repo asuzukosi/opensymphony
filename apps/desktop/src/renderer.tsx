@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import "@/styles.css";
-import "@ui/styles.css";
+import { HashRouter } from "react-router-dom";
+import "@symphony/ui/styles.css";
 import { AppRouter } from "@/renderer/app-router";
 
 const container = document.getElementById("root");
@@ -11,6 +11,8 @@ if (!container) {
 
 createRoot(container).render(
   <React.StrictMode>
-    <AppRouter />
+    <HashRouter>
+      <AppRouter />
+    </HashRouter>
   </React.StrictMode>,
 );

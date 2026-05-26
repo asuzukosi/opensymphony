@@ -10,10 +10,6 @@ export default defineConfig({
         replacement: `${path.resolve(__dirname, "../../packages/core/src")}/`,
       },
       {
-        find: /^@ui\//,
-        replacement: `${path.resolve(__dirname, "../../packages/ui/src")}/`,
-      },
-      {
         find: /^@db\//,
         replacement: `${path.resolve(__dirname, "../../packages/db/src")}/`,
       },

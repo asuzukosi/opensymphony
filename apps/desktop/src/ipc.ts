@@ -1,14 +1,56 @@
-export type OrchestratorStatus = "idle" | "running" | "stopped";
+export type RuntimeStatus = "idle" | "running" | "stopped";
 
-export interface OrchestratorSnapshot {
-  status: OrchestratorStatus;
-  runtimeAdapterKind: "mock-acp" | "acp-cli";
+export type RuntimeAdapterKind = "mock-acp" | "acp-cli";
+
+export type PollIntervalSource = "workflow" | "override";
+
+export interface RuntimeAuditEvent {
+  action: string;
+  issueId: string | null;
+  payloadJson: string | null;
+  createdAt: string;
+}
+
+export interface RuntimeRunningEntry {
+  runAttemptId: string;
+  issueId: string;
+  identifier: string;
+  attemptNumber: number;
+  startedAt: string;
+}
+
+export interface RuntimeRetryEntry {
+  issueId: string;
+  identifier: string;
+  attemptNumber: number;
+  dueAt: string;
+  errorMessage: string | null;
+}
+
+export interface RuntimeCandidateEntry {
+  issueId: string;
+  identifier: string;
+  title: string;
+  priority: number | null;
+  stateCategory: string;
+}
+
+export interface RuntimeStateCounts {
+  running: number;
+  retrying: number;
+  candidates: number;
+}
+
+export interface RuntimeStateSnapshot {
+  generatedAt: string;
+  status: RuntimeStatus;
+  runtimeAdapterKind: RuntimeAdapterKind;
   workflowPath: string;
   workflowVersion: string | null;
   workflowLastReloadedAt: string | null;
   startedAt: string | null;
   pollIntervalMs: number;
-  pollIntervalSource: "workflow" | "override";
+  pollIntervalSource: PollIntervalSource;
   nextTickAt: string | null;
   tickCount: number;
   lastTickAt: string | null;
@@ -17,92 +59,137 @@ export interface OrchestratorSnapshot {
   lastCancelledCount: number;
   lastAction: string | null;
   lastError: string | null;
+  validationError: string | null;
+  counts: RuntimeStateCounts;
+  running: RuntimeRunningEntry[];
+  retrying: RuntimeRetryEntry[];
+  candidates: RuntimeCandidateEntry[];
+  recentEvents: RuntimeAuditEvent[];
 }
 
-export interface OrchestratorIssueQueues {
-  running: Array<{
-    runAttemptId: string;
-    issueId: string;
-    attemptNumber: number;
-    startedAt: string;
-  }>;
-  retryQueue: Array<{
-    issueId: string;
-    attemptNumber: number;
-    dueAt: string;
-    errorMessage: string | null;
-  }>;
-  candidates: Array<{
-    issueId: string;
-    identifier: string;
-    title: string;
-    priority: number | null;
-    stateCategory: string;
-  }>;
+export interface ProjectBoardIssue {
+  issueId: string;
+  identifier: string;
+  title: string;
+  priority: number | null;
 }
 
-export interface OrchestratorAuditEvent {
-  action: string;
-  issueId: string | null;
-  payloadJson: string | null;
+export interface ProjectBoardColumn {
+  stateId: string;
+  stateName: string;
+  issues: ProjectBoardIssue[];
+}
+
+export interface ProjectBoard {
+  columns: ProjectBoardColumn[];
+}
+
+export interface IssueDetailComment {
+  id: string;
+  body: string;
+  authorId: string | null;
   createdAt: string;
 }
 
-export interface IssueRunHistory {
-  issueId: string;
-  attempts: Array<{
-    runAttemptId: string;
-    attemptNumber: number;
-    status: string;
-    startedAt: string;
-    finishedAt: string | null;
-    errorMessage: string | null;
-    sessions: Array<{
-      sessionId: string;
-      runtimeKind: string;
-      sessionRef: string | null;
-      status: string;
-      startedAt: string;
-      finishedAt: string | null;
-    }>;
-  }>;
+export interface IssueDetailSession {
+  sessionId: string;
+  runtimeKind: string;
+  sessionRef: string | null;
+  status: string;
+  startedAt: string;
+  finishedAt: string | null;
 }
 
-export interface SystemInfo {
-  appName: string;
-  platform: NodeJS.Platform;
+export interface IssueDetailRunAttempt {
+  runAttemptId: string;
+  attemptNumber: number;
+  status: string;
+  startedAt: string;
+  finishedAt: string | null;
+  errorMessage: string | null;
+  sessions: IssueDetailSession[];
+}
+
+export interface IssueDetail {
+  issueId: string;
+  projectId: string;
+  identifier: string;
+  title: string;
+  description: string | null;
+  priority: number | null;
+  workflowStateId: string;
+  workflowStateName: string;
+  comments: IssueDetailComment[];
+  attempts: IssueDetailRunAttempt[];
+}
+
+export type MutateIssueRequest =
+  | {
+      action: "transition";
+      issueId: string;
+      targetStateId: string;
+      actor?: string;
+    }
+  | {
+      action: "comment";
+      issueId: string;
+      body: string;
+      authorId?: string;
+    }
+  | {
+      action: "create";
+      projectId: string;
+      title: string;
+      description?: string;
+      priority?: number;
+      workflowStateId?: string;
+    }
+  | {
+      action: "update";
+      issueId: string;
+      title?: string;
+      description?: string;
+      priority?: number;
+    };
+
+export type ControlRuntimeRequest =
+  | { action: "start" }
+  | { action: "stop" }
+  | { action: "tick" }
+  | { action: "setPollInterval"; pollIntervalMs: number }
+  | { action: "clearPollIntervalOverride" };
+
+export interface SettingsView {
+  status: RuntimeStatus;
+  workflowPath: string;
+  workflowVersion: string | null;
+  runtimeAdapterKind: RuntimeAdapterKind;
+  pollIntervalMs: number;
+  pollIntervalSource: PollIntervalSource;
+  startedAt: string | null;
+  nextTickAt: string | null;
+  tickCount: number;
+  lastTickAt: string | null;
+  lastAction: string | null;
+  lastError: string | null;
 }
 
 export interface SymphonyDesktopApi {
-  getSystemInfo(): Promise<SystemInfo>;
-  getOrchestratorStatus(): Promise<OrchestratorStatus>;
-  getOrchestratorSnapshot(): Promise<OrchestratorSnapshot>;
-  getOrchestratorIssueQueues(): Promise<OrchestratorIssueQueues>;
-  getRecentAuditEvents(limit?: number): Promise<OrchestratorAuditEvent[]>;
-  getIssueRunHistory(issueId: string, limit?: number): Promise<IssueRunHistory>;
-  startOrchestratorRuntime(): Promise<OrchestratorSnapshot>;
-  stopOrchestratorRuntime(): Promise<OrchestratorSnapshot>;
-  runOrchestratorTick(): Promise<OrchestratorSnapshot>;
-  setOrchestratorPollIntervalMs(pollIntervalMs: number): Promise<OrchestratorSnapshot>;
-  clearOrchestratorPollIntervalOverride(): Promise<OrchestratorSnapshot>;
-  transitionIssue(issueId: string, targetStateId: string, actor?: string): Promise<void>;
-  addIssueComment(issueId: string, body: string, authorId?: string): Promise<void>;
+  getRuntimeState(eventLimit?: number): Promise<RuntimeStateSnapshot>;
+  getProjectBoard(): Promise<ProjectBoard>;
+  getIssue(issueId: string, attemptLimit?: number): Promise<IssueDetail>;
+  mutateIssue(request: MutateIssueRequest): Promise<void>;
+  controlRuntime(request: ControlRuntimeRequest): Promise<RuntimeStateSnapshot>;
+  getSettings(): Promise<SettingsView>;
 }
 
 export const IPC_CHANNELS = {
-  getSystemInfo: "symphony:get-system-info",
-  getOrchestratorStatus: "symphony:get-orchestrator-status",
-  getOrchestratorSnapshot: "symphony:get-orchestrator-snapshot",
-  getOrchestratorIssueQueues: "symphony:get-orchestrator-issue-queues",
-  getRecentAuditEvents: "symphony:get-recent-audit-events",
-  getIssueRunHistory: "symphony:get-issue-run-history",
-  startOrchestratorRuntime: "symphony:start-orchestrator-runtime",
-  stopOrchestratorRuntime: "symphony:stop-orchestrator-runtime",
-  runOrchestratorTick: "symphony:run-orchestrator-tick",
-  setOrchestratorPollIntervalMs: "symphony:set-orchestrator-poll-interval-ms",
-  clearOrchestratorPollIntervalOverride: "symphony:clear-orchestrator-poll-interval-override",
-  transitionIssue: "symphony:transition-issue",
-  addIssueComment: "symphony:add-issue-comment",
+  getRuntimeState: "symphony:get-runtime-state",
+  getProjectBoard: "symphony:get-project-board",
+  getIssue: "symphony:get-issue",
+  mutateIssue: "symphony:mutate-issue",
+  controlRuntime: "symphony:control-runtime",
+  getSettings: "symphony:get-settings",
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

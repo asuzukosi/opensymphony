@@ -1,50 +1,23 @@
-import React, { useMemo, useState } from "react";
-import { Button, Card, CardContent } from "@symphony/ui";
-import { DashboardRoute } from "@/renderer/routes/dashboard-route";
-import { IssuesRoute } from "@/renderer/routes/issues-route";
-import { SettingsRoute } from "@/renderer/routes/settings-route";
-
-export type RouteId = "dashboard" | "issues" | "settings";
+import React from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { AppShell } from "@/renderer/layout/app-shell";
+import { Agents } from "@/renderer/routes/agents";
+import { Board } from "@/renderer/routes/board";
+import { Dashboard } from "@/renderer/routes/dashboard";
+import { Issue } from "@/renderer/routes/issue";
+import { Settings } from "@/renderer/routes/settings";
 
 export function AppRouter(): React.JSX.Element {
-  const [route, setRoute] = useState<RouteId>("dashboard");
-
-  const content = useMemo(() => {
-    if (route === "issues") return <IssuesRoute />;
-    if (route === "settings") return <SettingsRoute />;
-    return <DashboardRoute />;
-  }, [route]);
-
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <Card>
-        <CardContent className="pt-6">
-          <nav aria-label="Main navigation" className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              variant={route === "dashboard" ? "default" : "secondary"}
-              onClick={() => setRoute("dashboard")}
-            >
-              Dashboard
-            </Button>
-            <Button
-              type="button"
-              variant={route === "issues" ? "default" : "secondary"}
-              onClick={() => setRoute("issues")}
-            >
-              Issues
-            </Button>
-            <Button
-              type="button"
-              variant={route === "settings" ? "default" : "secondary"}
-              onClick={() => setRoute("settings")}
-            >
-              Settings
-            </Button>
-          </nav>
-        </CardContent>
-      </Card>
-      <main>{content}</main>
-    </div>
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route index element={<Dashboard />} />
+        <Route path="board" element={<Board />} />
+        <Route path="agents" element={<Agents />} />
+        <Route path="issues/:id" element={<Issue />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
   );
 }

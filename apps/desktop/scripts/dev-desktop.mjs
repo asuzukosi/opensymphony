@@ -16,8 +16,7 @@ const aliasPlugin = {
     const aliasTable = [
       { re: /^@\/(.+)$/, to: path.join(appRoot, 'src', '$1') },
       { re: /^@core\/(.+)$/, to: path.join(repoRoot, 'packages/core/src', '$1') },
-      { re: /^@db\/(.+)$/, to: path.join(repoRoot, 'packages/db/src', '$1') },
-      { re: /^@ui\/(.+)$/, to: path.join(repoRoot, 'packages/ui/src', '$1') }
+      { re: /^@db\/(.+)$/, to: path.join(repoRoot, 'packages/db/src', '$1') }
     ];
 
     for (const { re, to } of aliasTable) {
@@ -73,7 +72,7 @@ async function buildElectronEntrypoints() {
 }
 
 function spawnVite() {
-  return spawn('bunx', ['vite'], {
+  return spawn('bunx', ['vite', '--host', '127.0.0.1', '--port', '5173'], {
     cwd: appRoot,
     stdio: ['inherit', 'pipe', 'pipe'],
     env: process.env

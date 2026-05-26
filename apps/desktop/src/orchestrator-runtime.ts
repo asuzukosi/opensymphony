@@ -1,5 +1,6 @@
 import path from "node:path";
-import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, statSync } from "node:fs";
 import { app } from "electron";
 import {
   createTrackerStore,
@@ -11,30 +12,39 @@ import {
   type WorkflowStateCategory,
 } from "@symphony/db";
 import {
-  createTrackerAdapter,
+  CandidateSelectionService,
+  DEFAULT_RETRY_BASE_DELAY_MS,
   OrchestratorService,
   RestartRecoveryService,
   RunLifecycleService,
   RuntimeConfigService,
   StructuredLoggerService,
+  TrackerService,
   WorkflowLoaderService,
   WorkspaceManagerService,
   type RuntimeConfig,
-  type TrackerAdapter,
 } from "@symphony/core";
 import type {
-  IssueRunHistory,
-  OrchestratorAuditEvent,
-  OrchestratorIssueQueues,
-  OrchestratorSnapshot,
-  OrchestratorStatus,
+  ControlRuntimeRequest,
+  IssueDetail,
+  MutateIssueRequest,
+  ProjectBoard,
+  ProjectBoardIssue,
+  RuntimeAuditEvent,
+  RuntimeCandidateEntry,
+  RuntimeRetryEntry,
+  RuntimeRunningEntry,
+  RuntimeAdapterKind,
+  RuntimeStateSnapshot,
+  RuntimeStatus,
+  SettingsView,
 } from "@/ipc";
-import type { AgentRuntimeAdapter } from "@/runtime/agent-runtime-adapter";
-import { createRuntimeAdapter } from "@/runtime/create-runtime-adapter";
+import type { AcpAdapter } from "@/runtime/acp";
+import { ACP_RUNTIME_KIND, createAcpAdapter, runtimeKindFromAcpMode } from "@/runtime/acp";
 
 interface RuntimeState {
-  status: OrchestratorStatus;
-  runtimeAdapterKind: "mock-acp" | "acp-cli";
+  status: RuntimeStatus;
+  runtimeAdapterKind: RuntimeAdapterKind;
   workflowPath: string;
   workflowVersion: string | null;
   workflowLastReloadedAt: string | null;
@@ -53,7 +63,7 @@ interface RuntimeState {
 
 const state: RuntimeState = {
   status: "idle",
-  runtimeAdapterKind: "mock-acp",
+  runtimeAdapterKind: ACP_RUNTIME_KIND.mock,
   workflowPath: "",
   workflowVersion: null,
   workflowLastReloadedAt: null,
@@ -73,46 +83,13 @@ const state: RuntimeState = {
 let db: SqliteDatabase | null = null;
 let store: ITrackerStore | null = null;
 let orchestrator: OrchestratorService | null = null;
-let runtimeAdapter: AgentRuntimeAdapter | null = null;
+let runtimeAdapter: AcpAdapter | null = null;
 let loadedConfig: RuntimeConfig | null = null;
 let loadedWorkflowVersion: string | null = null;
 let workspaceManager: WorkspaceManagerService | null = null;
-let trackerAdapter: TrackerAdapter | null = null;
 const runAttemptWorkspacePath = new Map<string, string>();
 const logger = new StructuredLoggerService();
 let timer: ReturnType<typeof setInterval> | null = null;
-
-interface RuntimeSettings {
-  pollIntervalMs: number;
-}
-
-function runtimeSettingsPath(): string {
-  return path.join(app.getPath("userData"), "runtime-settings.json");
-}
-
-function loadRuntimeSettings(): RuntimeSettings | null {
-  const filePath = runtimeSettingsPath();
-  if (!existsSync(filePath)) return null;
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, "utf8")) as Partial<RuntimeSettings>;
-    if (!parsed || typeof parsed.pollIntervalMs !== "number" || parsed.pollIntervalMs < 1000)
-      return null;
-    return { pollIntervalMs: Math.floor(parsed.pollIntervalMs) };
-  } catch {
-    return null;
-  }
-}
-
-function persistRuntimeSettings(settings: RuntimeSettings): void {
-  writeFileSync(runtimeSettingsPath(), JSON.stringify(settings, null, 2), "utf8");
-}
-
-function clearRuntimeSettings(): void {
-  const filePath = runtimeSettingsPath();
-  if (existsSync(filePath)) {
-    unlinkSync(filePath);
-  }
-}
 
 function scheduleTimer(): void {
   if (timer) {
@@ -131,7 +108,7 @@ function scheduleTimer(): void {
   state.nextTickAt = new Date(Date.now() + state.pollIntervalMs).toISOString();
 }
 
-function ensureRuntimeConfig(applyPersisted = true): RuntimeConfig {
+function ensureRuntimeConfig(): RuntimeConfig {
   const loader = new WorkflowLoaderService();
   const configService = new RuntimeConfigService();
   const workflowPath =
@@ -139,36 +116,20 @@ function ensureRuntimeConfig(applyPersisted = true): RuntimeConfig {
 
   try {
     const definition = loader.loadFromFile(workflowPath);
-    const config = configService.toRuntimeConfig(definition);
-    const persisted = applyPersisted ? loadRuntimeSettings() : null;
-    if (persisted) {
-      config.pollIntervalMs = persisted.pollIntervalMs;
-      state.pollIntervalSource = "override";
-    } else {
-      state.pollIntervalSource = "workflow";
-    }
-    return config;
+    return configService.toRuntimeConfig(definition);
   } catch {
-    const fallback: RuntimeConfig = {
-      tracker: {
-        kind: "db",
-        linearApiUrl: "https://api.linear.app/graphql",
-        linearTokenEnvVar: "LINEAR_API_TOKEN",
-        linearTeamId: "default",
-      },
+    return {
       projectId: "desktop-default",
       pollIntervalMs: 30000,
       maxConcurrency: 2,
-      retryBaseDelayMs: 10000,
-      retryMaxDelayMs: 300000,
-      activeStateCategories: ["active", "backlog"],
-      runtimeAdapter: {
-        kind: "mock-acp",
-        completionDelayMs: 1200,
-        acpCliCommand: process.execPath,
-        acpCliArgs: ["-e", "setTimeout(() => process.exit(0), 1200)"],
-      },
+      retryMaxBackoffMs: 300000,
       workspaceRoot: ".symphony-workspaces",
+      acp: {
+        mode: "mock",
+        command: process.execPath,
+        args: ["-e", "setTimeout(() => process.exit(0), 1200)"],
+        mockCompletionDelayMs: 1200,
+      },
       hooks: {
         afterCreate: [],
         beforeAgentRun: [],
@@ -177,14 +138,6 @@ function ensureRuntimeConfig(applyPersisted = true): RuntimeConfig {
         timeoutMs: 60_000,
       },
     };
-    const persisted = applyPersisted ? loadRuntimeSettings() : null;
-    if (persisted) {
-      fallback.pollIntervalMs = persisted.pollIntervalMs;
-      state.pollIntervalSource = "override";
-    } else {
-      state.pollIntervalSource = "workflow";
-    }
-    return fallback;
   }
 }
 
@@ -206,14 +159,13 @@ function applyWorkflowConfig(
   const previousPollIntervalMs = state.pollIntervalMs;
   loadedConfig = config;
   loadedWorkflowVersion = version;
-  trackerAdapter = store ? createTrackerAdapter(store, config) : null;
-  orchestrator = store ? new OrchestratorService(store, config, trackerAdapter ?? undefined) : null;
-  runtimeAdapter = createRuntimeAdapter(config.runtimeAdapter);
+  orchestrator = store ? new OrchestratorService(store, config) : null;
+  runtimeAdapter = createAcpAdapter(config.acp);
   workspaceManager = new WorkspaceManagerService(
     path.resolve(process.cwd(), config.workspaceRoot),
     config.hooks,
   );
-  state.runtimeAdapterKind = config.runtimeAdapter.kind;
+  state.runtimeAdapterKind = runtimeKindFromAcpMode(config.acp.mode);
   state.workflowPath = workflowPath;
   state.workflowVersion = version;
   state.workflowLastReloadedAt = new Date().toISOString();
@@ -285,18 +237,16 @@ function ensureDbAndOrchestrator(): {
   if (!store) {
     store = createTrackerStore(db);
     if (loadedConfig) {
-      trackerAdapter = createTrackerAdapter(store, loadedConfig);
-      orchestrator = new OrchestratorService(store, loadedConfig, trackerAdapter);
+      orchestrator = new OrchestratorService(store, loadedConfig);
     }
   }
 
   if (!orchestrator) {
-    trackerAdapter = trackerAdapter ?? createTrackerAdapter(store, config);
-    orchestrator = new OrchestratorService(store, config, trackerAdapter);
+    orchestrator = new OrchestratorService(store, config);
   }
   if (!runtimeAdapter) {
-    runtimeAdapter = createRuntimeAdapter(config.runtimeAdapter);
-    state.runtimeAdapterKind = config.runtimeAdapter.kind;
+    runtimeAdapter = createAcpAdapter(config.acp);
+    state.runtimeAdapterKind = runtimeKindFromAcpMode(config.acp.mode);
   }
 
   return { orchestrator, config, store };
@@ -310,8 +260,8 @@ function recoverStaleRuns(runtime: { config: RuntimeConfig; store: ITrackerStore
   );
   const result = recovery.recoverStaleRuns({
     projectId: runtime.config.projectId,
-    retryBaseDelayMs: runtime.config.retryBaseDelayMs,
-    retryMaxDelayMs: runtime.config.retryMaxDelayMs,
+    retryBaseDelayMs: DEFAULT_RETRY_BASE_DELAY_MS,
+    retryMaxDelayMs: runtime.config.retryMaxBackoffMs,
   });
   if (result.recoveredAttempts > 0 || result.recoveredSessions > 0) {
     logger.warn({
@@ -362,7 +312,7 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
   try {
     const runtime = ensureDbAndOrchestrator();
     if (!runtimeAdapter) {
-      runtimeAdapter = createRuntimeAdapter(runtime.config.runtimeAdapter);
+      runtimeAdapter = createAcpAdapter(runtime.config.acp);
     }
     const pollResult = runtime.orchestrator.runPollCycle(nowIso);
     const runLifecycle = new RunLifecycleService(
@@ -384,6 +334,7 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
         issueId: dispatched.issueId,
         attemptNumber: dispatched.attemptNumber,
         startedAt: nowIso,
+        workspacePath: workspace.workspacePath,
       });
       runLifecycle.attachSession({
         sessionId: startedSession.sessionId,
@@ -561,7 +512,6 @@ export function setOrchestratorPollIntervalMs(pollIntervalMs: number): void {
 
   state.pollIntervalMs = Math.floor(pollIntervalMs);
   state.pollIntervalSource = "override";
-  persistRuntimeSettings({ pollIntervalMs: state.pollIntervalMs });
   if (state.status === "running") {
     scheduleTimer();
   }
@@ -570,8 +520,7 @@ export function setOrchestratorPollIntervalMs(pollIntervalMs: number): void {
 }
 
 export function clearOrchestratorPollIntervalOverride(): void {
-  clearRuntimeSettings();
-  const workflowConfig = ensureRuntimeConfig(false);
+  const workflowConfig = ensureRuntimeConfig();
   state.pollIntervalMs = workflowConfig.pollIntervalMs;
   state.pollIntervalSource = "workflow";
   if (state.status === "running") {
@@ -581,57 +530,162 @@ export function clearOrchestratorPollIntervalOverride(): void {
   state.lastError = null;
 }
 
-export function getOrchestratorSnapshot(): OrchestratorSnapshot {
-  return { ...state };
-}
-
-export function getOrchestratorStatus(): OrchestratorStatus {
-  return state.status;
-}
-
-export function getOrchestratorIssueQueues(): OrchestratorIssueQueues {
+export function getRuntimeState(eventLimit = 20): RuntimeStateSnapshot {
   const runtime = ensureDbAndOrchestrator();
-  trackerAdapter = trackerAdapter ?? createTrackerAdapter(runtime.store, runtime.config);
-  const running = runtime.store.runAttempts.listRunningRunAttempts(runtime.config.projectId);
+  const candidateSelection = new CandidateSelectionService(
+    runtime.store.issues,
+    runtime.store.dependencies,
+    runtime.store.workflowStates,
+  );
+  const runningAttempts = runtime.store.runAttempts.listRunningRunAttempts(runtime.config.projectId);
   const retries = runtime.store.retryQueue.listRetries();
-  const candidates = trackerAdapter
-    .listCandidateIssues(runtime.config.projectId, runtime.config.activeStateCategories)
+  const candidates: RuntimeCandidateEntry[] = candidateSelection
+    .listEligible(runtime.config.projectId)
     .map((item) => ({
-      issueId: item.id,
+      issueId: item.issueId,
       identifier: item.identifier,
       title: item.title,
       priority: item.priority,
       stateCategory: item.stateCategory,
     }));
 
-  return {
-    running: running.map((attempt) => ({
+  const running: RuntimeRunningEntry[] = runningAttempts.map((attempt) => {
+    const issue = runtime.store.issues.getIssueById(attempt.issueId);
+    return {
       runAttemptId: attempt.id,
       issueId: attempt.issueId,
+      identifier: issue?.identifier ?? attempt.issueId,
       attemptNumber: attempt.attemptNumber,
       startedAt: attempt.startedAt,
-    })),
-    retryQueue: retries.map((entry) => ({
+    };
+  });
+
+  const retrying: RuntimeRetryEntry[] = retries.map((entry) => {
+    const issue = runtime.store.issues.getIssueById(entry.issueId);
+    return {
       issueId: entry.issueId,
+      identifier: issue?.identifier ?? entry.issueId,
       attemptNumber: entry.attemptNumber,
       dueAt: entry.dueAt,
       errorMessage: entry.errorMessage,
-    })),
+    };
+  });
+
+  const cap = Math.max(0, Math.min(200, Math.floor(eventLimit)));
+  const recentEvents: RuntimeAuditEvent[] =
+    cap === 0
+      ? []
+      : runtime.store.audits.listAuditEvents(runtime.config.projectId).slice(0, cap);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    status: state.status,
+    runtimeAdapterKind: state.runtimeAdapterKind,
+    workflowPath: state.workflowPath,
+    workflowVersion: state.workflowVersion,
+    workflowLastReloadedAt: state.workflowLastReloadedAt,
+    startedAt: state.startedAt,
+    pollIntervalMs: state.pollIntervalMs,
+    pollIntervalSource: state.pollIntervalSource,
+    nextTickAt: state.nextTickAt,
+    tickCount: state.tickCount,
+    lastTickAt: state.lastTickAt,
+    lastDispatchedCount: state.lastDispatchedCount,
+    lastDeferredCount: state.lastDeferredCount,
+    lastCancelledCount: state.lastCancelledCount,
+    lastAction: state.lastAction,
+    lastError: state.lastError,
+    validationError: null,
+    counts: {
+      running: running.length,
+      retrying: retrying.length,
+      candidates: candidates.length,
+    },
+    running,
+    retrying,
     candidates,
+    recentEvents,
   };
 }
 
-export function getRecentAuditEvents(limit = 20): OrchestratorAuditEvent[] {
-  const runtime = ensureDbAndOrchestrator();
-  const cap = Math.max(1, Math.min(200, Math.floor(limit)));
-  return runtime.store.audits.listAuditEvents(runtime.config.projectId).slice(0, cap);
+export function getSettings(): SettingsView {
+  return {
+    status: state.status,
+    workflowPath: state.workflowPath,
+    workflowVersion: state.workflowVersion,
+    runtimeAdapterKind: state.runtimeAdapterKind,
+    pollIntervalMs: state.pollIntervalMs,
+    pollIntervalSource: state.pollIntervalSource,
+    startedAt: state.startedAt,
+    nextTickAt: state.nextTickAt,
+    tickCount: state.tickCount,
+    lastTickAt: state.lastTickAt,
+    lastAction: state.lastAction,
+    lastError: state.lastError,
+  };
 }
 
-export function getIssueRunHistory(issueId: string, limit = 20): IssueRunHistory {
+export function getProjectBoard(): ProjectBoard {
   const runtime = ensureDbAndOrchestrator();
-  const attempts = runtime.store.runAttempts.listRunAttemptsByIssue(issueId, limit);
+  const workflowStates = runtime.store.workflowStates.listWorkflowStates(runtime.config.projectId);
+  const issues = runtime.store.issues.listIssuesByStateCategories(runtime.config.projectId, [
+    "active",
+    "backlog",
+    "terminal",
+    "other",
+  ]);
+  const issuesByState = new Map<string, ProjectBoardIssue[]>();
+
+  for (const workflowState of workflowStates) {
+    issuesByState.set(workflowState.id, []);
+  }
+
+  for (const issue of issues) {
+    const columnIssues = issuesByState.get(issue.workflowStateId) ?? [];
+    columnIssues.push({
+      issueId: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      priority: issue.priority,
+    });
+    issuesByState.set(issue.workflowStateId, columnIssues);
+  }
+
   return {
-    issueId,
+    columns: workflowStates.map((workflowState) => ({
+      stateId: workflowState.id,
+      stateName: workflowState.name,
+      issues: issuesByState.get(workflowState.id) ?? [],
+    })),
+  };
+}
+
+export function getIssue(issueId: string, attemptLimit = 20): IssueDetail {
+  const runtime = ensureDbAndOrchestrator();
+  const issue = runtime.store.issues.getIssueById(issueId);
+  if (!issue) {
+    throw new Error(`issue not found: ${issueId}`);
+  }
+
+  const workflowState = runtime.store.workflowStates.getWorkflowStateById(issue.workflowStateId);
+  const limit = Math.max(1, Math.min(200, Math.floor(attemptLimit)));
+  const attempts = runtime.store.runAttempts.listRunAttemptsByIssue(issueId, limit);
+
+  return {
+    issueId: issue.id,
+    projectId: issue.projectId,
+    identifier: issue.identifier,
+    title: issue.title,
+    description: issue.description,
+    priority: issue.priority,
+    workflowStateId: issue.workflowStateId,
+    workflowStateName: workflowState?.name ?? "unknown",
+    comments: runtime.store.comments.listComments(issueId).map((comment) => ({
+      id: comment.id,
+      body: comment.body,
+      authorId: comment.authorId,
+      createdAt: "",
+    })),
     attempts: attempts.map((attempt) => ({
       runAttemptId: attempt.id,
       attemptNumber: attempt.attemptNumber,
@@ -651,28 +705,64 @@ export function getIssueRunHistory(issueId: string, limit = 20): IssueRunHistory
   };
 }
 
-export function transitionIssue(issueId: string, targetStateId: string, actor?: string): void {
-  const runtime = ensureDbAndOrchestrator();
-  trackerAdapter = trackerAdapter ?? createTrackerAdapter(runtime.store, runtime.config);
-  trackerAdapter.transitionIssue(issueId, targetStateId, actor);
-  logger.info({
-    event: "issue_transitioned",
-    message: "Issue transitioned via orchestrator tracker API",
-    projectId: runtime.config.projectId,
-    issueId,
-    meta: { targetStateId, actor: actor ?? null },
-  });
+export function mutateIssue(request: MutateIssueRequest): void {
+  switch (request.action) {
+    case "transition": {
+      const runtime = ensureDbAndOrchestrator();
+      const tracker = new TrackerService(runtime.store);
+      tracker.transitionIssue(request.issueId, request.targetStateId, request.actor);
+      logger.info({
+        event: "issue_transitioned",
+        message: "issue transitioned via tracker service",
+        projectId: runtime.config.projectId,
+        issueId: request.issueId,
+        meta: { targetStateId: request.targetStateId, actor: request.actor ?? null },
+      });
+      return;
+    }
+    case "comment": {
+      const runtime = ensureDbAndOrchestrator();
+      const tracker = new TrackerService(runtime.store);
+      tracker.addComment({
+        id: randomUUID(),
+        issueId: request.issueId,
+        body: request.body,
+        authorId: request.authorId,
+        actor: request.authorId,
+      });
+      logger.info({
+        event: "issue_comment_added",
+        message: "issue comment added via tracker service",
+        projectId: runtime.config.projectId,
+        issueId: request.issueId,
+        meta: { authorId: request.authorId ?? null },
+      });
+      return;
+    }
+    case "create":
+      throw new Error("create issue is not implemented yet");
+    case "update":
+      throw new Error("update issue is not implemented yet");
+  }
 }
 
-export function addIssueComment(issueId: string, body: string, authorId?: string): void {
-  const runtime = ensureDbAndOrchestrator();
-  trackerAdapter = trackerAdapter ?? createTrackerAdapter(runtime.store, runtime.config);
-  trackerAdapter.addIssueComment(issueId, body, authorId ?? undefined);
-  logger.info({
-    event: "issue_comment_added",
-    message: "Issue comment added via orchestrator tracker API",
-    projectId: runtime.config.projectId,
-    issueId,
-    meta: { authorId: authorId ?? null },
-  });
+export function controlRuntime(request: ControlRuntimeRequest): RuntimeStateSnapshot {
+  switch (request.action) {
+    case "start":
+      startOrchestratorRuntime();
+      break;
+    case "stop":
+      stopOrchestratorRuntime();
+      break;
+    case "tick":
+      runOrchestratorTick();
+      break;
+    case "setPollInterval":
+      setOrchestratorPollIntervalMs(request.pollIntervalMs);
+      break;
+    case "clearPollIntervalOverride":
+      clearOrchestratorPollIntervalOverride();
+      break;
+  }
+  return getRuntimeState();
 }

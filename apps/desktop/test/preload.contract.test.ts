@@ -16,20 +16,18 @@ describe("preload contract smoke", () => {
     const { createDesktopApi } = await import("../src/preload");
     const api = createDesktopApi();
 
-    await api.getSystemInfo();
-    await api.getOrchestratorStatus();
-    await api.getOrchestratorSnapshot();
-    await api.getOrchestratorIssueQueues();
-    await api.getRecentAuditEvents(10);
-    await api.getIssueRunHistory("issue-1", 5);
-    await api.startOrchestratorRuntime();
-    await api.stopOrchestratorRuntime();
-    await api.runOrchestratorTick();
-    await api.setOrchestratorPollIntervalMs(15000);
-    await api.clearOrchestratorPollIntervalOverride();
-    await api.transitionIssue("issue-1", "p1:done", "operator");
-    await api.addIssueComment("issue-1", "handoff complete", "operator");
+    await api.getRuntimeState(10);
+    await api.getProjectBoard();
+    await api.getIssue("issue-1", 5);
+    await api.mutateIssue({
+      action: "transition",
+      issueId: "issue-1",
+      targetStateId: "p1:done",
+      actor: "operator",
+    });
+    await api.controlRuntime({ action: "tick" });
+    await api.getSettings();
 
-    expect(invoke).toHaveBeenCalledTimes(13);
+    expect(invoke).toHaveBeenCalledTimes(6);
   });
 });

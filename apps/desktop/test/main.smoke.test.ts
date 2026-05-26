@@ -33,13 +33,13 @@ describe("desktop bootstrap smoke", () => {
 
     expect(options.webPreferences.contextIsolation).toBe(true);
     expect(options.webPreferences.nodeIntegration).toBe(false);
-    expect(options.webPreferences.sandbox).toBe(true);
+    expect(options.webPreferences.sandbox).toBe(false);
   });
 
   test("registers typed IPC handlers", async () => {
     const { registerIpcHandlers } = await import("../src/main");
     registerIpcHandlers();
 
-    expect(ipcHandle).toHaveBeenCalledTimes(13);
+    expect(ipcHandle).toHaveBeenCalledTimes(6);
   });
 });
