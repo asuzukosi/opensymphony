@@ -26,6 +26,53 @@ export interface IssueRow {
   priority: number | null;
 }
 
+export interface IssuesByWorkflowStateColumn {
+  workflowStateId: string;
+  workflowStateName: string;
+  category: WorkflowStateCategory;
+  position: number;
+  issues: IssueRow[];
+}
+
+export interface IssueDetailCommentRow {
+  id: string;
+  body: string;
+  authorId: string | null;
+  createdAt: string;
+}
+
+export interface IssueDetailSessionRow {
+  sessionId: string;
+  runtimeKind: string;
+  sessionRef: string | null;
+  status: AgentSessionStatus;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface IssueDetailRunAttemptRow {
+  runAttemptId: string;
+  attemptNumber: number;
+  status: RunAttemptStatus;
+  startedAt: string;
+  finishedAt: string | null;
+  errorMessage: string | null;
+  sessions: IssueDetailSessionRow[];
+}
+
+export interface IssueDetailRow {
+  issueId: string;
+  projectId: string;
+  identifier: string;
+  title: string;
+  description: string | null;
+  priority: number | null;
+  workflowStateId: string;
+  workflowStateName: string;
+  comments: IssueDetailCommentRow[];
+  attempts: IssueDetailRunAttemptRow[];
+}
+
 export interface IssueCommentRow {
   id: string;
   issueId: string;
@@ -58,6 +105,27 @@ export interface RunAttemptRow {
   errorMessage: string | null;
 }
 
+export interface RunningRunSnapshotRow {
+  runAttemptId: string;
+  issueId: string;
+  identifier: string;
+  attemptNumber: number;
+  startedAt: string;
+  sessionId: string | null;
+  runtimeKind: string | null;
+  sessionStatus: AgentSessionStatus | null;
+}
+
+export interface RecentFinishedRunSnapshotRow {
+  runAttemptId: string;
+  issueId: string;
+  identifier: string;
+  attemptNumber: number;
+  status: Exclude<RunAttemptStatus, "running">;
+  finishedAt: string;
+  errorMessage: string | null;
+}
+
 export interface AgentSessionRow {
   id: string;
   runAttemptId: string;
@@ -70,6 +138,14 @@ export interface AgentSessionRow {
 
 export interface RetryQueueRow {
   issueId: string;
+  attemptNumber: number;
+  dueAt: string;
+  errorMessage: string | null;
+}
+
+export interface RetryRunSnapshotRow {
+  issueId: string;
+  identifier: string;
   attemptNumber: number;
   dueAt: string;
   errorMessage: string | null;

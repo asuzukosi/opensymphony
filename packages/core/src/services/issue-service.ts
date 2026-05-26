@@ -5,7 +5,7 @@ import type {
   IssueRow,
   WorkflowStateCategory,
 } from "@symphony/db";
-import type { CreateIssueInput, TransitionIssueInput } from "@core/types/tracker";
+import type { CreateIssueInput, TransitionIssueInput, UpdateIssueInput } from "@core/types/tracker";
 import { AuditService } from "@core/services/audit-service";
 
 export class IssueService {
@@ -74,6 +74,44 @@ export class IssueService {
         toStateId: targetState.id,
         fromCategory: currentState.category,
         toCategory: targetState.category,
+      },
+    });
+
+    return this.requireIssue(input.issueId);
+  }
+
+  update(input: UpdateIssueInput): IssueRow {
+    const issue = this.requireIssue(input.issueId);
+    const nextTitle = input.title !== undefined ? input.title.trim() : undefined;
+
+    if (nextTitle !== undefined && !nextTitle) {
+      throw new Error("title is required");
+    }
+
+    if (
+      nextTitle === undefined &&
+      input.description === undefined &&
+      input.priority === undefined
+    ) {
+      return issue;
+    }
+
+    this.issues.updateIssue(input.issueId, {
+      title: nextTitle,
+      description: input.description,
+      priority: input.priority,
+    });
+
+    this.audit.write({
+      id: `audit:${input.issueId}:update:${Date.now()}`,
+      projectId: issue.projectId,
+      issueId: input.issueId,
+      actor: input.actor,
+      action: "issue.updated",
+      payload: {
+        title: nextTitle,
+        description: input.description,
+        priority: input.priority,
       },
     });
 

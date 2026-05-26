@@ -6,7 +6,6 @@ import {
   createTrackerStore,
   migrateUp,
   openDatabase,
-  seedProjectWithDefaultStates,
   type ITrackerStore,
   type SqliteDatabase,
   type WorkflowStateCategory,
@@ -29,18 +28,18 @@ import type {
   IssueDetail,
   MutateIssueRequest,
   ProjectBoard,
-  ProjectBoardIssue,
   RuntimeAuditEvent,
   RuntimeCandidateEntry,
-  RuntimeRetryEntry,
-  RuntimeRunningEntry,
   RuntimeAdapterKind,
   RuntimeStateSnapshot,
   RuntimeStatus,
   SettingsView,
 } from "@/ipc";
 import type { AcpAdapter } from "@/runtime/acp";
-import { ACP_RUNTIME_KIND, createAcpAdapter, runtimeKindFromAcpMode } from "@/runtime/acp";
+import { createAcpAdapter, ACP_RUNTIME_KIND, runtimeKindFromAcpMode } from "@/runtime/acp";
+import { resolveWorkflowPath } from "@/runtime/workflow-path";
+import { buildProjectSeedInput, ensureProjectSeededOnce } from "@/runtime/project-seed";
+import { buildRuntimeSnapshot } from "@/runtime/runtime-snapshot";
 
 interface RuntimeState {
   status: RuntimeStatus;
@@ -88,6 +87,7 @@ let loadedConfig: RuntimeConfig | null = null;
 let loadedWorkflowVersion: string | null = null;
 let workspaceManager: WorkspaceManagerService | null = null;
 const runAttemptWorkspacePath = new Map<string, string>();
+const seededProjectIds = new Set<string>();
 const logger = new StructuredLoggerService();
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -111,8 +111,7 @@ function scheduleTimer(): void {
 function ensureRuntimeConfig(): RuntimeConfig {
   const loader = new WorkflowLoaderService();
   const configService = new RuntimeConfigService();
-  const workflowPath =
-    process.env.SYMPHONY_WORKFLOW_PATH ?? path.join(process.cwd(), "WORKFLOW.md");
+  const workflowPath = resolveWorkflowPath();
 
   try {
     const definition = loader.loadFromFile(workflowPath);
@@ -142,7 +141,7 @@ function ensureRuntimeConfig(): RuntimeConfig {
 }
 
 function getWorkflowPath(): string {
-  return process.env.SYMPHONY_WORKFLOW_PATH ?? path.join(process.cwd(), "WORKFLOW.md");
+  return resolveWorkflowPath();
 }
 
 function computeWorkflowVersion(workflowPath: string): string | null {
@@ -227,12 +226,9 @@ function ensureDbAndOrchestrator(): {
     const dbPath = path.join(userData, "symphony.sqlite");
     db = openDatabase(dbPath);
     migrateUp(db);
-    seedProjectWithDefaultStates(db, {
-      id: config.projectId,
-      name: "Symphony Desktop",
-      slug: "symphony-desktop",
-    });
   }
+
+  ensureProjectSeededOnce(db, config.projectId, seededProjectIds);
 
   if (!store) {
     store = createTrackerStore(db);
@@ -537,8 +533,6 @@ export function getRuntimeState(eventLimit = 20): RuntimeStateSnapshot {
     runtime.store.dependencies,
     runtime.store.workflowStates,
   );
-  const runningAttempts = runtime.store.runAttempts.listRunningRunAttempts(runtime.config.projectId);
-  const retries = runtime.store.retryQueue.listRetries();
   const candidates: RuntimeCandidateEntry[] = candidateSelection
     .listEligible(runtime.config.projectId)
     .map((item) => ({
@@ -549,66 +543,43 @@ export function getRuntimeState(eventLimit = 20): RuntimeStateSnapshot {
       stateCategory: item.stateCategory,
     }));
 
-  const running: RuntimeRunningEntry[] = runningAttempts.map((attempt) => {
-    const issue = runtime.store.issues.getIssueById(attempt.issueId);
-    return {
-      runAttemptId: attempt.id,
-      issueId: attempt.issueId,
-      identifier: issue?.identifier ?? attempt.issueId,
-      attemptNumber: attempt.attemptNumber,
-      startedAt: attempt.startedAt,
-    };
-  });
-
-  const retrying: RuntimeRetryEntry[] = retries.map((entry) => {
-    const issue = runtime.store.issues.getIssueById(entry.issueId);
-    return {
-      issueId: entry.issueId,
-      identifier: issue?.identifier ?? entry.issueId,
-      attemptNumber: entry.attemptNumber,
-      dueAt: entry.dueAt,
-      errorMessage: entry.errorMessage,
-    };
-  });
-
   const cap = Math.max(0, Math.min(200, Math.floor(eventLimit)));
   const recentEvents: RuntimeAuditEvent[] =
     cap === 0
       ? []
       : runtime.store.audits.listAuditEvents(runtime.config.projectId).slice(0, cap);
 
-  return {
-    generatedAt: new Date().toISOString(),
-    status: state.status,
-    runtimeAdapterKind: state.runtimeAdapterKind,
-    workflowPath: state.workflowPath,
-    workflowVersion: state.workflowVersion,
-    workflowLastReloadedAt: state.workflowLastReloadedAt,
-    startedAt: state.startedAt,
-    pollIntervalMs: state.pollIntervalMs,
-    pollIntervalSource: state.pollIntervalSource,
-    nextTickAt: state.nextTickAt,
-    tickCount: state.tickCount,
-    lastTickAt: state.lastTickAt,
-    lastDispatchedCount: state.lastDispatchedCount,
-    lastDeferredCount: state.lastDeferredCount,
-    lastCancelledCount: state.lastCancelledCount,
-    lastAction: state.lastAction,
-    lastError: state.lastError,
-    validationError: null,
-    counts: {
-      running: running.length,
-      retrying: retrying.length,
-      candidates: candidates.length,
+  return buildRuntimeSnapshot({
+    store: runtime.store,
+    projectId: runtime.config.projectId,
+    state: {
+      status: state.status,
+      runtimeAdapterKind: state.runtimeAdapterKind,
+      workflowPath: state.workflowPath,
+      workflowVersion: state.workflowVersion,
+      workflowLastReloadedAt: state.workflowLastReloadedAt,
+      startedAt: state.startedAt,
+      pollIntervalMs: state.pollIntervalMs,
+      pollIntervalSource: state.pollIntervalSource,
+      nextTickAt: state.nextTickAt,
+      tickCount: state.tickCount,
+      lastTickAt: state.lastTickAt,
+      lastDispatchedCount: state.lastDispatchedCount,
+      lastDeferredCount: state.lastDeferredCount,
+      lastCancelledCount: state.lastCancelledCount,
+      lastAction: state.lastAction,
+      lastError: state.lastError,
     },
-    running,
-    retrying,
     candidates,
     recentEvents,
-  };
+  });
 }
 
 export function getSettings(): SettingsView {
+  const { config, store } = ensureDbAndOrchestrator();
+  const projectRow = store.projects.getProject(config.projectId);
+  const projectSeed = buildProjectSeedInput(config.projectId);
+
   return {
     status: state.status,
     workflowPath: state.workflowPath,
@@ -616,6 +587,15 @@ export function getSettings(): SettingsView {
     runtimeAdapterKind: state.runtimeAdapterKind,
     pollIntervalMs: state.pollIntervalMs,
     pollIntervalSource: state.pollIntervalSource,
+    project: projectRow
+      ? { id: projectRow.id, name: projectRow.name, slug: projectRow.slug }
+      : { id: projectSeed.id, name: projectSeed.name, slug: projectSeed.slug },
+    acp: {
+      mode: config.acp.mode,
+      command: config.acp.command,
+      args: [...config.acp.args],
+      mockCompletionDelayMs: config.acp.mockCompletionDelayMs,
+    },
     startedAt: state.startedAt,
     nextTickAt: state.nextTickAt,
     tickCount: state.tickCount,
@@ -627,82 +607,48 @@ export function getSettings(): SettingsView {
 
 export function getProjectBoard(): ProjectBoard {
   const runtime = ensureDbAndOrchestrator();
-  const workflowStates = runtime.store.workflowStates.listWorkflowStates(runtime.config.projectId);
-  const issues = runtime.store.issues.listIssuesByStateCategories(runtime.config.projectId, [
-    "active",
-    "backlog",
-    "terminal",
-    "other",
-  ]);
-  const issuesByState = new Map<string, ProjectBoardIssue[]>();
-
-  for (const workflowState of workflowStates) {
-    issuesByState.set(workflowState.id, []);
-  }
-
-  for (const issue of issues) {
-    const columnIssues = issuesByState.get(issue.workflowStateId) ?? [];
-    columnIssues.push({
-      issueId: issue.id,
-      identifier: issue.identifier,
-      title: issue.title,
-      priority: issue.priority,
-    });
-    issuesByState.set(issue.workflowStateId, columnIssues);
-  }
 
   return {
-    columns: workflowStates.map((workflowState) => ({
-      stateId: workflowState.id,
-      stateName: workflowState.name,
-      issues: issuesByState.get(workflowState.id) ?? [],
-    })),
+    columns: runtime.store.issues
+      .listIssuesGroupedByWorkflowState(runtime.config.projectId)
+      .map((column) => ({
+        stateId: column.workflowStateId,
+        stateName: column.workflowStateName,
+        issues: column.issues.map((issue) => ({
+          issueId: issue.id,
+          identifier: issue.identifier,
+          title: issue.title,
+          priority: issue.priority,
+        })),
+      })),
   };
 }
 
 export function getIssue(issueId: string, attemptLimit = 20): IssueDetail {
   const runtime = ensureDbAndOrchestrator();
-  const issue = runtime.store.issues.getIssueById(issueId);
-  if (!issue) {
+  const detail = runtime.store.issues.getIssueDetail(issueId, attemptLimit);
+  if (!detail) {
     throw new Error(`issue not found: ${issueId}`);
   }
 
-  const workflowState = runtime.store.workflowStates.getWorkflowStateById(issue.workflowStateId);
-  const limit = Math.max(1, Math.min(200, Math.floor(attemptLimit)));
-  const attempts = runtime.store.runAttempts.listRunAttemptsByIssue(issueId, limit);
+  return detail;
+}
 
-  return {
-    issueId: issue.id,
-    projectId: issue.projectId,
-    identifier: issue.identifier,
-    title: issue.title,
-    description: issue.description,
-    priority: issue.priority,
-    workflowStateId: issue.workflowStateId,
-    workflowStateName: workflowState?.name ?? "unknown",
-    comments: runtime.store.comments.listComments(issueId).map((comment) => ({
-      id: comment.id,
-      body: comment.body,
-      authorId: comment.authorId,
-      createdAt: "",
-    })),
-    attempts: attempts.map((attempt) => ({
-      runAttemptId: attempt.id,
-      attemptNumber: attempt.attemptNumber,
-      status: attempt.status,
-      startedAt: attempt.startedAt,
-      finishedAt: attempt.finishedAt,
-      errorMessage: attempt.errorMessage,
-      sessions: runtime.store.agentSessions.listSessionsByRunAttempt(attempt.id).map((session) => ({
-        sessionId: session.id,
-        runtimeKind: session.runtimeKind,
-        sessionRef: session.sessionRef,
-        status: session.status,
-        startedAt: session.startedAt,
-        finishedAt: session.finishedAt,
-      })),
-    })),
-  };
+function nextIssueIdentifier(store: ITrackerStore, projectId: string): string {
+  const project = store.projects.getProject(projectId);
+  if (!project) {
+    throw new Error(`project not found: ${projectId}`);
+  }
+
+  const issueCount = store.issues.listIssuesByStateCategories(projectId, [
+    "active",
+    "backlog",
+    "terminal",
+    "other",
+  ]).length;
+  const prefix = project.slug.toUpperCase().replace(/[^A-Z0-9]/g, "") || "ISSUE";
+
+  return `${prefix}-${issueCount + 1}`;
 }
 
 export function mutateIssue(request: MutateIssueRequest): void {
@@ -739,10 +685,71 @@ export function mutateIssue(request: MutateIssueRequest): void {
       });
       return;
     }
-    case "create":
-      throw new Error("create issue is not implemented yet");
-    case "update":
-      throw new Error("update issue is not implemented yet");
+    case "create": {
+      const runtime = ensureDbAndOrchestrator();
+      if (request.projectId !== runtime.config.projectId) {
+        throw new Error(`project mismatch: ${request.projectId}`);
+      }
+
+      const title = request.title.trim();
+      if (!title) {
+        throw new Error("title is required");
+      }
+
+      const tracker = new TrackerService(runtime.store);
+      const issue = tracker.createIssue({
+        id: randomUUID(),
+        projectId: request.projectId,
+        identifier: nextIssueIdentifier(runtime.store, request.projectId),
+        title,
+        description: request.description,
+        priority: request.priority,
+      });
+
+      if (request.workflowStateId && request.workflowStateId !== issue.workflowStateId) {
+        tracker.transitionIssue(issue.id, request.workflowStateId);
+      }
+
+      logger.info({
+        event: "issue_created",
+        message: "issue created via tracker service",
+        projectId: runtime.config.projectId,
+        issueId: issue.id,
+        meta: {
+          identifier: issue.identifier,
+          workflowStateId: request.workflowStateId ?? issue.workflowStateId,
+        },
+      });
+      return;
+    }
+    case "update": {
+      const runtime = ensureDbAndOrchestrator();
+      const tracker = new TrackerService(runtime.store);
+
+      if (request.title !== undefined && !request.title.trim()) {
+        throw new Error("title is required");
+      }
+
+      tracker.updateIssue({
+        issueId: request.issueId,
+        title: request.title?.trim(),
+        description: request.description,
+        priority: request.priority,
+      });
+
+      logger.info({
+        event: "issue_updated",
+        message: "issue updated via tracker service",
+        projectId: runtime.config.projectId,
+        issueId: request.issueId,
+        meta: {
+          title: request.title !== undefined,
+          description: request.description !== undefined,
+          priority: request.priority !== undefined,
+        },
+      });
+      return;
+    }
   }
 }
 

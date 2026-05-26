@@ -61,11 +61,19 @@ describe("orchestrator groundwork services", () => {
     tracker.addDependency("i2", "i3");
 
     const store = createTrackerStore(db);
-    const service = new CandidateSelectionService(store.issues, store.dependencies);
+    const service = new CandidateSelectionService(
+      store.issues,
+      store.dependencies,
+      store.workflowStates,
+    );
 
     const selected = service.select({ projectId: "p1", maxCount: 5 });
 
     expect(selected.map((s) => s.issueId)).toEqual(["i1", "i3"]);
+
+    const eligible = service.listEligible("p1");
+    expect(eligible.map((item) => item.issueId)).toEqual(["i1", "i3"]);
+    expect(eligible.find((item) => item.issueId === "i2")).toBeUndefined();
 
     closeDatabase(db);
   });
@@ -125,7 +133,7 @@ describe("orchestrator groundwork services", () => {
     runs.attachSession({
       sessionId: "sess-1",
       runAttemptId: "run-1",
-      runtimeKind: "acp",
+      runtimeKind: "mock-acp",
       sessionRef: "abc",
     });
     runs.finishSession("sess-1", "succeeded");

@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-import { ACP_RUNTIME_KIND, createAcpAdapter, runtimeKindFromAcpMode } from "@/runtime/acp";
+import { ACP_RUNTIME_KIND, createAcpAdapter, formatSubprocessExitError, runtimeKindFromAcpMode, SUBPROCESS_STDERR_TAIL_MAX_CHARS, tailStderr } from "@/runtime/acp";
 
 const tempDirs: string[] = [];
 
@@ -20,6 +20,25 @@ function makeWorkspacePath(): string {
 }
 
 describe("acp adapter factory", () => {
+  test("creates mock adapter when selected", () => {
+    const adapter = createAcpAdapter({
+      mode: "mock",
+      command: process.execPath,
+      args: [],
+      mockCompletionDelayMs: 100,
+    });
+
+    const session = adapter.startSession({
+      runAttemptId: "r1",
+      issueId: "i1",
+      attemptNumber: 1,
+      startedAt: new Date().toISOString(),
+      workspacePath: makeWorkspacePath(),
+    });
+
+    expect(session.runtimeKind).toBe(ACP_RUNTIME_KIND.mock);
+  });
+
   test("creates subprocess adapter when selected", () => {
     const adapter = createAcpAdapter({
       mode: "subprocess",
@@ -90,6 +109,49 @@ describe("mock acp adapter", () => {
     expect(terminal?.status).toBe("failed");
     expect(terminal?.errorMessage).toBe("mock_acp_failure");
   });
+
+  test("succeeds fail-tagged issues after attempt two", () => {
+    const adapter = createAcpAdapter({
+      mode: "mock",
+      command: process.execPath,
+      args: [],
+      mockCompletionDelayMs: 0,
+    });
+    const session = adapter.startSession({
+      runAttemptId: "run-fail-3",
+      issueId: "issue-fail-retry",
+      attemptNumber: 3,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      workspacePath: makeWorkspacePath(),
+    });
+
+    const terminal = adapter.pollSessions("2026-01-01T00:00:01.000Z", [session.sessionId])[0];
+    expect(terminal?.status).toBe("succeeded");
+    expect(terminal?.errorMessage).toBeNull();
+  });
+
+  test("cancels running mock sessions", () => {
+    const adapter = createAcpAdapter({
+      mode: "mock",
+      command: process.execPath,
+      args: [],
+      mockCompletionDelayMs: 60_000,
+    });
+    const session = adapter.startSession({
+      runAttemptId: "run-cancel",
+      issueId: "issue-cancel",
+      attemptNumber: 1,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      workspacePath: makeWorkspacePath(),
+    });
+
+    const cancelled = adapter.cancelSession(session.sessionId, "2026-01-01T00:00:01.000Z");
+    expect(cancelled?.status).toBe("cancelled");
+    expect(cancelled?.errorMessage).toBe("cancelled_by_reconciliation");
+
+    const polled = adapter.pollSessions("2026-01-01T00:00:02.000Z", [session.sessionId])[0];
+    expect(polled?.status).toBe("cancelled");
+  });
 });
 
 async function waitForTerminalStatus(
@@ -107,6 +169,24 @@ async function waitForTerminalStatus(
   }
   throw new Error("timed out waiting for terminal status");
 }
+
+describe("subprocess stderr helpers", () => {
+  test("tailStderr keeps the end of long output", () => {
+    const stderr = `${"x".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS + 50)}tail-marker`;
+    expect(tailStderr(stderr)).toBe("x".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS - "tail-marker".length) + "tail-marker");
+  });
+
+  test("formatSubprocessExitError includes bounded stderr tail", () => {
+    const stderr = `${"y".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS + 20)}boom`;
+    expect(formatSubprocessExitError(2, stderr)).toBe(
+      `exit_2:${"y".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS - "boom".length)}boom`,
+    );
+  });
+
+  test("formatSubprocessExitError omits colon when stderr is empty", () => {
+    expect(formatSubprocessExitError(1, "   ")).toBe("exit_1");
+  });
+});
 
 describe("subprocess acp adapter", () => {
   test("marks session succeeded when subprocess exits 0", async () => {
@@ -149,7 +229,38 @@ describe("subprocess acp adapter", () => {
     expect(status).toBe("failed");
 
     const snapshot = adapter.pollSessions(new Date().toISOString(), [session.sessionId])[0];
-    expect(snapshot?.errorMessage).toContain("exit_2");
+    expect(snapshot?.errorMessage).toBe("exit_2:boom");
+  });
+
+  test("stores bounded stderr tail when subprocess emits long stderr", async () => {
+    const marker = "stderr-tail-marker";
+    const adapter = createAcpAdapter({
+      mode: "subprocess",
+      command: process.execPath,
+      args: [
+        "-e",
+        `process.stderr.write("${"z".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS + 100)}${marker}"); process.exit(3)`,
+      ],
+      mockCompletionDelayMs: 100,
+    });
+
+    const session = adapter.startSession({
+      runAttemptId: "run-long-stderr",
+      issueId: "issue-long-stderr",
+      attemptNumber: 1,
+      startedAt: new Date().toISOString(),
+      workspacePath: makeWorkspacePath(),
+    });
+
+    const status = await waitForTerminalStatus(adapter, session.sessionId);
+    expect(status).toBe("failed");
+
+    const snapshot = adapter.pollSessions(new Date().toISOString(), [session.sessionId])[0];
+    expect(snapshot?.errorMessage).toContain(`exit_3:`);
+    expect(snapshot?.errorMessage?.endsWith(marker)).toBe(true);
+    expect(snapshot?.errorMessage?.length).toBeLessThanOrEqual(
+      `exit_3:${"z".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS)}`.length,
+    );
   });
 
   test("spawns subprocess with issue workspace cwd", async () => {
@@ -173,5 +284,56 @@ describe("subprocess acp adapter", () => {
     const status = await waitForTerminalStatus(adapter, session.sessionId);
     expect(status).toBe("succeeded");
     expect(realpathSync(readFileSync(markerPath, "utf8"))).toBe(realpathSync(workspacePath));
+    expect(realpathSync(workspacePath)).not.toBe(realpathSync(process.cwd()));
+  });
+
+  test("passes symphony env vars to subprocess", async () => {
+    const workspacePath = makeWorkspacePath();
+    const markerPath = path.join(workspacePath, "env.json");
+    const adapter = createAcpAdapter({
+      mode: "subprocess",
+      command: process.execPath,
+      args: [
+        "-e",
+        "require('fs').writeFileSync('env.json', JSON.stringify({ SYMPHONY_RUN_ATTEMPT_ID: process.env.SYMPHONY_RUN_ATTEMPT_ID, SYMPHONY_ISSUE_ID: process.env.SYMPHONY_ISSUE_ID, SYMPHONY_ATTEMPT_NUMBER: process.env.SYMPHONY_ATTEMPT_NUMBER, SYMPHONY_WORKSPACE_PATH: process.env.SYMPHONY_WORKSPACE_PATH }))",
+      ],
+      mockCompletionDelayMs: 100,
+    });
+
+    const session = adapter.startSession({
+      runAttemptId: "run-env-1",
+      issueId: "issue-env-1",
+      attemptNumber: 2,
+      startedAt: new Date().toISOString(),
+      workspacePath,
+    });
+
+    const status = await waitForTerminalStatus(adapter, session.sessionId);
+    expect(status).toBe("succeeded");
+    expect(JSON.parse(readFileSync(markerPath, "utf8"))).toEqual({
+      SYMPHONY_RUN_ATTEMPT_ID: "run-env-1",
+      SYMPHONY_ISSUE_ID: "issue-env-1",
+      SYMPHONY_ATTEMPT_NUMBER: "2",
+      SYMPHONY_WORKSPACE_PATH: workspacePath,
+    });
+  });
+
+  test("requires workspace path for subprocess sessions", () => {
+    const adapter = createAcpAdapter({
+      mode: "subprocess",
+      command: process.execPath,
+      args: ["-e", "process.exit(0)"],
+      mockCompletionDelayMs: 100,
+    });
+
+    expect(() =>
+      adapter.startSession({
+        runAttemptId: "run-missing-cwd",
+        issueId: "issue-missing-cwd",
+        attemptNumber: 1,
+        startedAt: new Date().toISOString(),
+        workspacePath: "   ",
+      }),
+    ).toThrow("workspacePath is required for subprocess acp sessions");
   });
 });

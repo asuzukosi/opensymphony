@@ -3,35 +3,45 @@ export interface WorkflowDefinition {
   promptTemplate: string;
 }
 
-export type RuntimeAdapterKind = "mock-acp" | "acp-cli";
+export type ACPMode = "mock" | "subprocess";
 
-export interface RuntimeAdapterConfig {
-  kind: RuntimeAdapterKind;
-  completionDelayMs: number;
-  acpCliCommand: string;
-  acpCliArgs: string[];
+export interface ACPConfig {
+  mode: ACPMode;
+  command: string;
+  args: string[];
+  mockCompletionDelayMs: number;
+}
+
+export interface RuntimeHooksConfig {
+  afterCreate: string[];
+  beforeAgentRun: string[];
+  afterRun: string[];
+  beforeRemove: string[];
+  timeoutMs: number;
 }
 
 export interface RuntimeConfig {
-  tracker: {
-    kind: "db" | "linear";
-    linearApiUrl: string;
-    linearTokenEnvVar: string;
-    linearTeamId: string;
-  };
   projectId: string;
   pollIntervalMs: number;
   maxConcurrency: number;
-  retryBaseDelayMs: number;
-  retryMaxDelayMs: number;
-  activeStateCategories: string[];
-  runtimeAdapter: RuntimeAdapterConfig;
+  retryMaxBackoffMs: number;
   workspaceRoot: string;
-  hooks: {
-    afterCreate: string[];
-    beforeAgentRun: string[];
-    afterRun: string[];
-    beforeRemove: string[];
-    timeoutMs: number;
-  };
+  hooks: RuntimeHooksConfig;
+  acp: ACPConfig;
+}
+
+export const DEFAULT_RETRY_BASE_DELAY_MS = 10_000;
+
+export const DEFAULT_ACTIVE_STATE_CATEGORIES = ["active", "backlog"] as const;
+
+export type RuntimeConfigValidationField = "project_id" | "acp.mode";
+
+export interface RuntimeConfigValidationError {
+  field: RuntimeConfigValidationField;
+  message: string;
+}
+
+export interface RuntimeConfigValidationResult {
+  valid: boolean;
+  errors: RuntimeConfigValidationError[];
 }

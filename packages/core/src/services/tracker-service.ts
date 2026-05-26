@@ -18,6 +18,7 @@ import type {
   AddLabelInput,
   AssignIssueInput,
   CreateIssueInput,
+  UpdateIssueInput,
 } from "@core/types/tracker";
 
 export class TrackerService {
@@ -56,6 +57,10 @@ export class TrackerService {
 
   createIssue(input: CreateIssueInput) {
     return this.issueService.create(input);
+  }
+
+  updateIssue(input: UpdateIssueInput) {
+    return this.issueService.update(input);
   }
 
   transitionIssue(issueId: string, targetStateId: string, actor?: string) {

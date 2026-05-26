@@ -3,8 +3,8 @@ import { CandidateSelectionService } from "@core/services/candidate-selection-se
 import { RetryService } from "@core/services/retry-service";
 import { RunLifecycleService } from "@core/services/run-lifecycle-service";
 import { DbTrackerAdapter } from "@core/services/db-tracker-adapter";
-import type { TrackerAdapter } from "@core/types/tracker-adapter";
 import type { RuntimeConfig } from "@core/types/workflow";
+import { DEFAULT_ACTIVE_STATE_CATEGORIES, DEFAULT_RETRY_BASE_DELAY_MS } from "@core/types/workflow";
 
 export interface PollCycleResult {
   dispatched: Array<{
@@ -20,17 +20,20 @@ export class OrchestratorService {
   private readonly candidateSelection: CandidateSelectionService;
   private readonly retryService: RetryService;
   private readonly runLifecycle: RunLifecycleService;
-  private readonly trackerAdapter: TrackerAdapter;
+  private readonly trackerAdapter: DbTrackerAdapter;
 
   constructor(
     private readonly store: ITrackerStore,
     private readonly config: RuntimeConfig,
-    trackerAdapter?: TrackerAdapter,
   ) {
-    this.candidateSelection = new CandidateSelectionService(store.issues, store.dependencies);
+    this.candidateSelection = new CandidateSelectionService(
+      store.issues,
+      store.dependencies,
+      store.workflowStates,
+    );
     this.retryService = new RetryService(store.retryQueue);
     this.runLifecycle = new RunLifecycleService(store.runAttempts, store.agentSessions);
-    this.trackerAdapter = trackerAdapter ?? new DbTrackerAdapter(store);
+    this.trackerAdapter = new DbTrackerAdapter(store);
   }
 
   runPollCycle(nowIso: string): PollCycleResult {
@@ -85,8 +88,8 @@ export class OrchestratorService {
     this.retryService.scheduleRetry({
       issueId,
       attemptNumber: attemptNumber + 1,
-      baseDelayMs: this.config.retryBaseDelayMs,
-      maxDelayMs: this.config.retryMaxDelayMs,
+      baseDelayMs: DEFAULT_RETRY_BASE_DELAY_MS,
+      maxDelayMs: this.config.retryMaxBackoffMs,
       errorMessage,
     });
   }
@@ -101,7 +104,7 @@ export class OrchestratorService {
     const issueStateById = this.trackerAdapter.getIssueStateCategories(
       running.map((attempt) => attempt.issueId),
     );
-    const allowed = new Set(this.config.activeStateCategories);
+    const allowed = new Set<string>(DEFAULT_ACTIVE_STATE_CATEGORIES);
     const results: Array<{
       runAttemptId: string;
       issueId: string;

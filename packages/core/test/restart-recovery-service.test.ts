@@ -43,7 +43,7 @@ describe("RestartRecoveryService", () => {
     lifecycle.attachSession({
       sessionId: "sess-1",
       runAttemptId: "i1:attempt:1",
-      runtimeKind: "acp",
+      runtimeKind: "mock-acp",
       sessionRef: "acp://sess-1",
     });
 

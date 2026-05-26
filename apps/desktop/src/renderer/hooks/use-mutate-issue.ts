@@ -13,9 +13,26 @@ export type AddIssueCommentInput = {
   authorId?: string;
 };
 
+export type CreateIssueInput = {
+  projectId: string;
+  title: string;
+  description?: string;
+  priority?: number;
+  workflowStateId?: string;
+};
+
+export type UpdateIssueInput = {
+  issueId: string;
+  title?: string;
+  description?: string;
+  priority?: number;
+};
+
 export type UseMutateIssueResult = {
   transition: (input: TransitionIssueInput) => Promise<void>;
   addComment: (input: AddIssueCommentInput) => Promise<void>;
+  createIssue: (input: CreateIssueInput) => Promise<void>;
+  updateIssue: (input: UpdateIssueInput) => Promise<void>;
   isPending: boolean;
   error: Error | null;
   reset: () => void;
@@ -40,6 +57,23 @@ export function useMutateIssue(): UseMutateIssueResult {
         issueId: input.issueId,
         body: input.body,
         authorId: input.authorId,
+      }),
+    createIssue: (input) =>
+      mutateMutation.mutateAsync({
+        action: "create",
+        projectId: input.projectId,
+        title: input.title,
+        description: input.description,
+        priority: input.priority,
+        workflowStateId: input.workflowStateId,
+      }),
+    updateIssue: (input) =>
+      mutateMutation.mutateAsync({
+        action: "update",
+        issueId: input.issueId,
+        title: input.title,
+        description: input.description,
+        priority: input.priority,
       }),
     isPending: mutateMutation.isPending,
     error: mutateMutation.error,

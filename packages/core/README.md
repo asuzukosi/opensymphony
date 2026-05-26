@@ -14,12 +14,9 @@ Domain and orchestration layer for Symphony.
 
 ## Adapter Boundaries
 
-- Tracker adapters:
-- `DbTrackerAdapter`
-- `LinearTrackerAdapter` (shape/stub)
-- `createTrackerAdapter(...)` provider factory.
-
-- Runtime adapters are selected by desktop runtime config and integrated in `apps/desktop`.
+- Tracker reads: `DbTrackerAdapter` (issue state categories for reconciliation).
+- Tracker writes: `TrackerService` (audit-aware transitions, comments, labels).
+- Runtime adapters: selected by desktop ACP config and integrated in `apps/desktop`.
 
 ## Tests
 

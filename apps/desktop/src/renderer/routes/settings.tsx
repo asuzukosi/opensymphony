@@ -1,7 +1,61 @@
-import React, { useEffect, useState } from "react";
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@symphony/ui";
-import { useRuntimeControls } from "@/renderer/hooks/use-runtime-controls";
-import { useSettings } from "@/renderer/hooks/use-settings";
+import React, { useState } from "react";
+import { Settings as SettingsIcon } from "lucide-react";
+import {
+  Badge,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Skeleton,
+} from "@symphony/ui";
+import { SettingsPollInterval } from "@/renderer/components/settings-poll-interval";
+import { SettingsReadonlyConfig } from "@/renderer/components/settings-readonly-config";
+import { SettingsRuntimeControls } from "@/renderer/components/settings-runtime-controls";
+import { MetadataField } from "@/renderer/layout/metadata-field";
+import { PageHeader } from "@/renderer/layout/page-header";
+import { PageShell } from "@/renderer/layout/page-shell";
+import { SurfaceCard } from "@/renderer/layout/surface-card";
+import {
+  RuntimeStatusBadge,
+} from "@/renderer/components/runtime-status-badge";
+import { useRuntimeControls, useSettings } from "@/renderer/hooks";
+
+type SettingsAction = "control" | "poll";
+
+function SettingsLoadingState(): React.JSX.Element {
+  return (
+    <PageShell>
+      <PageHeader
+        eyebrow="Configuration"
+        icon={SettingsIcon}
+        title="Settings"
+        description="Control orchestration execution and review runtime configuration."
+        isLoading
+      />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <SurfaceCard>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-56" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+          </CardContent>
+        </SurfaceCard>
+        <SurfaceCard>
+          <CardHeader>
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-48" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-24 w-full rounded-lg" />
+          </CardContent>
+        </SurfaceCard>
+      </div>
+    </PageShell>
+  );
+}
 
 export function Settings(): React.JSX.Element {
   const { settings, error: settingsError, isLoading, refetch } = useSettings();
@@ -15,137 +69,151 @@ export function Settings(): React.JSX.Element {
     error: controlsError,
     reset: resetControls,
   } = useRuntimeControls();
-  const [pollIntervalInput, setPollIntervalInput] = useState("30000");
-  const [inputError, setInputError] = useState<string | null>(null);
+  const [failedAction, setFailedAction] = useState<SettingsAction | null>(null);
 
-  useEffect(() => {
-    if (settings) {
-      setPollIntervalInput(String(settings.pollIntervalMs));
-    }
-  }, [settings?.pollIntervalMs]);
-
-  const runControl = async (action: () => Promise<unknown>): Promise<void> => {
-    setInputError(null);
+  const runControl = async (
+    action: () => Promise<unknown>,
+    actionType: SettingsAction,
+  ): Promise<void> => {
     resetControls();
+    setFailedAction(null);
     try {
       await action();
       await refetch();
     } catch {
-      // mutation errors are exposed via controlsError
+      setFailedAction(actionType);
     }
   };
 
-  const errorMessage =
-    inputError ?? settingsError?.message ?? controlsError?.message ?? null;
-
   if (isLoading) {
+    return <SettingsLoadingState />;
+  }
+
+  if (!settings) {
     return (
-      <Card>
-        <CardContent className="pt-6">Loading runtime settings...</CardContent>
-      </Card>
+      <PageShell>
+        <PageHeader
+          variant="compact"
+          eyebrow="Configuration"
+          icon={SettingsIcon}
+          title="Settings"
+          description="Control orchestration execution and review runtime configuration."
+        />
+        <SurfaceCard>
+          <CardContent className="py-8 text-sm text-muted-foreground">
+            Runtime settings could not be loaded.
+          </CardContent>
+        </SurfaceCard>
+      </PageShell>
     );
   }
 
+  const badgeStatus = settings.status;
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Runtime Controls</CardTitle>
-        <CardDescription>Control orchestration execution and polling cadence.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-x-4 gap-y-2 [&_p]:m-0">
-          <p>Current status: {settings?.status ?? "unknown"}</p>
-          <p>
-            Started at:{" "}
-            {settings?.startedAt ? new Date(settings.startedAt).toLocaleString() : "Not started"}
-          </p>
-          <p>Poll interval: {settings?.pollIntervalMs ?? 0} ms</p>
-          <p>Poll interval source: {settings?.pollIntervalSource ?? "workflow"}</p>
-          <p>
-            Next tick:{" "}
-            {settings?.nextTickAt ? new Date(settings.nextTickAt).toLocaleString() : "n/a"}
-          </p>
-          <p>Total ticks: {settings?.tickCount ?? 0}</p>
-          <p>
-            Last tick:{" "}
-            {settings?.lastTickAt ? new Date(settings.lastTickAt).toLocaleString() : "Never"}
-          </p>
-          <p>Last action: {settings?.lastAction ?? "n/a"}</p>
-          <p>Last runtime error: {settings?.lastError ?? "none"}</p>
-        </div>
-        {errorMessage ? <p className="text-sm text-red-400">Settings error: {errorMessage}</p> : null}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" disabled={isPending} onClick={() => void runControl(start)}>
-            Start Runtime
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={isPending}
-            onClick={() => void runControl(stop)}
-          >
-            Stop Runtime
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={isPending}
-            onClick={() => void runControl(tick)}
-          >
-            Run Tick Now
-          </Button>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="poll-interval-input">Poll interval (ms)</label>
-          <Input
-            id="poll-interval-input"
-            type="number"
-            min={1000}
-            step={1000}
-            value={pollIntervalInput}
-            onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-              setPollIntervalInput(event.target.value)
-            }
-            disabled={isPending}
-          />
-          <Button
-            type="button"
-            disabled={isPending}
-            onClick={() => {
-              const parsed = Number.parseInt(pollIntervalInput, 10);
-              if (!Number.isFinite(parsed)) {
-                setInputError("Poll interval must be a number");
-                return;
+    <PageShell>
+      <PageHeader
+        eyebrow="Configuration"
+        icon={SettingsIcon}
+        title="Settings"
+        description="Control orchestration execution and review runtime configuration."
+        metaLabel="Runtime status"
+        meta={<RuntimeStatusBadge status={badgeStatus} className="px-3 py-1 text-sm" />}
+      />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <SurfaceCard>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base">Runtime status</CardTitle>
+            <CardDescription>Current orchestrator state and execution metrics.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <MetadataField
+                label="Status"
+                value={<Badge variant="outline">{settings.status}</Badge>}
+              />
+              <MetadataField
+                label="Started at"
+                value={
+                  settings.startedAt
+                    ? new Date(settings.startedAt).toLocaleString()
+                    : "Not started"
+                }
+              />
+              <MetadataField
+                label="Poll interval"
+                value={
+                  <span className="font-mono tabular-nums">{settings.pollIntervalMs} ms</span>
+                }
+              />
+              <MetadataField label="Poll source" value={settings.pollIntervalSource} />
+              <MetadataField
+                label="Next tick"
+                value={
+                  settings.nextTickAt
+                    ? new Date(settings.nextTickAt).toLocaleString()
+                    : "n/a"
+                }
+              />
+              <MetadataField
+                label="Total ticks"
+                value={<span className="font-mono tabular-nums">{settings.tickCount}</span>}
+              />
+              <MetadataField
+                label="Last tick"
+                value={
+                  settings.lastTickAt
+                    ? new Date(settings.lastTickAt).toLocaleString()
+                    : "Never"
+                }
+              />
+              <MetadataField label="Last action" value={settings.lastAction ?? "n/a"} />
+            </dl>
+
+            {settings.lastError ? (
+              <MetadataField
+                label="Last error"
+                value={<span className="text-destructive">{settings.lastError}</span>}
+                className="sm:col-span-2"
+              />
+            ) : null}
+
+            {settingsError ? (
+              <p className="text-sm text-destructive">Settings error: {settingsError.message}</p>
+            ) : null}
+          </CardContent>
+        </SurfaceCard>
+
+        <SurfaceCard>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base">Controls</CardTitle>
+            <CardDescription>Start, stop, and tune orchestration behavior.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <SettingsRuntimeControls
+              onStart={() => runControl(start, "control")}
+              onStop={() => runControl(stop, "control")}
+              onTick={() => runControl(tick, "control")}
+              isPending={isPending}
+              submitError={failedAction === "control" ? controlsError : null}
+            />
+
+            <SettingsPollInterval
+              pollIntervalMs={settings.pollIntervalMs}
+              pollIntervalSource={settings.pollIntervalSource}
+              onApply={(pollIntervalMs) =>
+                runControl(() => setPollInterval(pollIntervalMs), "poll")
               }
-              void runControl(() => setPollInterval(parsed));
-            }}
-          >
-            Apply Interval
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={isPending}
-            onClick={() => void runControl(clearPollIntervalOverride)}
-          >
-            Reset To Workflow Default
-          </Button>
-        </div>
-        <div className="space-y-2 border-t border-border pt-4">
-          <Label htmlFor="workflow-path-input" className="text-xs text-muted-foreground">
-            Workflow path
-          </Label>
-          <Input
-            id="workflow-path-input"
-            type="text"
-            value={settings?.workflowPath ?? ""}
-            placeholder="path/to/WORKFLOW.md"
-            className="font-mono text-xs text-muted-foreground"
-            disabled={isPending}
-            readOnly
-          />
-        </div>
-      </CardContent>
-    </Card>
+              onReset={() => runControl(clearPollIntervalOverride, "poll")}
+              isPending={isPending}
+              submitError={failedAction === "poll" ? controlsError : null}
+            />
+          </CardContent>
+        </SurfaceCard>
+      </div>
+
+      <SettingsReadonlyConfig settings={settings} />
+    </PageShell>
   );
 }

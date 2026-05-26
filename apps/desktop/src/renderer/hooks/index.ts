@@ -40,6 +40,8 @@ export {
 export {
   useMutateIssue,
   type AddIssueCommentInput,
+  type CreateIssueInput,
   type TransitionIssueInput,
+  type UpdateIssueInput,
   type UseMutateIssueResult,
 } from "./use-mutate-issue";

@@ -10,9 +10,13 @@ import {
   seedProjectWithDefaultStates,
 } from "@symphony/db";
 import { OrchestratorService } from "@core/services/orchestrator-service";
-import { RuntimeConfigService } from "@core/services/runtime-config-service";
+import {
+  RuntimeConfigService,
+  validateRuntimeConfig,
+} from "@core/services/runtime-config-service";
 import { TrackerService } from "@core/services/tracker-service";
 import { WorkflowLoaderService } from "@core/services/workflow-loader-service";
+import { makeOrchestratorRuntimeConfig } from "./fixtures/runtime-config";
 
 const tempDirs: string[] = [];
 
@@ -33,18 +37,21 @@ describe("WorkflowLoaderService", () => {
   test("parses front matter and prompt body", () => {
     const loader = new WorkflowLoaderService();
     const definition = loader.loadFromText(`---
-tracker:
-  project_id: p1
-orchestrator:
-  poll_interval_ms: 20000
+project_id: p1
+poll_interval_ms: 20000
+max_concurrency: 4
+acp:
+  mode: mock
 ---
 # Runbook
 Execute issue work safely.
 `);
 
     expect(definition.config).toEqual({
-      tracker: { project_id: "p1" },
-      orchestrator: { poll_interval_ms: 20000 },
+      project_id: "p1",
+      poll_interval_ms: 20000,
+      max_concurrency: 4,
+      acp: { mode: "mock" },
     });
     expect(definition.promptTemplate).toContain("Execute issue work safely.");
   });
@@ -55,39 +62,117 @@ describe("RuntimeConfigService", () => {
     const configService = new RuntimeConfigService();
     const config = configService.toRuntimeConfig({
       config: {
-        tracker: { project_id: "p1" },
-        orchestrator: { max_concurrency: 4 },
+        project_id: "p1",
+        max_concurrency: 4,
       },
       promptTemplate: "Ship code",
     });
 
     expect(config.projectId).toBe("p1");
-    expect(config.tracker.kind).toBe("db");
     expect(config.maxConcurrency).toBe(4);
     expect(config.pollIntervalMs).toBe(30000);
-    expect(config.runtimeAdapter.kind).toBe("mock-acp");
-    expect(config.runtimeAdapter.acpCliCommand.length).toBeGreaterThan(0);
+    expect(config.retryMaxBackoffMs).toBe(300000);
+    expect(config.acp.mode).toBe("mock");
+    expect(config.acp.command.length).toBeGreaterThan(0);
     expect(config.workspaceRoot).toBe(".symphony-workspaces");
     expect(config.hooks.timeoutMs).toBe(60000);
   });
 
-  test("resolves explicit acp-cli runtime adapter settings", () => {
+  test("requires project_id in workflow config", () => {
+    const configService = new RuntimeConfigService();
+    expect(() =>
+      configService.toRuntimeConfig({
+        config: { poll_interval_ms: 10_000 },
+        promptTemplate: "Ship code",
+      }),
+    ).toThrow("Missing required config: project_id");
+  });
+
+  test("resolves explicit subprocess acp settings", () => {
     const configService = new RuntimeConfigService();
     const config = configService.toRuntimeConfig({
       config: {
-        tracker: { project_id: "p2" },
-        runtime: {
-          adapter_kind: "acp-cli",
-          acp_cli_command: "bunx",
-          acp_cli_args: ["acp-agent", "--stdio"],
+        project_id: "p2",
+        acp: {
+          mode: "subprocess",
+          command: "bunx",
+          args: ["acp-agent", "--stdio"],
+          mock_completion_delay_ms: 500,
+        },
+        workspace_root: "./workspaces",
+        hooks: {
+          timeout_ms: 30_000,
         },
       },
       promptTemplate: "Ship code",
     });
 
-    expect(config.runtimeAdapter.kind).toBe("acp-cli");
-    expect(config.runtimeAdapter.acpCliCommand).toBe("bunx");
-    expect(config.runtimeAdapter.acpCliArgs).toEqual(["acp-agent", "--stdio"]);
+    expect(config.acp.mode).toBe("subprocess");
+    expect(config.acp.command).toBe("bunx");
+    expect(config.acp.args).toEqual(["acp-agent", "--stdio"]);
+    expect(config.acp.mockCompletionDelayMs).toBe(500);
+    expect(config.workspaceRoot).toBe("./workspaces");
+    expect(config.hooks.timeoutMs).toBe(30_000);
+  });
+});
+
+describe("validateRuntimeConfig", () => {
+  test("accepts minimal valid workflow config", () => {
+    const result = validateRuntimeConfig({
+      config: {
+        project_id: "p1",
+        acp: { mode: "mock" },
+      },
+      promptTemplate: "Ship code",
+    });
+
+    expect(result).toEqual({ valid: true, errors: [] });
+  });
+
+  test("reports missing project_id", () => {
+    const result = validateRuntimeConfig({
+      config: {
+        acp: { mode: "mock" },
+      },
+      promptTemplate: "Ship code",
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([
+      { field: "project_id", message: "Missing required config: project_id" },
+    ]);
+  });
+
+  test("reports missing acp.mode", () => {
+    const result = validateRuntimeConfig({
+      config: {
+        project_id: "p1",
+      },
+      promptTemplate: "Ship code",
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([
+      { field: "acp.mode", message: "Missing required config: acp.mode" },
+    ]);
+  });
+
+  test("reports invalid acp.mode", () => {
+    const result = validateRuntimeConfig({
+      config: {
+        project_id: "p1",
+        acp: { mode: "acp-cli" },
+      },
+      promptTemplate: "Ship code",
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([
+      {
+        field: "acp.mode",
+        message: "Invalid config: acp.mode must be mock or subprocess",
+      },
+    ]);
   });
 });
 
@@ -109,34 +194,10 @@ describe("OrchestratorService", () => {
     tracker.addDependency("i1", "i2");
 
     const store = createTrackerStore(db);
-    const orchestrator = new OrchestratorService(store, {
-      tracker: {
-        kind: "db",
-        linearApiUrl: "https://api.linear.app/graphql",
-        linearTokenEnvVar: "LINEAR_API_TOKEN",
-        linearTeamId: "default",
-      },
-      projectId: "p1",
-      maxConcurrency: 2,
-      pollIntervalMs: 30000,
-      retryBaseDelayMs: 1000,
-      retryMaxDelayMs: 30000,
-      activeStateCategories: ["active", "backlog"],
-      runtimeAdapter: {
-        kind: "mock-acp",
-        completionDelayMs: 1200,
-        acpCliCommand: process.execPath,
-        acpCliArgs: ["-e", "setTimeout(() => process.exit(0), 1200)"],
-      },
-      workspaceRoot: ".symphony-workspaces",
-      hooks: {
-        afterCreate: [],
-        beforeAgentRun: [],
-        afterRun: [],
-        beforeRemove: [],
-        timeoutMs: 60000,
-      },
-    });
+    const orchestrator = new OrchestratorService(
+      store,
+      makeOrchestratorRuntimeConfig({ maxConcurrency: 2 }),
+    );
 
     const result = orchestrator.runPollCycle(new Date().toISOString());
 
@@ -158,34 +219,10 @@ describe("OrchestratorService", () => {
     tracker.createIssue({ id: "i2", projectId: "p1", identifier: "P1-2", title: "Still active" });
 
     const store = createTrackerStore(db);
-    const orchestrator = new OrchestratorService(store, {
-      tracker: {
-        kind: "db",
-        linearApiUrl: "https://api.linear.app/graphql",
-        linearTokenEnvVar: "LINEAR_API_TOKEN",
-        linearTeamId: "default",
-      },
-      projectId: "p1",
-      maxConcurrency: 3,
-      pollIntervalMs: 30000,
-      retryBaseDelayMs: 1000,
-      retryMaxDelayMs: 30000,
-      activeStateCategories: ["active", "backlog"],
-      runtimeAdapter: {
-        kind: "mock-acp",
-        completionDelayMs: 1200,
-        acpCliCommand: process.execPath,
-        acpCliArgs: ["-e", "setTimeout(() => process.exit(0), 1200)"],
-      },
-      workspaceRoot: ".symphony-workspaces",
-      hooks: {
-        afterCreate: [],
-        beforeAgentRun: [],
-        afterRun: [],
-        beforeRemove: [],
-        timeoutMs: 60000,
-      },
-    });
+    const orchestrator = new OrchestratorService(
+      store,
+      makeOrchestratorRuntimeConfig({ maxConcurrency: 3 }),
+    );
 
     orchestrator.runPollCycle(new Date().toISOString());
     tracker.transitionIssue("i1", "p1:done");

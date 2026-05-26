@@ -1,6 +1,6 @@
 import type { SqliteDatabase } from "@db/client";
 import type { IRetryQueueRepo } from "@db/types/repo";
-import type { RetryQueueRow } from "@db/types/domain";
+import type { RetryQueueRow, RetryRunSnapshotRow } from "@db/types/domain";
 
 export class RetryQueueRepo implements IRetryQueueRepo {
   constructor(private readonly db: SqliteDatabase) {}
@@ -53,5 +53,21 @@ export class RetryQueueRepo implements IRetryQueueRepo {
          ORDER BY due_at ASC`,
       )
       .all() as RetryQueueRow[];
+  }
+
+  listRetrySnapshots(projectId: string): RetryRunSnapshotRow[] {
+    return this.db
+      .prepare(
+        `SELECT q.issue_id as issueId,
+                i.identifier as identifier,
+                q.attempt_number as attemptNumber,
+                q.due_at as dueAt,
+                q.error_message as errorMessage
+         FROM retry_queue q
+         JOIN issues i ON i.id = q.issue_id
+         WHERE i.project_id = ?
+         ORDER BY q.due_at ASC`,
+      )
+      .all(projectId) as RetryRunSnapshotRow[];
   }
 }

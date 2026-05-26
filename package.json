@@ -12,7 +12,9 @@
     "test:e2e": "playwright test",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "clean": "turbo clean"
+    "clean": "turbo clean",
+    "rebuild:node": "npm rebuild better-sqlite3",
+    "rebuild:electron": "bun run --filter @symphony/desktop rebuild:native"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
@@ -21,8 +23,13 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tailwindcss-animate": "^1.0.7",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "@dnd-kit/sortable": "^10.0.0",
+    "react-router-dom": "^7.15.1"
   }
 }

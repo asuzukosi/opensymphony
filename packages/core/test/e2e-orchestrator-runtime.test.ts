@@ -9,37 +9,26 @@ import {
   openDatabase,
   seedProjectWithDefaultStates,
 } from "@symphony/db";
-import { DbTrackerAdapter } from "@core/services/db-tracker-adapter";
 import { OrchestratorService } from "@core/services/orchestrator-service";
 import { RunLifecycleService } from "@core/services/run-lifecycle-service";
 import { TrackerService } from "@core/services/tracker-service";
 import { WorkspaceManagerService } from "@core/services/workspace-manager-service";
-import { createTrackerAdapter } from "@core/services/create-tracker-adapter";
-import type { RuntimeConfig } from "@core/types/workflow";
+import { makeOrchestratorRuntimeConfig } from "./fixtures/runtime-config";
 
 const tempDirs: string[] = [];
 
-function makeRuntimeConfig(workspaceRoot: string): RuntimeConfig {
-  return {
-    tracker: {
-      kind: "db",
-      linearApiUrl: "https://api.linear.app/graphql",
-      linearTokenEnvVar: "LINEAR_API_TOKEN",
-      linearTeamId: "default",
-    },
-    projectId: "p1",
+function makeRuntimeConfig(workspaceRoot: string) {
+  return makeOrchestratorRuntimeConfig({
     pollIntervalMs: 1000,
     maxConcurrency: 2,
-    retryBaseDelayMs: 100,
-    retryMaxDelayMs: 3000,
-    activeStateCategories: ["active", "backlog"],
-    runtimeAdapter: {
-      kind: "mock-acp",
-      completionDelayMs: 50,
-      acpCliCommand: process.execPath,
-      acpCliArgs: ["-e", "setTimeout(() => process.exit(0), 50)"],
-    },
+    retryMaxBackoffMs: 3000,
     workspaceRoot,
+    acp: {
+      mode: "mock",
+      command: process.execPath,
+      args: ["-e", "setTimeout(() => process.exit(0), 50)"],
+      mockCompletionDelayMs: 50,
+    },
     hooks: {
       afterCreate: [],
       beforeAgentRun: [],
@@ -47,7 +36,7 @@ function makeRuntimeConfig(workspaceRoot: string): RuntimeConfig {
       beforeRemove: [],
       timeoutMs: 5000,
     },
-  };
+  });
 }
 
 afterEach(() => {
@@ -58,7 +47,7 @@ afterEach(() => {
 });
 
 describe("orchestrator e2e integration", () => {
-  test("dispatches lifecycle and supports tracker writes through adapter boundary", () => {
+  test("dispatches lifecycle and supports tracker writes through service boundary", () => {
     const root = mkdtempSync(path.join(tmpdir(), "symphony-e2e-int-"));
     tempDirs.push(root);
 
@@ -73,8 +62,7 @@ describe("orchestrator e2e integration", () => {
     tracker.createIssue({ id: "i1", projectId: "p1", identifier: "P1-1", title: "Ship feature" });
 
     const config = makeRuntimeConfig(path.join(root, "workspaces"));
-    const readAdapter = new DbTrackerAdapter(store);
-    const orchestrator = new OrchestratorService(store, config, readAdapter);
+    const orchestrator = new OrchestratorService(store, config);
 
     const poll = orchestrator.runPollCycle(new Date().toISOString());
     expect(poll.dispatched).toHaveLength(1);
@@ -92,9 +80,14 @@ describe("orchestrator e2e integration", () => {
     lifecycle.finishSession("sess-1", "succeeded");
     lifecycle.finishRun(dispatched.runAttemptId, "succeeded");
 
-    const writeAdapter = createTrackerAdapter(store, config);
-    writeAdapter.addIssueComment("i1", "handoff complete", "operator");
-    writeAdapter.transitionIssue("i1", "p1:done", "operator");
+    tracker.addComment({
+      id: "comment-1",
+      issueId: "i1",
+      body: "handoff complete",
+      authorId: "operator",
+      actor: "operator",
+    });
+    tracker.transitionIssue("i1", "p1:done", "operator");
 
     const run = store.runAttempts.getLatestRunAttempt("i1");
     expect(run?.status).toBe("succeeded");
@@ -103,8 +96,11 @@ describe("orchestrator e2e integration", () => {
     expect(comments.length).toBe(1);
     expect(comments[0]?.body).toContain("handoff complete");
 
-    const state = readAdapter.getIssueStateCategories(["i1"])["i1"];
-    expect(state).toBe("terminal");
+    const issue = store.issues.getIssueById("i1");
+    const workflowState = issue
+      ? store.workflowStates.getWorkflowStateById(issue.workflowStateId)
+      : null;
+    expect(workflowState?.category).toBe("terminal");
 
     closeDatabase(db);
   });

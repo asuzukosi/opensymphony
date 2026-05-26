@@ -18,5 +18,6 @@
 
 #### Test Plan
 
-- [ ] `make -C elixir all`
+- [ ] `bun run check-types`
+- [ ] `bun run test`
 - [ ] <!-- Additional targeted checks (list below) -->

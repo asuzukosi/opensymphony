@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { uiReady } from "@ui/index";
+import { uiReady } from "../src/index";
 
 describe("ui smoke", () => {
   test("returns readiness marker", () => {

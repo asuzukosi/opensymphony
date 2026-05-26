@@ -12,6 +12,7 @@ dist/
 build/
 out/
 coverage/
+.electron/
 
 # TypeScript
 *.tsbuildinfo

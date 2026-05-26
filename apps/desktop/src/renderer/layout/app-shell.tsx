@@ -1,5 +1,5 @@
 import React from "react";
-import { Bot, Kanban, LayoutDashboard, Settings, type LucideIcon } from "lucide-react";
+import { Bot, Kanban, LayoutDashboard, Settings, Sparkles, type LucideIcon } from "lucide-react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -14,6 +14,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  cn,
 } from "@symphony/ui";
 
 type NavItem = {
@@ -29,13 +30,30 @@ const navItems: NavItem[] = [
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
+const pageTitles: Record<string, string> = {
+  "/": "Dashboard",
+  "/board": "Task board",
+  "/agents": "Agents",
+  "/settings": "Settings",
+};
+
+function resolvePageTitle(pathname: string): string {
+  if (pathname.startsWith("/issues/")) {
+    return "Issue detail";
+  }
+  return pageTitles[pathname] ?? "Symphony";
+}
+
 function SidebarNavLink({ to, label, icon: Icon }: NavItem): React.JSX.Element {
   const location = useLocation();
-  const active = location.pathname === to;
+  const active =
+    to === "/"
+      ? location.pathname === "/"
+      : location.pathname === to || location.pathname.startsWith(`${to}/`);
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={active}>
+      <SidebarMenuButton asChild isActive={active} tooltip={label}>
         <Link to={to}>
           <Icon />
           <span>{label}</span>
@@ -46,17 +64,26 @@ function SidebarNavLink({ to, label, icon: Icon }: NavItem): React.JSX.Element {
 }
 
 export function AppShell(): React.JSX.Element {
+  const location = useLocation();
+  const pageTitle = resolvePageTitle(location.pathname);
+
   return (
     <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader>
-          <div className="flex items-center px-2 py-1">
-            <span className="text-sm font-semibold tracking-wide">Symphony</span>
+      <Sidebar variant="inset" className="border-r border-sidebar-border">
+        <SidebarHeader className="border-b border-sidebar-border">
+          <div className="flex items-center gap-2 px-2 py-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold tracking-tight">Symphony</p>
+              <p className="truncate text-xs text-sidebar-foreground/70">Local orchestrator</p>
+            </div>
           </div>
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {navItems.map((item) => (
@@ -68,11 +95,19 @@ export function AppShell(): React.JSX.Element {
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger />
-          <span className="text-sm font-medium text-muted-foreground">Local orchestrator</span>
+        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 md:px-6">
+          <SidebarTrigger className="-ml-1" />
+          <div className="h-4 w-px bg-border/60" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{pageTitle}</p>
+            <p className="truncate text-xs text-muted-foreground">Symphony Desktop</p>
+          </div>
         </header>
-        <main className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+        <main
+          className={cn(
+            "flex flex-1 flex-col bg-gradient-to-b from-background via-background to-muted/10 p-4 md:p-6 lg:p-8",
+          )}
+        >
           <Outlet />
         </main>
       </SidebarInset>

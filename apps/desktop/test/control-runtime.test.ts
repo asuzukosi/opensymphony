@@ -1,0 +1,129 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+const tempDirs: string[] = [];
+let userDataDir = "";
+
+vi.mock("electron", () => ({
+  app: {
+    getPath: vi.fn((name: string) => {
+      if (name === "userData") {
+        return userDataDir;
+      }
+      return "/tmp/electron-mock";
+    }),
+  },
+}));
+
+describe("controlRuntime", () => {
+  const originalWorkflowPath = process.env.SYMPHONY_WORKFLOW_PATH;
+
+  beforeEach(() => {
+    userDataDir = mkdtempSync(path.join(tmpdir(), "symphony-control-runtime-"));
+    tempDirs.push(userDataDir);
+  });
+
+  afterEach(async () => {
+    vi.resetModules();
+    if (originalWorkflowPath === undefined) {
+      delete process.env.SYMPHONY_WORKFLOW_PATH;
+    } else {
+      process.env.SYMPHONY_WORKFLOW_PATH = originalWorkflowPath;
+    }
+    while (tempDirs.length > 0) {
+      const dir = tempDirs.pop();
+      if (dir) rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  async function loadRuntime() {
+    const workflowDir = mkdtempSync(path.join(tmpdir(), "symphony-workflow-control-"));
+    tempDirs.push(workflowDir);
+    const workflowPath = path.join(workflowDir, "WORKFLOW.md");
+    writeFileSync(
+      workflowPath,
+      `---
+project_id: symphony-local
+poll_interval_ms: 30000
+acp:
+  mode: mock
+---
+
+Run the issue.
+`,
+    );
+    process.env.SYMPHONY_WORKFLOW_PATH = workflowPath;
+
+    const runtime = await import("../src/orchestrator-runtime");
+    return { ...runtime, workflowPath };
+  }
+
+  test("start and stop return runtime snapshots", async () => {
+    const { controlRuntime, stopOrchestratorRuntime } = await loadRuntime();
+
+    const started = controlRuntime({ action: "start" });
+    expect(started.status).toBe("running");
+    expect(started.startedAt).toEqual(expect.any(String));
+    expect(started.nextTickAt).toEqual(expect.any(String));
+
+    const stopped = controlRuntime({ action: "stop" });
+    expect(stopped.status).toBe("stopped");
+    expect(stopped.nextTickAt).toBeNull();
+
+    stopOrchestratorRuntime();
+  });
+
+  test("tick returns enriched snapshot and increments tick count", async () => {
+    const { controlRuntime, stopOrchestratorRuntime } = await loadRuntime();
+
+    controlRuntime({ action: "start" });
+    const beforeTick = controlRuntime({ action: "tick" });
+
+    expect(beforeTick.tickCount).toBe(1);
+    expect(beforeTick.lastTickAt).toEqual(expect.any(String));
+    expect(beforeTick.counts).toEqual({
+      running: 0,
+      retrying: 0,
+      candidates: 0,
+    });
+
+    const afterTick = controlRuntime({ action: "tick" });
+    expect(afterTick.tickCount).toBe(2);
+
+    stopOrchestratorRuntime();
+  });
+
+  test("setPollInterval and clearPollIntervalOverride update poll settings", async () => {
+    const { controlRuntime, stopOrchestratorRuntime } = await loadRuntime();
+
+    controlRuntime({ action: "start" });
+
+    const overridden = controlRuntime({
+      action: "setPollInterval",
+      pollIntervalMs: 5000,
+    });
+    expect(overridden.pollIntervalMs).toBe(5000);
+    expect(overridden.pollIntervalSource).toBe("override");
+
+    const reset = controlRuntime({ action: "clearPollIntervalOverride" });
+    expect(reset.pollIntervalMs).toBe(30_000);
+    expect(reset.pollIntervalSource).toBe("workflow");
+
+    stopOrchestratorRuntime();
+  });
+
+  test("rejects poll intervals below 1000 ms", async () => {
+    const { controlRuntime, stopOrchestratorRuntime } = await loadRuntime();
+
+    expect(() =>
+      controlRuntime({
+        action: "setPollInterval",
+        pollIntervalMs: 500,
+      }),
+    ).toThrow("pollIntervalMs must be at least 1000 ms");
+
+    stopOrchestratorRuntime();
+  });
+});

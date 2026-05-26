@@ -1,6 +1,6 @@
 import type { SqliteDatabase } from "@db/client";
 import type { IRunAttemptRepo } from "@db/types/repo";
-import type { RunAttemptRow, RunAttemptStatus } from "@db/types/domain";
+import type { RunAttemptRow, RunAttemptStatus, RecentFinishedRunSnapshotRow, RunningRunSnapshotRow } from "@db/types/domain";
 
 export class RunAttemptRepo implements IRunAttemptRepo {
   constructor(private readonly db: SqliteDatabase) {}
@@ -60,6 +60,54 @@ export class RunAttemptRepo implements IRunAttemptRepo {
          ORDER BY r.started_at ASC`,
       )
       .all(projectId) as RunAttemptRow[];
+  }
+
+  listRunningRunSnapshots(projectId: string): RunningRunSnapshotRow[] {
+    return this.db
+      .prepare(
+        `SELECT r.id as runAttemptId,
+                r.issue_id as issueId,
+                i.identifier as identifier,
+                r.attempt_number as attemptNumber,
+                r.started_at as startedAt,
+                s.id as sessionId,
+                s.runtime_kind as runtimeKind,
+                s.status as sessionStatus
+         FROM run_attempts r
+         JOIN issues i ON i.id = r.issue_id
+         LEFT JOIN agent_sessions s ON s.id = (
+           SELECT id
+           FROM agent_sessions
+           WHERE run_attempt_id = r.id AND status = 'running'
+           ORDER BY started_at DESC
+           LIMIT 1
+         )
+         WHERE i.project_id = ? AND r.status = 'running'
+         ORDER BY r.started_at ASC`,
+      )
+      .all(projectId) as RunningRunSnapshotRow[];
+  }
+
+  listRecentFinishedRunSnapshots(projectId: string, limit = 20): RecentFinishedRunSnapshotRow[] {
+    const cap = Math.max(1, Math.min(200, Math.floor(limit)));
+    return this.db
+      .prepare(
+        `SELECT r.id as runAttemptId,
+                r.issue_id as issueId,
+                i.identifier as identifier,
+                r.attempt_number as attemptNumber,
+                r.status as status,
+                r.finished_at as finishedAt,
+                r.error_message as errorMessage
+         FROM run_attempts r
+         JOIN issues i ON i.id = r.issue_id
+         WHERE i.project_id = ?
+           AND r.status != 'running'
+           AND r.finished_at IS NOT NULL
+         ORDER BY r.finished_at DESC
+         LIMIT ?`,
+      )
+      .all(projectId, cap) as RecentFinishedRunSnapshotRow[];
   }
 
   listRunAttemptsByIssue(issueId: string, limit = 20): RunAttemptRow[] {

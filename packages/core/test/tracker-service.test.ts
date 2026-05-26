@@ -144,4 +144,40 @@ describe("TrackerService", () => {
 
     closeDatabase(db);
   });
+
+  test("updates issue fields and writes audit events", () => {
+    const db = openDatabase(dbPath());
+    migrateUp(db);
+    seedProjectWithDefaultStates(db, { id: "p1", name: "Project One", slug: "project-one" });
+
+    const service = TrackerService.fromDatabase(db);
+    service.createIssue({
+      id: "i1",
+      projectId: "p1",
+      identifier: "P1-1",
+      title: "Original title",
+      description: "Original description",
+      priority: 3,
+      actor: "dev-user",
+    });
+
+    const updated = service.updateIssue({
+      issueId: "i1",
+      title: "Updated title",
+      description: "Updated description",
+      priority: 1,
+      actor: "dev-user",
+    });
+
+    expect(updated).toMatchObject({
+      title: "Updated title",
+      description: "Updated description",
+      priority: 1,
+    });
+
+    const audit = service.getAuditEvents("p1");
+    expect(audit.map((e: { action: string }) => e.action)).toContain("issue.updated");
+
+    closeDatabase(db);
+  });
 });

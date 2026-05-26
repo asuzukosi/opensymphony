@@ -3,6 +3,14 @@ export interface CandidateSelectionInput {
   maxCount: number;
 }
 
+export interface CandidateIssueSnapshot {
+  issueId: string;
+  identifier: string;
+  title: string;
+  priority: number | null;
+  stateCategory: string;
+}
+
 export interface ScheduleRetryInput {
   issueId: string;
   attemptNumber: number;

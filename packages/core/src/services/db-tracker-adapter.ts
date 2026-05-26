@@ -1,24 +1,7 @@
-import { randomUUID } from "node:crypto";
-import type { ITrackerStore, WorkflowStateCategory } from "@symphony/db";
-import type { TrackerAdapter, TrackerIssueSnapshot } from "@core/types/tracker-adapter";
+import type { ITrackerStore } from "@symphony/db";
 
-export class DbTrackerAdapter implements TrackerAdapter {
+export class DbTrackerAdapter {
   constructor(private readonly store: ITrackerStore) {}
-
-  listCandidateIssues(projectId: string, categories: string[]): TrackerIssueSnapshot[] {
-    const typedCategories = categories as WorkflowStateCategory[];
-    const issues = this.store.issues.listIssuesByStateCategories(projectId, typedCategories);
-    return issues.map((issue) => {
-      const state = this.store.workflowStates.getWorkflowStateById(issue.workflowStateId);
-      return {
-        id: issue.id,
-        identifier: issue.identifier,
-        title: issue.title,
-        priority: issue.priority,
-        stateCategory: state?.category ?? "other",
-      };
-    });
-  }
 
   getIssueStateCategories(issueIds: string[]): Record<string, string> {
     const result: Record<string, string> = {};
@@ -29,18 +12,5 @@ export class DbTrackerAdapter implements TrackerAdapter {
       result[issueId] = state?.category ?? "other";
     }
     return result;
-  }
-
-  transitionIssue(issueId: string, targetStateId: string): void {
-    this.store.issues.updateIssueState(issueId, targetStateId);
-  }
-
-  addIssueComment(issueId: string, body: string, authorId?: string): void {
-    this.store.comments.addComment({
-      id: randomUUID(),
-      issueId,
-      body,
-      authorId: authorId ?? null,
-    });
   }
 }

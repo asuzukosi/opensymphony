@@ -8,6 +8,14 @@ export interface CreateIssueInput {
   actor?: string;
 }
 
+export interface UpdateIssueInput {
+  issueId: string;
+  title?: string;
+  description?: string | null;
+  priority?: number | null;
+  actor?: string;
+}
+
 export interface TransitionIssueInput {
   issueId: string;
   targetStateId: string;

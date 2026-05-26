@@ -17,6 +17,9 @@ export interface RuntimeRunningEntry {
   identifier: string;
   attemptNumber: number;
   startedAt: string;
+  sessionId: string | null;
+  runtimeKind: string | null;
+  sessionStatus: string | null;
 }
 
 export interface RuntimeRetryEntry {
@@ -24,6 +27,16 @@ export interface RuntimeRetryEntry {
   identifier: string;
   attemptNumber: number;
   dueAt: string;
+  errorMessage: string | null;
+}
+
+export interface RuntimeRecentFinishedEntry {
+  runAttemptId: string;
+  issueId: string;
+  identifier: string;
+  attemptNumber: number;
+  status: "succeeded" | "failed" | "cancelled";
+  finishedAt: string;
   errorMessage: string | null;
 }
 
@@ -39,6 +52,12 @@ export interface RuntimeStateCounts {
   running: number;
   retrying: number;
   candidates: number;
+}
+
+export interface RuntimeAgentTotals {
+  activeSessions: number;
+  mockAcp: number;
+  acpCli: number;
 }
 
 export interface RuntimeStateSnapshot {
@@ -61,8 +80,10 @@ export interface RuntimeStateSnapshot {
   lastError: string | null;
   validationError: string | null;
   counts: RuntimeStateCounts;
+  agentTotals: RuntimeAgentTotals;
   running: RuntimeRunningEntry[];
   retrying: RuntimeRetryEntry[];
+  recentFinished: RuntimeRecentFinishedEntry[];
   candidates: RuntimeCandidateEntry[];
   recentEvents: RuntimeAuditEvent[];
 }
@@ -159,6 +180,19 @@ export type ControlRuntimeRequest =
   | { action: "setPollInterval"; pollIntervalMs: number }
   | { action: "clearPollIntervalOverride" };
 
+export interface SettingsProjectMeta {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface SettingsAcpConfig {
+  mode: "mock" | "subprocess";
+  command: string;
+  args: string[];
+  mockCompletionDelayMs: number;
+}
+
 export interface SettingsView {
   status: RuntimeStatus;
   workflowPath: string;
@@ -166,6 +200,8 @@ export interface SettingsView {
   runtimeAdapterKind: RuntimeAdapterKind;
   pollIntervalMs: number;
   pollIntervalSource: PollIntervalSource;
+  project: SettingsProjectMeta;
+  acp: SettingsAcpConfig;
   startedAt: string | null;
   nextTickAt: string | null;
   tickCount: number;

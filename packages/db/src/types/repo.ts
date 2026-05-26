@@ -3,12 +3,17 @@ import type {
   AssignmentRow,
   AuditEventInput,
   IssueCommentRow,
+  IssueDetailRow,
   IssueRow,
+  IssuesByWorkflowStateColumn,
   LabelRow,
   ProjectRow,
   RetryQueueRow,
+  RetryRunSnapshotRow,
   RunAttemptRow,
   RunAttemptStatus,
+  RunningRunSnapshotRow,
+  RecentFinishedRunSnapshotRow,
   WorkflowStateCategory,
   WorkflowStateRow,
 } from "@db/types/domain";
@@ -26,9 +31,15 @@ export interface IWorkflowStateRepo {
 export interface IIssueRepo {
   createIssue(input: IssueRow): void;
   updateIssueState(issueId: string, workflowStateId: string): void;
+  updateIssue(
+    issueId: string,
+    input: { title?: string; description?: string | null; priority?: number | null },
+  ): void;
   getIssueById(issueId: string): IssueRow | null;
   setIssueAssignee(issueId: string, assigneeId: string | null): void;
   listIssuesByStateCategories(projectId: string, categories: WorkflowStateCategory[]): IssueRow[];
+  listIssuesGroupedByWorkflowState(projectId: string): IssuesByWorkflowStateColumn[];
+  getIssueDetail(issueId: string, attemptLimit?: number): IssueDetailRow | null;
 }
 
 export interface ICommentRepo {
@@ -71,6 +82,8 @@ export interface IRunAttemptRepo {
   ): void;
   getLatestRunAttempt(issueId: string): RunAttemptRow | null;
   listRunningRunAttempts(projectId: string): RunAttemptRow[];
+  listRunningRunSnapshots(projectId: string): RunningRunSnapshotRow[];
+  listRecentFinishedRunSnapshots(projectId: string, limit?: number): RecentFinishedRunSnapshotRow[];
   listRunAttemptsByIssue(issueId: string, limit?: number): RunAttemptRow[];
 }
 
@@ -95,6 +108,7 @@ export interface IRetryQueueRepo {
   getRetry(issueId: string): RetryQueueRow | null;
   listDueRetries(nowIso: string): RetryQueueRow[];
   listRetries(): RetryQueueRow[];
+  listRetrySnapshots(projectId: string): RetryRunSnapshotRow[];
 }
 
 export interface IAuditRepo {

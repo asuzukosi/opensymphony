@@ -8,6 +8,34 @@ export const ACP_RUNTIME_KIND = {
   subprocess: "acp-cli",
 } as const satisfies Record<ACPConfig["mode"], RuntimeAdapterKind>;
 
+export const SUBPROCESS_STDERR_BUFFER_MAX_CHARS = 8192;
+export const SUBPROCESS_STDERR_TAIL_MAX_CHARS = 500;
+
+export function appendSubprocessStderr(current: string, chunk: string): string {
+  const next = current + chunk;
+  if (next.length <= SUBPROCESS_STDERR_BUFFER_MAX_CHARS) {
+    return next;
+  }
+  return next.slice(-SUBPROCESS_STDERR_BUFFER_MAX_CHARS);
+}
+
+export function tailStderr(
+  stderr: string,
+  maxChars = SUBPROCESS_STDERR_TAIL_MAX_CHARS,
+): string {
+  const trimmed = stderr.trim();
+  if (trimmed.length <= maxChars) {
+    return trimmed;
+  }
+  return trimmed.slice(-maxChars);
+}
+
+export function formatSubprocessExitError(exitCode: number | null, stderr: string): string {
+  const code = exitCode ?? "unknown";
+  const stderrTail = tailStderr(stderr);
+  return stderrTail.length > 0 ? `exit_${String(code)}:${stderrTail}` : `exit_${String(code)}`;
+}
+
 export type RuntimeSessionStatus = "running" | "succeeded" | "failed" | "cancelled";
 
 export interface StartRuntimeSessionInput {
@@ -134,7 +162,7 @@ class MockAcpAdapter implements AcpAdapter {
 interface SubprocessStoredSession extends RuntimeSessionRecord {
   process: ChildProcessWithoutNullStreams | null;
   stdout: string[];
-  stderr: string[];
+  stderrText: string;
 }
 
 class SubprocessAcpAdapter implements AcpAdapter {
@@ -177,14 +205,14 @@ class SubprocessAcpAdapter implements AcpAdapter {
       errorMessage: null,
       process: child,
       stdout: [],
-      stderr: [],
+      stderrText: "",
     };
 
     child.stdout.on("data", (chunk) => {
       session.stdout.push(String(chunk));
     });
     child.stderr.on("data", (chunk) => {
-      session.stderr.push(String(chunk));
+      session.stderrText = appendSubprocessStderr(session.stderrText, String(chunk));
     });
 
     child.on("error", (error) => {
@@ -203,9 +231,7 @@ class SubprocessAcpAdapter implements AcpAdapter {
         session.errorMessage = null;
       } else {
         session.status = "failed";
-        const stderrTail = session.stderr.join("").trim();
-        session.errorMessage =
-          stderrTail.length > 0 ? `exit_${String(code)}:${stderrTail}` : `exit_${String(code)}`;
+        session.errorMessage = formatSubprocessExitError(code, session.stderrText);
       }
       session.process = null;
     });
