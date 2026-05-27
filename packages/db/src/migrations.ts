@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import type { SqliteDatabase } from "@db/client";
@@ -9,8 +9,18 @@ export interface MigrationRecord {
 }
 
 function migrationsDir(): string {
-  const thisFilePath = fileURLToPath(import.meta.url);
-  return path.resolve(path.dirname(thisFilePath), "..", "migrations");
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    process.env.SYMPHONY_MIGRATIONS_DIR,
+    path.resolve(thisDir, "..", "migrations"),
+    path.resolve(thisDir, "migrations"),
+  ].filter((dir): dir is string => typeof dir === "string" && dir.length > 0);
+
+  for (const dir of candidates) {
+    if (existsSync(dir)) return dir;
+  }
+
+  throw new Error(`migrations directory not found (checked: ${candidates.join(", ")})`);
 }
 
 function readMigrationFiles(

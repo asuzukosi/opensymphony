@@ -5,15 +5,15 @@ max_concurrency: 2
 retry_max_backoff_ms: 300000
 workspace:
   root: .symphony-workspaces
-# local dev default — demo acp server on stdio (replace with your repo absolute path)
+# hermes acp on stdio — use absolute path so electron main process can find the binary
 acp:
-  command: node
-  args: ["/absolute/path/to/symphony/scripts/demo-acp-server.mjs"]
+  command: /Users/kosisochukwuasuzu/Developer/agents/hermes-agent/.hermes_venv/bin/hermes
+  args: ["acp"]
   permission_mode: auto_approve
-# production with hermes (requires `hermes` on PATH; run `hermes acp --check`):
-#   command: hermes
-#   args: ["acp"]
-#   permission_mode: requires_approval
+# local dev without hermes — demo acp server (replace with your repo absolute path):
+#   command: node
+#   args: ["/absolute/path/to/symphony/scripts/demo-acp-server.mjs"]
+#   permission_mode: auto_approve
 hooks:
   timeout_ms: 60000
 ---

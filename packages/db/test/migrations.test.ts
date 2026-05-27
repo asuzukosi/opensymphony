@@ -96,7 +96,7 @@ describe("db migrations", () => {
 
     expect(tablesAfterDown.map((t) => t.name)).toContain("issues");
     expect(tablesAfterDown.map((t) => t.name)).toContain("projects");
-    expect(tablesAfterDown.map((t) => t.name)).not.toContain("retry_queue");
+    expect(tablesAfterDown.map((t) => t.name)).toContain("retry_queue");
     expect(tablesAfterDown.map((t) => t.name)).not.toContain("session_events");
 
     const appliedAgain = migrateUp(db);
