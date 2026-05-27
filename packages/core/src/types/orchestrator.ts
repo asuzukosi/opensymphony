@@ -28,6 +28,5 @@ export interface StartRunInput {
 export interface AttachSessionInput {
   sessionId: string;
   runAttemptId: string;
-  runtimeKind: string;
   sessionRef?: string;
 }

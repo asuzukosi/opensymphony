@@ -7,8 +7,8 @@ Purpose: Define a service that orchestrates coding agents to get project work do
 ## Implementation Status (May 2026)
 
 The active Symphony product in this repository is the **TypeScript Electron desktop**
-(`apps/desktop`) with local SQLite task tracking (`@symphony/db`) and ACP agent subprocesses
-(`acp.mode: mock` or `subprocess`).
+(`apps/desktop`) with local SQLite task tracking (`@symphony/db`) and an ACP JSON-RPC client
+that spawns a configured ACP server subprocess per issue (`acp.command` + `acp.args`).
 
 This document remains a language-agnostic design reference for orchestration concepts (workflow
 loader, poll loop, workspaces, hooks, retries, reconciliation). The Electron implementation maps
@@ -18,7 +18,7 @@ those concepts as follows:
 |--------------|----------------------------|
 | Issue tracker API | Local SQLite via `@symphony/db` and `@symphony/core` services |
 | Tracker writes from agents | `TrackerService` and desktop IPC (`mutateIssue`) |
-| Agent runtime session | ACP CLI subprocess (mock or real CLI) |
+| Agent runtime session | ACP client subprocess (`hermes acp`, demo server, or other ACP server on stdio) |
 | Observability dashboard | Electron renderer + structured JSON logs on main-process stdout |
 
 See the root [`README.md`](README.md) for the current architecture and run instructions. For ACP agent integration, see [`connecting-acp-agents.md`](connecting-acp-agents.md).

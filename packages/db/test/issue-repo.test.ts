@@ -177,8 +177,7 @@ describe("getIssueDetail", () => {
     store.agentSessions.createSession({
       id: "sess-1",
       runAttemptId: "run-1",
-      runtimeKind: "mock-acp",
-      sessionRef: "acp://i1/1",
+      sessionRef: "11111111-1111-4111-8111-111111111111",
       status: "succeeded",
     });
     db.prepare(`UPDATE agent_sessions SET finished_at = ? WHERE id = ?`).run(
@@ -199,8 +198,7 @@ describe("getIssueDetail", () => {
     store.agentSessions.createSession({
       id: "sess-2",
       runAttemptId: "run-2",
-      runtimeKind: "acp-cli",
-      sessionRef: "acp://i1/2",
+      sessionRef: "22222222-2222-4222-8222-222222222222",
       status: "running",
     });
 
@@ -238,8 +236,7 @@ describe("getIssueDetail", () => {
       sessions: [
         {
           sessionId: "sess-2",
-          runtimeKind: "acp-cli",
-          sessionRef: "acp://i1/2",
+          sessionRef: "22222222-2222-4222-8222-222222222222",
           status: "running",
           startedAt: expect.any(String),
           finishedAt: null,
@@ -253,14 +250,74 @@ describe("getIssueDetail", () => {
       sessions: [
         {
           sessionId: "sess-1",
-          runtimeKind: "mock-acp",
-          sessionRef: "acp://i1/1",
+          sessionRef: "11111111-1111-4111-8111-111111111111",
           status: "succeeded",
           startedAt: expect.any(String),
           finishedAt: "2026-01-01T00:01:00.000Z",
+          events: [],
         },
       ],
     });
+
+    closeDatabase(db);
+  });
+
+  test("includes session events on each session", () => {
+    const { db, store } = openTestStore();
+
+    store.issues.createIssue({
+      id: "i1",
+      projectId: "p1",
+      workflowStateId: "p1:todo",
+      identifier: "P1-1",
+      title: "Events issue",
+      description: null,
+      priority: null,
+    });
+    store.runAttempts.createRunAttempt({
+      id: "run-1",
+      issueId: "i1",
+      attemptNumber: 1,
+      status: "succeeded",
+    });
+    store.agentSessions.createSession({
+      id: "sess-1",
+      runAttemptId: "run-1",
+      status: "succeeded",
+    });
+    store.sessionEvents.append({
+      id: "event-1",
+      sessionId: "sess-1",
+      kind: "prompt",
+      payload: { text: "run task" },
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    store.sessionEvents.append({
+      id: "event-2",
+      sessionId: "sess-1",
+      kind: "stream_chunk",
+      payload: { chunk: "hello" },
+      createdAt: "2026-01-01T00:00:01.000Z",
+    });
+
+    const detail = store.issues.getIssueDetail("i1");
+
+    expect(detail?.attempts[0]?.sessions[0]?.events).toEqual([
+      {
+        id: "event-1",
+        sessionId: "sess-1",
+        kind: "prompt",
+        payloadJson: JSON.stringify({ text: "run task" }),
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "event-2",
+        sessionId: "sess-1",
+        kind: "stream_chunk",
+        payloadJson: JSON.stringify({ chunk: "hello" }),
+        createdAt: "2026-01-01T00:00:01.000Z",
+      },
+    ]);
 
     closeDatabase(db);
   });

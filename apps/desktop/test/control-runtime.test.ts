@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { demoAcpWorkflowBlock } from "./fixtures/demo-acp-workflow";
 
 const tempDirs: string[] = [];
 let userDataDir = "";
@@ -38,22 +39,18 @@ describe("controlRuntime", () => {
     }
   });
 
-  async function loadRuntime() {
-    const workflowDir = mkdtempSync(path.join(tmpdir(), "symphony-workflow-control-"));
-    tempDirs.push(workflowDir);
-    const workflowPath = path.join(workflowDir, "WORKFLOW.md");
-    writeFileSync(
-      workflowPath,
-      `---
+  async function loadRuntime(workflowBody = `---
 project_id: symphony-local
 poll_interval_ms: 30000
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
-`,
-    );
+`) {
+    const workflowDir = mkdtempSync(path.join(tmpdir(), "symphony-workflow-control-"));
+    tempDirs.push(workflowDir);
+    const workflowPath = path.join(workflowDir, "WORKFLOW.md");
+    writeFileSync(workflowPath, workflowBody);
     process.env.SYMPHONY_WORKFLOW_PATH = workflowPath;
 
     const runtime = await import("../src/orchestrator-runtime");
@@ -132,16 +129,100 @@ Run the issue.
 
     controlRuntime({ action: "start" });
 
-    controlRuntime({
+    const overridden = controlRuntime({
       action: "setPermissionMode",
       permissionMode: "requires_approval",
     });
+    expect(overridden.lastAction).toBe("permission_mode_updated");
     expect(getSettings().permissionMode).toBe("requires_approval");
     expect(getSettings().permissionModeSource).toBe("override");
 
-    controlRuntime({ action: "clearPermissionModeOverride" });
+    const reset = controlRuntime({ action: "clearPermissionModeOverride" });
+    expect(reset.lastAction).toBe("permission_mode_reset_to_workflow");
     expect(getSettings().permissionMode).toBe("auto_approve");
     expect(getSettings().permissionModeSource).toBe("workflow");
+
+    stopOrchestratorRuntime();
+  });
+
+  test("clearPermissionModeOverride restores workflow requires_approval default", async () => {
+    const { controlRuntime, getSettings, stopOrchestratorRuntime } = await loadRuntime(`---
+project_id: symphony-local
+poll_interval_ms: 30000
+${demoAcpWorkflowBlock(["  permission_mode: requires_approval"])}
+---
+
+Run the issue.
+`);
+
+    controlRuntime({
+      action: "setPermissionMode",
+      permissionMode: "auto_approve",
+    });
+    expect(getSettings().permissionMode).toBe("auto_approve");
+    expect(getSettings().permissionModeSource).toBe("override");
+
+    controlRuntime({ action: "clearPermissionModeOverride" });
+    expect(getSettings().permissionMode).toBe("requires_approval");
+    expect(getSettings().permissionModeSource).toBe("workflow");
+
+    stopOrchestratorRuntime();
+  });
+
+  test("permission mode override survives workflow reload", async () => {
+    const { controlRuntime, getRuntimeState, getSettings, stopOrchestratorRuntime, workflowPath } =
+      await loadRuntime(`---
+project_id: symphony-local
+poll_interval_ms: 30000
+${demoAcpWorkflowBlock(["  permission_mode: requires_approval"])}
+---
+
+Run the issue.
+`);
+
+    controlRuntime({
+      action: "setPermissionMode",
+      permissionMode: "auto_approve",
+    });
+
+    writeFileSync(
+      workflowPath,
+      `---
+project_id: symphony-local
+poll_interval_ms: 30000
+${demoAcpWorkflowBlock(["  permission_mode: requires_approval"])}
+---
+
+Run the issue with updated workflow body.
+`,
+    );
+
+    getRuntimeState();
+
+    expect(getSettings().permissionMode).toBe("auto_approve");
+    expect(getSettings().permissionModeSource).toBe("override");
+    expect(getSettings().promptTemplate).toBe("Run the issue with updated workflow body.");
+
+    stopOrchestratorRuntime();
+  });
+
+  test("setPermissionMode to auto_approve via controlRuntime", async () => {
+    const { controlRuntime, getSettings, stopOrchestratorRuntime } = await loadRuntime(`---
+project_id: symphony-local
+poll_interval_ms: 30000
+${demoAcpWorkflowBlock(["  permission_mode: requires_approval"])}
+---
+
+Run the issue.
+`);
+
+    controlRuntime({
+      action: "setPermissionMode",
+      permissionMode: "auto_approve",
+    });
+
+    expect(getSettings().permissionMode).toBe("auto_approve");
+    expect(getSettings().permissionModeSource).toBe("override");
 
     stopOrchestratorRuntime();
   });

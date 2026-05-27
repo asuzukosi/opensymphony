@@ -8,6 +8,7 @@ import {
   CardTitle,
   Skeleton,
 } from "@symphony/ui";
+import { SettingsPermissionMode } from "@/renderer/components/settings-permission-mode";
 import { SettingsPollInterval } from "@/renderer/components/settings-poll-interval";
 import { SettingsReadonlyConfig } from "@/renderer/components/settings-readonly-config";
 import { SettingsRuntimeControls } from "@/renderer/components/settings-runtime-controls";
@@ -20,7 +21,7 @@ import {
 } from "@/renderer/components/runtime-status-badge";
 import { useRuntimeControls, useSettings } from "@/renderer/hooks";
 
-type SettingsAction = "control" | "poll";
+type SettingsAction = "control" | "poll" | "permission";
 
 function SettingsLoadingState(): React.JSX.Element {
   return (
@@ -65,6 +66,8 @@ export function Settings(): React.JSX.Element {
     tick,
     setPollInterval,
     clearPollIntervalOverride,
+    setPermissionMode,
+    clearPermissionModeOverride,
     isPending,
     error: controlsError,
     reset: resetControls,
@@ -148,6 +151,11 @@ export function Settings(): React.JSX.Element {
                 }
               />
               <MetadataField label="Poll source" value={settings.pollIntervalSource} />
+              <MetadataField label="Permission mode" value={settings.permissionMode} />
+              <MetadataField
+                label="Permission source"
+                value={settings.permissionModeSource}
+              />
               <MetadataField
                 label="Next tick"
                 value={
@@ -208,6 +216,17 @@ export function Settings(): React.JSX.Element {
               onReset={() => runControl(clearPollIntervalOverride, "poll")}
               isPending={isPending}
               submitError={failedAction === "poll" ? controlsError : null}
+            />
+
+            <SettingsPermissionMode
+              permissionMode={settings.permissionMode}
+              permissionModeSource={settings.permissionModeSource}
+              onApply={(permissionMode) =>
+                runControl(() => setPermissionMode(permissionMode), "permission")
+              }
+              onReset={() => runControl(clearPermissionModeOverride, "permission")}
+              isPending={isPending}
+              submitError={failedAction === "permission" ? controlsError : null}
             />
           </CardContent>
         </SurfaceCard>

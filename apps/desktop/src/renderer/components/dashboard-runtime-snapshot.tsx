@@ -1,7 +1,6 @@
 import React, { useMemo } from "react";
 import { History } from "lucide-react";
 import {
-  Badge,
   CardContent,
   CardDescription,
   CardHeader,
@@ -78,14 +77,6 @@ export function DashboardRuntimeSnapshot({
       </CardHeader>
       <CardContent className="space-y-6">
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          <MetadataField
-            label="Runtime adapter"
-            value={
-              <Badge variant="outline" className="font-normal">
-                {snapshot.runtimeAdapterKind}
-              </Badge>
-            }
-          />
           <MetadataField label="Started at" value={startedAt} />
           <MetadataField
             label="Poll interval"

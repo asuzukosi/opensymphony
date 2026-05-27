@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { closeDatabase, createTrackerStore, openDatabase } from "@symphony/db";
+import { demoAcpWorkflowBlock } from "./fixtures/demo-acp-workflow";
 
 const tempDirs: string[] = [];
 let userDataDir = "";
@@ -47,8 +48,7 @@ describe("mutateIssue create", () => {
       workflowPath,
       `---
 project_id: symphony-local
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -100,8 +100,7 @@ Run the issue.
       workflowPath,
       `---
 project_id: symphony-local
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -144,8 +143,7 @@ Run the issue.
       workflowPath,
       `---
 project_id: symphony-local
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -199,8 +197,7 @@ describe("mutateIssue update", () => {
       workflowPath,
       `---
 project_id: symphony-local
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -303,8 +300,7 @@ describe("mutateIssue transition", () => {
       workflowPath,
       `---
 project_id: symphony-local
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -408,8 +404,7 @@ describe("mutateIssue comment", () => {
       workflowPath,
       `---
 project_id: symphony-local
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -478,8 +473,7 @@ Run the issue.
       workflowPath,
       `---
 project_id: symphony-local
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.

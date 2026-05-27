@@ -32,7 +32,7 @@ describe("db migrations", () => {
     const firstRun = migrateUp(db);
     const secondRun = migrateUp(db);
 
-    expect(firstRun).toEqual(["001_init", "002_retry_queue"]);
+    expect(firstRun).toEqual(["001_init", "002_retry_queue", "003_session_events"]);
     expect(secondRun).toEqual([]);
 
     const tables = db
@@ -88,7 +88,7 @@ describe("db migrations", () => {
     migrateUp(db);
 
     const removed = migrateDown(db, 1);
-    expect(removed).toEqual(["002_retry_queue"]);
+    expect(removed).toEqual(["003_session_events"]);
 
     const tablesAfterDown = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
@@ -97,9 +97,10 @@ describe("db migrations", () => {
     expect(tablesAfterDown.map((t) => t.name)).toContain("issues");
     expect(tablesAfterDown.map((t) => t.name)).toContain("projects");
     expect(tablesAfterDown.map((t) => t.name)).not.toContain("retry_queue");
+    expect(tablesAfterDown.map((t) => t.name)).not.toContain("session_events");
 
     const appliedAgain = migrateUp(db);
-    expect(appliedAgain).toEqual(["002_retry_queue"]);
+    expect(appliedAgain).toEqual(["003_session_events"]);
 
     closeDatabase(db);
   });

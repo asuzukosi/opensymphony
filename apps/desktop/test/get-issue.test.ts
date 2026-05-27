@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { closeDatabase, createTrackerStore, openDatabase } from "@symphony/db";
+import { demoAcpWorkflowBlock } from "./fixtures/demo-acp-workflow";
 
 const tempDirs: string[] = [];
 let userDataDir = "";
@@ -47,8 +48,7 @@ describe("getIssue", () => {
       workflowPath,
       `---
 project_id: symphony-local
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -87,9 +87,15 @@ Run the issue.
     store.agentSessions.createSession({
       id: "sess-1",
       runAttemptId: "run-1",
-      runtimeKind: "mock-acp",
-      sessionRef: "acp://i1/1",
+      sessionRef: "11111111-1111-4111-8111-111111111111",
       status: "running",
+    });
+    store.sessionEvents.append({
+      id: "event-1",
+      sessionId: "sess-1",
+      kind: "prompt",
+      payload: { text: "run task" },
+      createdAt: "2026-01-01T00:00:00.000Z",
     });
     closeDatabase(db);
 
@@ -121,11 +127,18 @@ Run the issue.
       sessions: [
         {
           sessionId: "sess-1",
-          runtimeKind: "mock-acp",
-          sessionRef: "acp://i1/1",
+          sessionRef: "11111111-1111-4111-8111-111111111111",
           status: "running",
           startedAt: expect.any(String),
           finishedAt: null,
+          events: [
+            {
+              id: "event-1",
+              kind: "prompt",
+              payload: { text: "run task" },
+              createdAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
         },
       ],
     });
@@ -141,8 +154,7 @@ Run the issue.
       workflowPath,
       `---
 project_id: symphony-local
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.

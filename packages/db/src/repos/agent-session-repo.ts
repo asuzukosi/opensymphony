@@ -8,16 +8,18 @@ export class AgentSessionRepo implements IAgentSessionRepo {
   createSession(input: {
     id: string;
     runAttemptId: string;
-    runtimeKind: string;
     sessionRef?: string | null;
     status: "running" | "succeeded" | "failed" | "cancelled";
   }): void {
     this.db
       .prepare(
         `INSERT INTO agent_sessions (id, run_attempt_id, runtime_kind, session_ref, status)
-         VALUES (@id, @runAttemptId, @runtimeKind, @sessionRef, @status)`,
+         VALUES (@id, @runAttemptId, 'acp', @sessionRef, @status)`,
       )
-      .run({ ...input, sessionRef: input.sessionRef ?? null });
+      .run({
+        ...input,
+        sessionRef: input.sessionRef ?? null,
+      });
   }
 
   updateSessionStatus(
@@ -33,10 +35,25 @@ export class AgentSessionRepo implements IAgentSessionRepo {
       .run(status, status, sessionId);
   }
 
+  updateSessionRef(sessionId: string, sessionRef: string): void {
+    const normalized = sessionRef.trim();
+    if (!normalized) {
+      return;
+    }
+
+    this.db
+      .prepare(
+        `UPDATE agent_sessions
+         SET session_ref = ?
+         WHERE id = ? AND (session_ref IS NULL OR session_ref != ?)`,
+      )
+      .run(normalized, sessionId, normalized);
+  }
+
   listSessionsByRunAttempt(runAttemptId: string): AgentSessionRow[] {
     return this.db
       .prepare(
-        `SELECT id, run_attempt_id as runAttemptId, runtime_kind as runtimeKind,
+        `SELECT id, run_attempt_id as runAttemptId,
                 session_ref as sessionRef, status, started_at as startedAt, finished_at as finishedAt
          FROM agent_sessions
          WHERE run_attempt_id = ?

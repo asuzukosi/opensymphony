@@ -72,6 +72,16 @@ export class WorkflowLoaderService {
     if (normalized === "false") return false;
     if (normalized === "null") return null;
     if (/^-?\d+$/.test(normalized)) return Number.parseInt(normalized, 10);
+    if (normalized.startsWith("[") && normalized.endsWith("]")) {
+      try {
+        const parsed: unknown = JSON.parse(normalized);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch {
+        // fall through to string handling
+      }
+    }
     if (
       (normalized.startsWith('"') && normalized.endsWith('"')) ||
       (normalized.startsWith("'") && normalized.endsWith("'"))

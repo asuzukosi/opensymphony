@@ -29,7 +29,6 @@ function makeRuntimeSnapshot(): RuntimeStateSnapshot {
   return {
     generatedAt: "2026-05-26T00:00:00.000Z",
     status: "running",
-    runtimeAdapterKind: "mock-acp",
     workflowPath: "/tmp/WORKFLOW.md",
     workflowVersion: "1",
     workflowLastReloadedAt: "2026-05-26T00:00:00.000Z",
@@ -46,7 +45,7 @@ function makeRuntimeSnapshot(): RuntimeStateSnapshot {
     lastError: null,
     validationError: null,
     counts: { running: 0, retrying: 0, candidates: 0 },
-    agentTotals: { activeSessions: 0, mockAcp: 0, acpCli: 0 },
+    agentTotals: { activeSessions: 0 },
     running: [],
     retrying: [],
     recentFinished: [],

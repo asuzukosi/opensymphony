@@ -105,6 +105,6 @@ describe("stdio-stream", () => {
         stdin: null as unknown as NodeJS.WritableStream,
         stdout: null as unknown as NodeJS.ReadableStream,
       }),
-    ).toThrow("acp stdio bridge requires piped stdin and stdout");
+    ).toThrow("ACP stdio bridge requires piped stdin and stdout");
   });
 });

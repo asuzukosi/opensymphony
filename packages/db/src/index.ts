@@ -13,8 +13,10 @@ export {
 } from "@db/migrations";
 export { seedProjectWithDefaultStates, type SeedProjectInput } from "@db/seed";
 export { createTrackerStore } from "@db/store";
+export { SESSION_EVENT_TAIL_CAP } from "@db/repos/session-event-repo";
 export type {
   AgentSessionRow,
+  AppendSessionEventInput,
   AssignmentRow,
   AuditEventInput,
   IssueCommentRow,
@@ -26,6 +28,8 @@ export type {
   RetryQueueRow,
   RunAttemptRow,
   RunAttemptStatus,
+  SessionEventKind,
+  SessionEventRow,
   RetryRunSnapshotRow,
   RecentFinishedRunSnapshotRow,
   RunningRunSnapshotRow,
@@ -43,6 +47,7 @@ export type {
   IProjectRepo,
   IRetryQueueRepo,
   IRunAttemptRepo,
+  ISessionEventRepo,
   ITrackerStore,
   IWorkflowStateRepo,
 } from "@db/types/repo";

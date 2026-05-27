@@ -133,8 +133,7 @@ describe("orchestrator groundwork services", () => {
     runs.attachSession({
       sessionId: "sess-1",
       runAttemptId: "run-1",
-      runtimeKind: "mock-acp",
-      sessionRef: "abc",
+      sessionRef: "11111111-1111-4111-8111-111111111111",
     });
     runs.finishSession("sess-1", "succeeded");
     runs.finishRun("run-1", "succeeded");
@@ -145,6 +144,32 @@ describe("orchestrator groundwork services", () => {
     expect(latest?.status).toBe("succeeded");
     expect(sessions).toHaveLength(1);
     expect(sessions[0].status).toBe("succeeded");
+    expect(sessions[0].sessionRef).toBe("11111111-1111-4111-8111-111111111111");
+
+    closeDatabase(db);
+  });
+
+  test("run lifecycle syncs agent session ref after attach", () => {
+    const db = openDatabase(dbPath());
+    migrateUp(db);
+    seedProjectWithDefaultStates(db, { id: "p1", name: "Project", slug: "project" });
+
+    const tracker = TrackerService.fromDatabase(db);
+    tracker.createIssue({ id: "i1", projectId: "p1", identifier: "P1-1", title: "Run me" });
+
+    const store = createTrackerStore(db);
+    const runs = new RunLifecycleService(store.runAttempts, store.agentSessions);
+
+    runs.startRun({ runAttemptId: "run-1", issueId: "i1", attemptNumber: 1 });
+    runs.attachSession({
+      sessionId: "sess-1",
+      runAttemptId: "run-1",
+    });
+    runs.syncSessionRef("sess-1", "22222222-2222-4222-8222-222222222222");
+
+    const sessions = store.agentSessions.listSessionsByRunAttempt("run-1");
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].sessionRef).toBe("22222222-2222-4222-8222-222222222222");
 
     closeDatabase(db);
   });

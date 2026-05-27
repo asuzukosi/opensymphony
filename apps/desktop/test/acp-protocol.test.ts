@@ -12,7 +12,7 @@ import {
   SYMPHONY_CLIENT_INFO,
 } from "@/runtime/acp/acp-protocol";
 
-describe("acp-protocol", () => {
+describe("ACP protocol", () => {
   test("re-exports official sdk method constants", () => {
     expect(AGENT_METHODS.initialize).toBe("initialize");
     expect(AGENT_METHODS.session_new).toBe("session/new");

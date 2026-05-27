@@ -45,3 +45,9 @@ export {
   type UpdateIssueInput,
   type UseMutateIssueResult,
 } from "./use-mutate-issue";
+
+export {
+  usePendingPermissions,
+  type UsePendingPermissionsOptions,
+  type UsePendingPermissionsResult,
+} from "./use-pending-permissions";

@@ -1,5 +1,6 @@
 import type {
   AgentSessionRow,
+  AppendSessionEventInput,
   AssignmentRow,
   AuditEventInput,
   IssueCommentRow,
@@ -11,6 +12,7 @@ import type {
   RetryQueueRow,
   RetryRunSnapshotRow,
   RunAttemptRow,
+  SessionEventRow,
   RunAttemptStatus,
   RunningRunSnapshotRow,
   RecentFinishedRunSnapshotRow,
@@ -91,7 +93,6 @@ export interface IAgentSessionRepo {
   createSession(input: {
     id: string;
     runAttemptId: string;
-    runtimeKind: string;
     sessionRef?: string | null;
     status: "running" | "succeeded" | "failed" | "cancelled";
   }): void;
@@ -99,7 +100,13 @@ export interface IAgentSessionRepo {
     sessionId: string,
     status: "running" | "succeeded" | "failed" | "cancelled",
   ): void;
+  updateSessionRef(sessionId: string, sessionRef: string): void;
   listSessionsByRunAttempt(runAttemptId: string): AgentSessionRow[];
+}
+
+export interface ISessionEventRepo {
+  append(input: AppendSessionEventInput): SessionEventRow;
+  listBySessionId(sessionId: string): SessionEventRow[];
 }
 
 export interface IRetryQueueRepo {
@@ -133,6 +140,7 @@ export interface ITrackerStore {
   dependencies: IDependencyRepo;
   runAttempts: IRunAttemptRepo;
   agentSessions: IAgentSessionRepo;
+  sessionEvents: ISessionEventRepo;
   retryQueue: IRetryQueueRepo;
   audits: IAuditRepo;
 }

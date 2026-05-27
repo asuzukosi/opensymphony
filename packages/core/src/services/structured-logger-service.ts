@@ -9,7 +9,6 @@ export interface StructuredLogEvent {
   issueIdentifier?: string;
   runAttemptId?: string;
   sessionId?: string;
-  runtimeKind?: string;
   error?: string;
   meta?: Record<string, unknown>;
   timestamp: string;

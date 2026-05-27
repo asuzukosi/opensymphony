@@ -1,5 +1,5 @@
 import type {
-  ACPMode,
+  LoadedWorkflow,
   PermissionMode,
   RuntimeConfig,
   RuntimeConfigValidationError,
@@ -7,6 +7,7 @@ import type {
   RuntimeConfigValidationResult,
   WorkflowDefinition,
 } from "@core/types/workflow";
+import { WorkflowLoaderService } from "@core/services/workflow-loader-service";
 
 export type {
   RuntimeConfigValidationError,
@@ -28,15 +29,15 @@ export function validateRuntimeConfig(definition: WorkflowDefinition): RuntimeCo
 
   if (!acp || typeof acp !== "object" || Array.isArray(acp)) {
     errors.push({
-      field: "acp.mode",
-      message: "Missing required config: acp.mode",
+      field: "acp.command",
+      message: "Missing required config: acp.command",
     });
   } else {
-    const mode = (acp as Record<string, unknown>).mode;
-    if (mode !== "mock" && mode !== "subprocess") {
+    const command = (acp as Record<string, unknown>).command;
+    if (typeof command !== "string" || command.trim().length === 0) {
       errors.push({
-        field: "acp.mode",
-        message: "Invalid config: acp.mode must be mock or subprocess",
+        field: "acp.command",
+        message: "Missing required config: acp.command",
       });
     }
   }
@@ -65,14 +66,22 @@ const DEFAULTS: RuntimeConfigDefaults = {
 };
 
 const DEFAULT_ACP = {
-  mode: "mock" as const,
-  mockCompletionDelayMs: 1200,
   command: process.execPath,
-  args: ["-e", "setTimeout(() => process.exit(0), 1200)"],
+  args: [] as string[],
   permissionMode: "auto_approve" as const,
 };
 
 export class RuntimeConfigService {
+  loadWorkflowFromFile(filePath: string): LoadedWorkflow {
+    const loader = new WorkflowLoaderService();
+    return this.toLoadedWorkflow(loader.loadFromFile(filePath));
+  }
+
+  loadWorkflowFromText(content: string): LoadedWorkflow {
+    const loader = new WorkflowLoaderService();
+    return this.toLoadedWorkflow(loader.loadFromText(content));
+  }
+
   toRuntimeConfig(definition: WorkflowDefinition): RuntimeConfig {
     const config = definition.config;
     const acp = this.asObject(config.acp);
@@ -99,13 +108,8 @@ export class RuntimeConfigService {
       retryMaxBackoffMs,
       workspaceRoot,
       acp: {
-        mode: this.readACPMode(acp.mode),
         command: this.readStringOrFallback(acp.command, DEFAULT_ACP.command),
         args: this.readStringArray(acp.args, DEFAULT_ACP.args),
-        mockCompletionDelayMs: this.readPositiveInt(
-          acp.mock_completion_delay_ms,
-          DEFAULT_ACP.mockCompletionDelayMs,
-        ),
         permissionMode: this.readPermissionMode(acp.permission_mode),
       },
       hooks: {
@@ -115,6 +119,13 @@ export class RuntimeConfigService {
         beforeRemove: this.readStringArray(hooks.before_remove, []),
         timeoutMs: hookTimeoutMs,
       },
+    };
+  }
+
+  private toLoadedWorkflow(definition: WorkflowDefinition): LoadedWorkflow {
+    return {
+      config: this.toRuntimeConfig(definition),
+      promptTemplate: definition.promptTemplate,
     };
   }
 
@@ -136,13 +147,6 @@ export class RuntimeConfigService {
     return value;
   }
 
-  private readACPMode(value: unknown): ACPMode {
-    if (value === "subprocess" || value === "mock") {
-      return value;
-    }
-    return DEFAULT_ACP.mode;
-  }
-
   private readPermissionMode(value: unknown): PermissionMode {
     if (value === "auto_approve" || value === "requires_approval") {
       return value;
@@ -158,6 +162,27 @@ export class RuntimeConfigService {
   }
 
   private readStringArray(value: unknown, fallback: string[]): string[] {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed === "[]") {
+        return [];
+      }
+      if (trimmed.startsWith("[")) {
+        try {
+          const parsed: unknown = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            const strings = parsed
+              .filter((item): item is string => typeof item === "string")
+              .map((item) => item.trim())
+              .filter(Boolean);
+            return strings.length > 0 ? strings : [];
+          }
+        } catch {
+          // fall through to default handling
+        }
+      }
+    }
+
     if (!Array.isArray(value)) return [...fallback];
     const strings = value
       .filter((item): item is string => typeof item === "string")

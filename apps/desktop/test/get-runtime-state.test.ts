@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { demoAcpWorkflowBlock } from "./fixtures/demo-acp-workflow";
 
 const tempDirs: string[] = [];
 let userDataDir = "";
@@ -46,8 +47,7 @@ describe("getRuntimeState", () => {
       workflowPath,
       `---
 project_id: symphony-local
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -68,8 +68,6 @@ Run the issue.
     });
     expect(snapshot.agentTotals).toEqual({
       activeSessions: 0,
-      mockAcp: 0,
-      acpCli: 0,
     });
     expect(snapshot.running).toEqual([]);
     expect(snapshot.retrying).toEqual([]);

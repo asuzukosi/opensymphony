@@ -1,12 +1,14 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { app } from "electron";
 import {
   createTrackerStore,
   migrateUp,
   openDatabase,
   type ITrackerStore,
+  type IssueDetailRow,
   type SqliteDatabase,
   type WorkflowStateCategory,
 } from "@symphony/db";
@@ -19,8 +21,8 @@ import {
   RuntimeConfigService,
   StructuredLoggerService,
   TrackerService,
-  WorkflowLoaderService,
   WorkspaceManagerService,
+  type LoadedWorkflow,
   type PermissionMode,
   type RuntimeConfig,
 } from "@symphony/core";
@@ -33,13 +35,12 @@ import type {
   ResolvePermissionRequest,
   RuntimeAuditEvent,
   RuntimeCandidateEntry,
-  RuntimeAdapterKind,
   RuntimeStateSnapshot,
   RuntimeStatus,
   SettingsView,
 } from "@/ipc";
-import type { AcpAdapter } from "@/runtime/acp";
-import { createAcpAdapter, ACP_RUNTIME_KIND, runtimeKindFromAcpMode } from "@/runtime/acp";
+import type { ACPAdapter } from "@/runtime/acp";
+import { createACPAdapter, type CreateACPAdapterDependencies } from "@/runtime/acp";
 import {
   createPermissionRouter,
   type PermissionRouter,
@@ -55,7 +56,6 @@ import { buildRuntimeSnapshot } from "@/runtime/runtime-snapshot";
 
 interface RuntimeState {
   status: RuntimeStatus;
-  runtimeAdapterKind: RuntimeAdapterKind;
   workflowPath: string;
   workflowVersion: string | null;
   workflowLastReloadedAt: string | null;
@@ -74,9 +74,12 @@ interface RuntimeState {
   lastError: string | null;
 }
 
+const defaultDemoAcpServerPath = fileURLToPath(
+  new URL("../../../scripts/demo-acp-server.mjs", import.meta.url),
+);
+
 const state: RuntimeState = {
   status: "idle",
-  runtimeAdapterKind: ACP_RUNTIME_KIND.mock,
   workflowPath: "",
   workflowVersion: null,
   workflowLastReloadedAt: null,
@@ -98,7 +101,7 @@ const state: RuntimeState = {
 let db: SqliteDatabase | null = null;
 let store: ITrackerStore | null = null;
 let orchestrator: OrchestratorService | null = null;
-let runtimeAdapter: AcpAdapter | null = null;
+let runtimeAdapter: ACPAdapter | null = null;
 let loadedConfig: RuntimeConfig | null = null;
 let loadedPromptTemplate = "";
 let loadedWorkflowVersion: string | null = null;
@@ -147,11 +150,6 @@ function scheduleTimer(): void {
   state.nextTickAt = new Date(Date.now() + state.pollIntervalMs).toISOString();
 }
 
-interface LoadedWorkflow {
-  config: RuntimeConfig;
-  promptTemplate: string;
-}
-
 function fallbackRuntimeConfig(): RuntimeConfig {
   return {
     projectId: "desktop-default",
@@ -160,10 +158,8 @@ function fallbackRuntimeConfig(): RuntimeConfig {
     retryMaxBackoffMs: 300000,
     workspaceRoot: ".symphony-workspaces",
     acp: {
-      mode: "mock",
       command: process.execPath,
-      args: ["-e", "setTimeout(() => process.exit(0), 1200)"],
-      mockCompletionDelayMs: 1200,
+      args: [defaultDemoAcpServerPath],
       permissionMode: "auto_approve",
     },
     hooks: {
@@ -177,16 +173,11 @@ function fallbackRuntimeConfig(): RuntimeConfig {
 }
 
 function loadWorkflow(): LoadedWorkflow {
-  const loader = new WorkflowLoaderService();
   const configService = new RuntimeConfigService();
   const workflowPath = resolveWorkflowPath();
 
   try {
-    const definition = loader.loadFromFile(workflowPath);
-    return {
-      config: configService.toRuntimeConfig(definition),
-      promptTemplate: definition.promptTemplate,
-    };
+    return configService.loadWorkflowFromFile(workflowPath);
   } catch {
     return {
       config: fallbackRuntimeConfig(),
@@ -218,12 +209,11 @@ function applyWorkflowConfig(
   loadedConfig = config;
   loadedWorkflowVersion = version;
   orchestrator = store ? new OrchestratorService(store, config) : null;
-  runtimeAdapter = createAcpAdapter(config.acp, { getPermissionRouter });
+  runtimeAdapter = createACPAdapter(config.acp, createACPAdapterDeps());
   workspaceManager = new WorkspaceManagerService(
     path.resolve(process.cwd(), config.workspaceRoot),
     config.hooks,
   );
-  state.runtimeAdapterKind = runtimeKindFromAcpMode(config.acp.mode);
   state.workflowPath = workflowPath;
   state.workflowVersion = version;
   state.workflowLastReloadedAt = new Date().toISOString();
@@ -304,8 +294,7 @@ function ensureDbAndOrchestrator(): {
     orchestrator = new OrchestratorService(store, config);
   }
   if (!runtimeAdapter) {
-    runtimeAdapter = createAcpAdapter(config.acp, { getPermissionRouter });
-    state.runtimeAdapterKind = runtimeKindFromAcpMode(config.acp.mode);
+    runtimeAdapter = createACPAdapter(config.acp, createACPAdapterDeps());
   }
 
   return { orchestrator, config, store };
@@ -349,7 +338,6 @@ export function startOrchestratorRuntime(): void {
     event: "runtime_started",
     message: "Orchestrator runtime started",
     projectId: config.projectId,
-    runtimeKind: state.runtimeAdapterKind,
   });
   scheduleTimer();
 }
@@ -372,7 +360,7 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
   try {
     const runtime = ensureDbAndOrchestrator();
     if (!runtimeAdapter) {
-      runtimeAdapter = createAcpAdapter(runtime.config.acp, { getPermissionRouter });
+      runtimeAdapter = createACPAdapter(runtime.config.acp, createACPAdapterDeps());
     }
     const pollResult = runtime.orchestrator.runPollCycle(nowIso);
     const runLifecycle = new RunLifecycleService(
@@ -404,7 +392,6 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
       runLifecycle.attachSession({
         sessionId: startedSession.sessionId,
         runAttemptId: dispatched.runAttemptId,
-        runtimeKind: startedSession.runtimeKind,
         sessionRef: startedSession.sessionRef ?? undefined,
       });
       logger.info({
@@ -415,7 +402,6 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
         issueIdentifier: dispatched.identifier,
         runAttemptId: dispatched.runAttemptId,
         sessionId: startedSession.sessionId,
-        runtimeKind: startedSession.runtimeKind,
       });
     }
 
@@ -446,7 +432,6 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
           issueId: session.runAttemptId.split(":attempt:")[0] ?? undefined,
           runAttemptId: session.runAttemptId,
           sessionId: session.id,
-          runtimeKind: session.runtimeKind,
         });
       }
     }
@@ -474,6 +459,10 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
     );
 
     for (const status of polledStatuses) {
+      if (status.sessionRef) {
+        runLifecycle.syncSessionRef(status.sessionId, status.sessionRef);
+      }
+
       if (status.status === "running") continue;
       const matchingAttempt = runningAttempts.find((attempt) => attempt.id === status.runAttemptId);
       if (!matchingAttempt) continue;
@@ -494,7 +483,6 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
           issueId: status.issueId,
           runAttemptId: status.runAttemptId,
           sessionId: status.sessionId,
-          runtimeKind: status.runtimeKind,
         });
       } else if (status.status === "failed") {
         runLifecycle.finishSession(status.sessionId, "failed");
@@ -516,7 +504,6 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
           issueId: status.issueId,
           runAttemptId: status.runAttemptId,
           sessionId: status.sessionId,
-          runtimeKind: status.runtimeKind,
           error: status.errorMessage ?? "runtime_failure",
         });
       } else if (status.status === "cancelled") {
@@ -533,7 +520,6 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
           issueId: status.issueId,
           runAttemptId: status.runAttemptId,
           sessionId: status.sessionId,
-          runtimeKind: status.runtimeKind,
         });
       }
     }
@@ -607,6 +593,15 @@ export function getPermissionRouter(): PermissionRouter {
   return permissionRouter;
 }
 
+function createACPAdapterDeps(): CreateACPAdapterDependencies {
+  return {
+    getPermissionRouter,
+    appendSessionEvent: (input) => {
+      store?.sessionEvents.append(input);
+    },
+  };
+}
+
 export function setOrchestratorPermissionMode(permissionMode: PermissionMode): void {
   if (permissionMode !== "auto_approve" && permissionMode !== "requires_approval") {
     throw new Error("permissionMode must be auto_approve or requires_approval");
@@ -671,9 +666,9 @@ export function getRuntimeState(eventLimit = 20): RuntimeStateSnapshot {
   return buildRuntimeSnapshot({
     store: runtime.store,
     projectId: runtime.config.projectId,
+    sessionObservability: runtimeAdapter,
     state: {
       status: state.status,
-      runtimeAdapterKind: state.runtimeAdapterKind,
       workflowPath: state.workflowPath,
       workflowVersion: state.workflowVersion,
       workflowLastReloadedAt: state.workflowLastReloadedAt,
@@ -703,7 +698,7 @@ export function getSettings(): SettingsView {
     status: state.status,
     workflowPath: state.workflowPath,
     workflowVersion: state.workflowVersion,
-    runtimeAdapterKind: state.runtimeAdapterKind,
+    promptTemplate: loadedPromptTemplate,
     pollIntervalMs: state.pollIntervalMs,
     pollIntervalSource: state.pollIntervalSource,
     permissionMode: state.permissionMode,
@@ -712,10 +707,8 @@ export function getSettings(): SettingsView {
       ? { id: projectRow.id, name: projectRow.name, slug: projectRow.slug }
       : { id: projectSeed.id, name: projectSeed.name, slug: projectSeed.slug },
     acp: {
-      mode: config.acp.mode,
       command: config.acp.command,
       args: [...config.acp.args],
-      mockCompletionDelayMs: config.acp.mockCompletionDelayMs,
     },
     startedAt: state.startedAt,
     nextTickAt: state.nextTickAt,
@@ -745,6 +738,49 @@ export function getProjectBoard(): ProjectBoard {
   };
 }
 
+function parseSessionEventPayload(payloadJson: string): unknown {
+  try {
+    return JSON.parse(payloadJson) as unknown;
+  } catch {
+    return payloadJson;
+  }
+}
+
+function mapIssueDetailForIpc(detail: IssueDetailRow): IssueDetail {
+  return {
+    issueId: detail.issueId,
+    projectId: detail.projectId,
+    identifier: detail.identifier,
+    title: detail.title,
+    description: detail.description,
+    priority: detail.priority,
+    workflowStateId: detail.workflowStateId,
+    workflowStateName: detail.workflowStateName,
+    comments: detail.comments,
+    attempts: detail.attempts.map((attempt) => ({
+      runAttemptId: attempt.runAttemptId,
+      attemptNumber: attempt.attemptNumber,
+      status: attempt.status,
+      startedAt: attempt.startedAt,
+      finishedAt: attempt.finishedAt,
+      errorMessage: attempt.errorMessage,
+      sessions: attempt.sessions.map((session) => ({
+        sessionId: session.sessionId,
+        sessionRef: session.sessionRef,
+        status: session.status,
+        startedAt: session.startedAt,
+        finishedAt: session.finishedAt,
+        events: session.events.map((event) => ({
+          id: event.id,
+          kind: event.kind,
+          payload: parseSessionEventPayload(event.payloadJson),
+          createdAt: event.createdAt,
+        })),
+      })),
+    })),
+  };
+}
+
 export function getIssue(issueId: string, attemptLimit = 20): IssueDetail {
   const runtime = ensureDbAndOrchestrator();
   const detail = runtime.store.issues.getIssueDetail(issueId, attemptLimit);
@@ -752,7 +788,7 @@ export function getIssue(issueId: string, attemptLimit = 20): IssueDetail {
     throw new Error(`issue not found: ${issueId}`);
   }
 
-  return detail;
+  return mapIssueDetailForIpc(detail);
 }
 
 function nextIssueIdentifier(store: ITrackerStore, projectId: string): string {

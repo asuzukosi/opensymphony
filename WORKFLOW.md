@@ -5,14 +5,21 @@ max_concurrency: 2
 retry_max_backoff_ms: 300000
 workspace:
   root: .symphony-workspaces
+# local dev default — demo acp server on stdio (replace with your repo absolute path)
 acp:
-  mode: subprocess
-  command: /Users/kosisochukwuasuzu/Developer/interfaces/symphony/run-hermes.sh
-  args: []
+  command: node
+  args: ["/absolute/path/to/symphony/scripts/demo-acp-server.mjs"]
+  permission_mode: auto_approve
+# production with hermes (requires `hermes` on PATH; run `hermes acp --check`):
+#   command: hermes
+#   args: ["acp"]
+#   permission_mode: requires_approval
 hooks:
   timeout_ms: 60000
 ---
 
-You are working on a Symphony issue from the local project board.
+Issue {{identifier}}: {{title}}
+
+{{description}}
 
 Complete the scoped work, run relevant checks, and leave the issue ready for human review.

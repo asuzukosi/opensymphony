@@ -31,13 +31,13 @@ export type {
 } from "@core/types/orchestrator";
 export type {
   ACPConfig,
-  ACPMode,
   PermissionMode,
   RuntimeConfig,
   RuntimeConfigValidationError,
   RuntimeConfigValidationField,
   RuntimeConfigValidationResult,
   RuntimeHooksConfig,
+  LoadedWorkflow,
   WorkflowDefinition,
 } from "@core/types/workflow";
 export {

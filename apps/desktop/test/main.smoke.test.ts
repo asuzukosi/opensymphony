@@ -10,7 +10,6 @@ const ipcHandle = vi.fn();
 const getRuntimeStateMock = vi.fn(async () => ({
   generatedAt: "2026-05-26T00:00:00.000Z",
   status: "idle",
-  runtimeAdapterKind: "mock-acp",
   workflowPath: "/tmp/WORKFLOW.md",
   workflowVersion: null,
   workflowLastReloadedAt: null,
@@ -27,7 +26,7 @@ const getRuntimeStateMock = vi.fn(async () => ({
   lastError: null,
   validationError: null,
   counts: { running: 0, retrying: 0, candidates: 0 },
-  agentTotals: { activeSessions: 0, mockAcp: 0, acpCli: 0 },
+  agentTotals: { activeSessions: 0 },
   running: [],
   retrying: [],
   candidates: [],
@@ -64,9 +63,9 @@ const resolvePermissionMock = vi.fn(async () => undefined);
 
 const getSettingsMock = vi.fn(async () => ({
   status: "idle",
-  workflowPath: "/tmp/WORKFLOW.md",
-  workflowVersion: null,
-  runtimeAdapterKind: "mock-acp",
+    workflowPath: "/tmp/WORKFLOW.md",
+    workflowVersion: null,
+    promptTemplate: "Run the issue.",
   pollIntervalMs: 30_000,
   pollIntervalSource: "workflow",
   permissionMode: "auto_approve",
@@ -77,10 +76,8 @@ const getSettingsMock = vi.fn(async () => ({
     slug: "symphony-local",
   },
   acp: {
-    mode: "mock",
     command: process.execPath,
-    args: ["-e", "setTimeout(() => process.exit(0), 1200)"],
-    mockCompletionDelayMs: 1200,
+    args: ["/tmp/demo-acp-server.mjs"],
   },
   startedAt: null,
   nextTickAt: null,
@@ -93,7 +90,6 @@ const getSettingsMock = vi.fn(async () => ({
 const controlRuntimeMock = vi.fn(async () => ({
   generatedAt: "2026-05-26T00:00:00.000Z",
   status: "running",
-  runtimeAdapterKind: "mock-acp",
   workflowPath: "/tmp/WORKFLOW.md",
   workflowVersion: null,
   workflowLastReloadedAt: null,
@@ -110,7 +106,7 @@ const controlRuntimeMock = vi.fn(async () => ({
   lastError: null,
   validationError: null,
   counts: { running: 0, retrying: 0, candidates: 0 },
-  agentTotals: { activeSessions: 0, mockAcp: 0, acpCli: 0 },
+  agentTotals: { activeSessions: 0 },
   running: [],
   retrying: [],
   candidates: [],
@@ -206,7 +202,7 @@ describe("desktop bootstrap smoke", () => {
     expect(getRuntimeStateMock).toHaveBeenCalledWith(15);
     expect(snapshot).toMatchObject({
       counts: { running: 0, retrying: 0, candidates: 0 },
-      agentTotals: { activeSessions: 0, mockAcp: 0, acpCli: 0 },
+      agentTotals: { activeSessions: 0 },
       validationError: null,
     });
   });
@@ -277,7 +273,7 @@ describe("desktop bootstrap smoke", () => {
       workflowPath: "/tmp/WORKFLOW.md",
       pollIntervalMs: 30_000,
       project: { id: "symphony-local", slug: "symphony-local" },
-      acp: { mode: "mock" },
+      acp: { command: process.execPath },
     });
   });
 

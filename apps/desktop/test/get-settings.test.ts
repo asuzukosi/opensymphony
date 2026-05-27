@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { demoAcpWorkflowBlock } from "./fixtures/demo-acp-workflow";
 
 const tempDirs: string[] = [];
 let userDataDir = "";
@@ -49,13 +50,11 @@ describe("getSettings", () => {
     return { ...runtime, workflowPath };
   }
 
-  test("returns workflow path, project meta, acp config, and poll interval from workflow", async () => {
+  test("returns workflow path, project meta, ACP config, and poll interval from workflow", async () => {
     const { getSettings, stopOrchestratorRuntime, workflowPath } = await loadRuntime(`---
 project_id: symphony-local
 poll_interval_ms: 45000
-acp:
-  mode: mock
-  mock_completion_delay_ms: 900
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -65,20 +64,18 @@ Run the issue.
 
     expect(settings.workflowPath).toBe(workflowPath);
     expect(settings.workflowVersion).toEqual(expect.any(String));
+    expect(settings.promptTemplate).toBe("Run the issue.");
     expect(settings.pollIntervalMs).toBe(45_000);
     expect(settings.pollIntervalSource).toBe("workflow");
     expect(settings.permissionMode).toBe("auto_approve");
     expect(settings.permissionModeSource).toBe("workflow");
-    expect(settings.runtimeAdapterKind).toBe("mock-acp");
     expect(settings.project).toEqual({
       id: "symphony-local",
       name: "symphony-local",
       slug: "symphony-local",
     });
-    expect(settings.acp.mode).toBe("mock");
-    expect(settings.acp.mockCompletionDelayMs).toBe(900);
-    expect(settings.acp.command).toEqual(expect.any(String));
-    expect(settings.acp.args.length).toBeGreaterThan(0);
+    expect(settings.acp.command).toEqual(process.execPath);
+    expect(settings.acp.args).toEqual([expect.stringContaining("demo-acp-server.mjs")]);
     expect(settings.status).toBe("idle");
 
     stopOrchestratorRuntime();
@@ -88,8 +85,7 @@ Run the issue.
     const { controlRuntime, getSettings, stopOrchestratorRuntime } = await loadRuntime(`---
 project_id: symphony-local
 poll_interval_ms: 30000
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -108,9 +104,7 @@ Run the issue.
     const { controlRuntime, getSettings, stopOrchestratorRuntime } = await loadRuntime(`---
 project_id: symphony-local
 poll_interval_ms: 30000
-acp:
-  mode: mock
-  permission_mode: auto_approve
+${demoAcpWorkflowBlock(["  permission_mode: auto_approve"])}
 ---
 
 Run the issue.
@@ -121,6 +115,67 @@ Run the issue.
 
     expect(settings.permissionMode).toBe("requires_approval");
     expect(settings.permissionModeSource).toBe("override");
+
+    stopOrchestratorRuntime();
+  });
+
+  test("reads requires_approval permission mode from workflow", async () => {
+    const { getSettings, stopOrchestratorRuntime } = await loadRuntime(`---
+project_id: symphony-local
+poll_interval_ms: 30000
+${demoAcpWorkflowBlock(["  permission_mode: requires_approval"])}
+---
+
+Run the issue.
+`);
+
+    const settings = getSettings();
+
+    expect(settings.permissionMode).toBe("requires_approval");
+    expect(settings.permissionModeSource).toBe("workflow");
+
+    stopOrchestratorRuntime();
+  });
+
+  test("reflects clearPermissionModeOverride through getSettings", async () => {
+    const { controlRuntime, getSettings, stopOrchestratorRuntime } = await loadRuntime(`---
+project_id: symphony-local
+poll_interval_ms: 30000
+${demoAcpWorkflowBlock(["  permission_mode: requires_approval"])}
+---
+
+Run the issue.
+`);
+
+    controlRuntime({ action: "setPermissionMode", permissionMode: "auto_approve" });
+    expect(getSettings().permissionMode).toBe("auto_approve");
+    expect(getSettings().permissionModeSource).toBe("override");
+
+    controlRuntime({ action: "clearPermissionModeOverride" });
+    const settings = getSettings();
+
+    expect(settings.permissionMode).toBe("requires_approval");
+    expect(settings.permissionModeSource).toBe("workflow");
+
+    stopOrchestratorRuntime();
+  });
+
+  test("leaves permission mode on workflow source when poll interval is overridden", async () => {
+    const { controlRuntime, getSettings, stopOrchestratorRuntime } = await loadRuntime(`---
+project_id: symphony-local
+poll_interval_ms: 30000
+${demoAcpWorkflowBlock(["  permission_mode: requires_approval"])}
+---
+
+Run the issue.
+`);
+
+    controlRuntime({ action: "setPollInterval", pollIntervalMs: 12_000 });
+    const settings = getSettings();
+
+    expect(settings.pollIntervalSource).toBe("override");
+    expect(settings.permissionMode).toBe("requires_approval");
+    expect(settings.permissionModeSource).toBe("workflow");
 
     stopOrchestratorRuntime();
   });

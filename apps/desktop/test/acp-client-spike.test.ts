@@ -12,12 +12,12 @@ import {
 import { createACPStdioStream } from "@/runtime/acp/stdio-stream";
 import { createSymphonyACPConnection } from "@/runtime/acp/symphony-client";
 
-interface HermesAcpLaunch {
+interface HermesACPLaunch {
   readonly command: string;
   readonly args: readonly string[];
 }
 
-function resolveHermesAcpLaunch(): HermesAcpLaunch | null {
+function resolveHermesACPLaunch(): HermesACPLaunch | null {
   if (process.env.SYMPHONY_SKIP_HERMES_SPIKE === "1") {
     return null;
   }
@@ -42,21 +42,21 @@ function resolveHermesAcpLaunch(): HermesAcpLaunch | null {
   return null;
 }
 
-const hermesAcp = resolveHermesAcpLaunch();
+const hermesACP = resolveHermesACPLaunch();
 
-function spawnHermesAcp(workspacePath: string): ChildProcessWithoutNullStreams {
-  if (!hermesAcp) {
+function spawnHermesACP(workspacePath: string): ChildProcessWithoutNullStreams {
+  if (!hermesACP) {
     throw new Error("hermes acp launch config missing");
   }
 
-  return spawn(hermesAcp.command, [...hermesAcp.args], {
+  return spawn(hermesACP.command, [...hermesACP.args], {
     cwd: workspacePath,
     env: process.env,
     stdio: ["pipe", "pipe", "pipe"],
   });
 }
 
-describe.skipIf(hermesAcp === null)("acp client hermes spike", () => {
+describe.skipIf(hermesACP === null)("ACP client hermes spike", () => {
   const tempDirs: string[] = [];
   const children: ChildProcessWithoutNullStreams[] = [];
 
@@ -83,7 +83,7 @@ describe.skipIf(hermesAcp === null)("acp client hermes spike", () => {
     const workspace = mkdtempSync(path.join(tmpdir(), "symphony-hermes-spike-"));
     tempDirs.push(workspace);
 
-    const child = spawnHermesAcp(workspace);
+    const child = spawnHermesACP(workspace);
     children.push(child);
 
     const stdio = createACPStdioStream(child);
@@ -99,7 +99,7 @@ describe.skipIf(hermesAcp === null)("acp client hermes spike", () => {
     const workspace = mkdtempSync(path.join(tmpdir(), "symphony-hermes-spike-"));
     tempDirs.push(workspace);
 
-    const child = spawnHermesAcp(workspace);
+    const child = spawnHermesACP(workspace);
     children.push(child);
 
     const stdio = createACPStdioStream(child);
@@ -121,7 +121,7 @@ describe.skipIf(hermesAcp === null)("acp client hermes spike", () => {
       const workspace = mkdtempSync(path.join(tmpdir(), "symphony-hermes-spike-"));
       tempDirs.push(workspace);
 
-      const child = spawnHermesAcp(workspace);
+      const child = spawnHermesACP(workspace);
       children.push(child);
 
       const stdio = createACPStdioStream(child);
@@ -152,14 +152,14 @@ describe.skipIf(hermesAcp === null)("acp client hermes spike", () => {
   );
 });
 
-describe("acp client hermes spike availability", () => {
+describe("ACP client hermes spike availability", () => {
   test("documents skip behavior when hermes acp is unavailable", () => {
-    if (hermesAcp !== null) {
-      expect(hermesAcp.command.length).toBeGreaterThan(0);
-      expect(hermesAcp.args).toEqual(["acp"]);
+    if (hermesACP !== null) {
+      expect(hermesACP.command.length).toBeGreaterThan(0);
+      expect(hermesACP.args).toEqual(["acp"]);
       return;
     }
 
-    expect(resolveHermesAcpLaunch()).toBeNull();
+    expect(resolveHermesACPLaunch()).toBeNull();
   });
 });

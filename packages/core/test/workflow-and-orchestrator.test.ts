@@ -41,7 +41,8 @@ project_id: p1
 poll_interval_ms: 20000
 max_concurrency: 4
 acp:
-  mode: mock
+  command: node
+  args: ["/tmp/demo-acp-server.mjs"]
 ---
 # Runbook
 Execute issue work safely.
@@ -51,13 +52,31 @@ Execute issue work safely.
       project_id: "p1",
       poll_interval_ms: 20000,
       max_concurrency: 4,
-      acp: { mode: "mock" },
+      acp: {
+        command: "node",
+        args: ["/tmp/demo-acp-server.mjs"],
+      },
     });
     expect(definition.promptTemplate).toContain("Execute issue work safely.");
   });
 });
 
 describe("RuntimeConfigService", () => {
+  test("loads workflow config and prompt template from text", () => {
+    const configService = new RuntimeConfigService();
+    const loaded = configService.loadWorkflowFromText(`---
+project_id: p1
+max_concurrency: 4
+---
+Issue {{identifier}}: {{title}}
+{{description}}
+`);
+
+    expect(loaded.config.projectId).toBe("p1");
+    expect(loaded.config.maxConcurrency).toBe(4);
+    expect(loaded.promptTemplate).toBe("Issue {{identifier}}: {{title}}\n{{description}}");
+  });
+
   test("resolves runtime config with defaults", () => {
     const configService = new RuntimeConfigService();
     const config = configService.toRuntimeConfig({
@@ -72,7 +91,6 @@ describe("RuntimeConfigService", () => {
     expect(config.maxConcurrency).toBe(4);
     expect(config.pollIntervalMs).toBe(30000);
     expect(config.retryMaxBackoffMs).toBe(300000);
-    expect(config.acp.mode).toBe("mock");
     expect(config.acp.permissionMode).toBe("auto_approve");
     expect(config.acp.command.length).toBeGreaterThan(0);
     expect(config.workspaceRoot).toBe(".symphony-workspaces");
@@ -89,16 +107,14 @@ describe("RuntimeConfigService", () => {
     ).toThrow("Missing required config: project_id");
   });
 
-  test("resolves explicit subprocess acp settings", () => {
+  test("resolves explicit ACP settings", () => {
     const configService = new RuntimeConfigService();
     const config = configService.toRuntimeConfig({
       config: {
         project_id: "p2",
         acp: {
-          mode: "subprocess",
           command: "bunx",
           args: ["acp-agent", "--stdio"],
-          mock_completion_delay_ms: 500,
         },
         workspace_root: "./workspaces",
         hooks: {
@@ -108,10 +124,8 @@ describe("RuntimeConfigService", () => {
       promptTemplate: "Ship code",
     });
 
-    expect(config.acp.mode).toBe("subprocess");
     expect(config.acp.command).toBe("bunx");
     expect(config.acp.args).toEqual(["acp-agent", "--stdio"]);
-    expect(config.acp.mockCompletionDelayMs).toBe(500);
     expect(config.workspaceRoot).toBe("./workspaces");
     expect(config.hooks.timeoutMs).toBe(30_000);
   });
@@ -121,7 +135,7 @@ describe("RuntimeConfigService", () => {
     const defaultConfig = configService.toRuntimeConfig({
       config: {
         project_id: "p1",
-        acp: { mode: "mock" },
+        acp: { command: "node" },
       },
       promptTemplate: "Ship code",
     });
@@ -131,7 +145,7 @@ describe("RuntimeConfigService", () => {
       config: {
         project_id: "p1",
         acp: {
-          mode: "subprocess",
+          command: "node",
           permission_mode: "auto_approve",
         },
       },
@@ -143,7 +157,7 @@ describe("RuntimeConfigService", () => {
       config: {
         project_id: "p1",
         acp: {
-          mode: "mock",
+          command: "node",
           permission_mode: "requires_approval",
         },
       },
@@ -155,7 +169,7 @@ describe("RuntimeConfigService", () => {
       config: {
         project_id: "p1",
         acp: {
-          mode: "mock",
+          command: "node",
           permission_mode: "ask_every_time",
         },
       },
@@ -170,7 +184,7 @@ describe("validateRuntimeConfig", () => {
     const result = validateRuntimeConfig({
       config: {
         project_id: "p1",
-        acp: { mode: "mock" },
+        acp: { command: "node" },
       },
       promptTemplate: "Ship code",
     });
@@ -181,7 +195,7 @@ describe("validateRuntimeConfig", () => {
   test("reports missing project_id", () => {
     const result = validateRuntimeConfig({
       config: {
-        acp: { mode: "mock" },
+        acp: { command: "node" },
       },
       promptTemplate: "Ship code",
     });
@@ -192,7 +206,7 @@ describe("validateRuntimeConfig", () => {
     ]);
   });
 
-  test("reports missing acp.mode", () => {
+  test("reports missing acp.command", () => {
     const result = validateRuntimeConfig({
       config: {
         project_id: "p1",
@@ -202,15 +216,15 @@ describe("validateRuntimeConfig", () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual([
-      { field: "acp.mode", message: "Missing required config: acp.mode" },
+      { field: "acp.command", message: "Missing required config: acp.command" },
     ]);
   });
 
-  test("reports invalid acp.mode", () => {
+  test("reports empty acp.command", () => {
     const result = validateRuntimeConfig({
       config: {
         project_id: "p1",
-        acp: { mode: "acp-cli" },
+        acp: { command: "   " },
       },
       promptTemplate: "Ship code",
     });
@@ -218,8 +232,8 @@ describe("validateRuntimeConfig", () => {
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual([
       {
-        field: "acp.mode",
-        message: "Invalid config: acp.mode must be mock or subprocess",
+        field: "acp.command",
+        message: "Missing required config: acp.command",
       },
     ]);
   });

@@ -15,14 +15,14 @@ export interface PipedStdio {
 
 function assertPipedStdio(stdio: PipedStdio): void {
   if (!stdio.stdin || !stdio.stdout) {
-    throw new Error("acp stdio bridge requires piped stdin and stdout");
+    throw new Error("ACP stdio bridge requires piped stdin and stdout");
   }
 }
 
 /**
  * bridges a child process's piped stdin/stdout to the SDK {@link ndJsonStream}.
  *
- * symphony writes acp json-rpc to child stdin and reads agent messages from stdout.
+ * symphony writes ACP json-rpc to child stdin and reads agent messages from stdout.
  * stderr stays outside this stream and should be handled separately for diagnostics.
  */
 export function createACPStdioStream(

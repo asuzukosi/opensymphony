@@ -1,24 +1,14 @@
 import React from "react";
-import { Badge, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@symphony/ui";
+import { Badge, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Textarea } from "@symphony/ui";
 import { MetadataField } from "@/renderer/layout/metadata-field";
 import { SurfaceCard } from "@/renderer/layout/surface-card";
-import type { RuntimeAdapterKind, SettingsView } from "@/ipc";
+import type { SettingsView } from "@/ipc";
 
 type SettingsReadonlyConfigProps = {
   settings: SettingsView;
 };
 
-function formatRuntimeAdapterKind(kind: RuntimeAdapterKind): string {
-  if (kind === "mock-acp") {
-    return "Mock ACP";
-  }
-  if (kind === "acp-cli") {
-    return "ACP CLI";
-  }
-  return kind;
-}
-
-function formatAcpCommand(settings: SettingsView): string {
+function formatACPCommand(settings: SettingsView): string {
   const parts = [settings.acp.command, ...settings.acp.args].filter(Boolean);
   return parts.join(" ");
 }
@@ -45,16 +35,25 @@ export function SettingsReadonlyConfig({ settings }: SettingsReadonlyConfigProps
           />
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="prompt-template-input" className="text-xs text-muted-foreground">
+            Prompt template
+          </Label>
+          <Textarea
+            id="prompt-template-input"
+            value={settings.promptTemplate}
+            placeholder="No prompt template loaded"
+            className="min-h-32 font-mono text-xs"
+            readOnly
+          />
+          <p className="text-xs text-muted-foreground">
+            Body from WORKFLOW.md after front matter. Supports {"{{identifier}}"}, {"{{title}}"}, and{" "}
+            {"{{description}}"}.
+          </p>
+        </div>
+
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <MetadataField label="Workflow version" value={settings.workflowVersion ?? "Not loaded"} />
-          <MetadataField
-            label="Runtime adapter"
-            value={
-              <Badge variant="outline" className="font-normal">
-                {formatRuntimeAdapterKind(settings.runtimeAdapterKind)}
-              </Badge>
-            }
-          />
           <MetadataField
             label="Project id"
             value={<span className="font-mono text-sm">{settings.project.id}</span>}
@@ -75,16 +74,8 @@ export function SettingsReadonlyConfig({ settings }: SettingsReadonlyConfigProps
           </div>
           <dl className="grid gap-3 sm:grid-cols-2">
             <MetadataField
-              label="Mode"
-              value={<Badge variant="outline">{settings.acp.mode}</Badge>}
-            />
-            <MetadataField
-              label="Mock completion delay"
-              value={
-                settings.acp.mode === "mock"
-                  ? `${settings.acp.mockCompletionDelayMs} ms`
-                  : "n/a"
-              }
+              label="Permission mode"
+              value={<Badge variant="outline">{settings.permissionMode}</Badge>}
             />
           </dl>
           <div className="space-y-2">
@@ -94,7 +85,7 @@ export function SettingsReadonlyConfig({ settings }: SettingsReadonlyConfigProps
             <Input
               id="acp-command-input"
               type="text"
-              value={formatAcpCommand(settings)}
+              value={formatACPCommand(settings)}
               className="font-mono text-xs"
               readOnly
             />

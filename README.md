@@ -7,7 +7,7 @@ This repository contains a Bun + Turbo + TypeScript implementation of Symphony i
 - UI-first desktop orchestration runtime (Electron main + renderer).
 - No non-UI control plane/server in this implementation.
 - Local SQLite task tracking (`@symphony/db` + `@symphony/core` services).
-- ACP agent subprocess integration (mock mode for dev, subprocess mode for real agents).
+- ACP JSON-RPC client integration — spawns a configured ACP server on stdio per issue workspace.
 
 ## Monorepo Layout
 
@@ -24,7 +24,7 @@ WORKFLOW.md → runtime config → orchestrator tick loop (Electron main)
                     ↓
               @symphony/db (SQLite) + @symphony/core (selection, retries, lifecycle)
                     ↓
-              ACP adapter (mock or subprocess) + per-issue workspaces
+              ACP client adapter + per-issue workspaces
                     ↓
               React renderer (Dashboard, Board, Agents, Issue, Settings)
 ```
@@ -44,7 +44,7 @@ WORKFLOW.md → runtime config → orchestrator tick loop (Electron main)
 | Issue tracker | Local SQLite via `@symphony/db` |
 | Tracker reads / candidate selection | Issue repos + `@symphony/core` orchestrator services |
 | Tracker writes (transition, comment, create) | `TrackerService` + `mutateIssue` IPC |
-| Agent runtime session | ACP adapter — mock (dev) or subprocess (real CLI) |
+| Agent runtime session | ACP client — subprocess ACP server (`hermes acp` or demo server for local dev) |
 | Control plane / server | None — UI-first desktop app only |
 | Observability | Electron UI + JSON-line main-process logs |
 
@@ -78,14 +78,14 @@ See [`apps/desktop/README.md`](apps/desktop/README.md) for setup and desktop-spe
 
 Task data lives in local SQLite via `@symphony/db`. Orchestration in `@symphony/core` drives selection, dispatch, and retries; the desktop main process wires ACP sessions and workspace hooks per issue.
 
-ACP agents run as mock sessions (local dev) or subprocesses (real ACP CLI). See [`connecting-acp-agents.md`](connecting-acp-agents.md) for the subprocess contract, Hermes example, mock mode, and troubleshooting.
+ACP agents run as subprocess ACP servers on stdio. Local dev uses [`scripts/demo-acp-server.mjs`](scripts/demo-acp-server.mjs); production typically uses `hermes acp`. See [`connecting-acp-agents.md`](connecting-acp-agents.md) for the subprocess contract, Hermes setup, demo server, and troubleshooting.
 
 ## Documentation
 
 | Doc | Contents |
 |-----|----------|
 | [`SPEC.md`](SPEC.md) | Orchestration concepts and normative design reference |
-| [`connecting-acp-agents.md`](connecting-acp-agents.md) | ACP subprocess contract, Hermes, mock mode, troubleshooting |
+| [`connecting-acp-agents.md`](connecting-acp-agents.md) | ACP client architecture, Hermes, demo server, troubleshooting |
 | [`apps/desktop/README.md`](apps/desktop/README.md) | Desktop setup (`bun install`, `rebuild:native`, `bun run dev`) |
 | [`WORKFLOW.md`](WORKFLOW.md) | Default runtime configuration for local dev |
 
@@ -115,7 +115,7 @@ The implemented slices include:
 
 - monorepo/tooling baseline
 - orchestrator runtime loop + UI controls
-- ACP mock + subprocess agent paths
+- ACP client agent path (demo server for dev, real ACP CLI for production)
 - workflow reload/re-apply
 - workspace lifecycle + terminal cleanup
 - structured logging

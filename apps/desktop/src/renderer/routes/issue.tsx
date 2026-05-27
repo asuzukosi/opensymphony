@@ -9,6 +9,26 @@ import { IssueNotFoundState } from "@/renderer/components/issue-not-found-state"
 import { IssueRunHistoryTable } from "@/renderer/components/issue-run-history-table";
 import { PageShell } from "@/renderer/layout/page-shell";
 import { useIssue, useMutateIssue, useProjectBoard } from "@/renderer/hooks";
+import type { SessionEvent } from "@/ipc";
+
+function sortSessionEvents(events: SessionEvent[]): SessionEvent[] {
+  return [...events].sort((left, right) => {
+    const leftTime = Date.parse(left.createdAt);
+    const rightTime = Date.parse(right.createdAt);
+    if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+      return left.createdAt.localeCompare(right.createdAt);
+    }
+    return leftTime - rightTime;
+  });
+}
+
+function collectSessionEvents(
+  attempts: Array<{ sessions: Array<{ events: SessionEvent[] }> }>,
+): SessionEvent[] {
+  return sortSessionEvents(
+    attempts.flatMap((attempt) => attempt.sessions.flatMap((session) => session.events)),
+  );
+}
 
 function isIssueNotFoundError(error: Error): boolean {
   return error.message.includes("issue not found");
@@ -36,6 +56,10 @@ export function Issue(): React.JSX.Element {
         stateName: column.stateName,
       })) ?? [],
     [board],
+  );
+  const sessionEvents = useMemo(
+    () => collectSessionEvents(issue?.attempts ?? []),
+    [issue?.attempts],
   );
 
   const handleAddComment = async (body: string): Promise<void> => {
@@ -128,7 +152,11 @@ export function Issue(): React.JSX.Element {
           />
         </div>
         <div className="lg:col-span-1">
-          <IssueRunHistoryTable attempts={issue.attempts} />
+          <IssueRunHistoryTable
+            attempts={issue.attempts}
+            sessionEvents={sessionEvents}
+            isLoading={isLoading}
+          />
         </div>
       </div>
     </PageShell>

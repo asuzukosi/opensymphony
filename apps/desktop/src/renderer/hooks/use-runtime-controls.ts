@@ -1,4 +1,4 @@
-import type { ControlRuntimeRequest, RuntimeStateSnapshot } from "@/ipc";
+import type { ControlRuntimeRequest, PermissionMode, RuntimeStateSnapshot } from "@/ipc";
 import { useIpcMutation } from "./use-ipc-mutation";
 
 export type UseRuntimeControlsResult = {
@@ -7,6 +7,8 @@ export type UseRuntimeControlsResult = {
   tick: () => Promise<RuntimeStateSnapshot>;
   setPollInterval: (pollIntervalMs: number) => Promise<RuntimeStateSnapshot>;
   clearPollIntervalOverride: () => Promise<RuntimeStateSnapshot>;
+  setPermissionMode: (permissionMode: PermissionMode) => Promise<RuntimeStateSnapshot>;
+  clearPermissionModeOverride: () => Promise<RuntimeStateSnapshot>;
   isPending: boolean;
   error: Error | null;
   reset: () => void;
@@ -25,6 +27,10 @@ export function useRuntimeControls(): UseRuntimeControlsResult {
       controlMutation.mutateAsync({ action: "setPollInterval", pollIntervalMs }),
     clearPollIntervalOverride: () =>
       controlMutation.mutateAsync({ action: "clearPollIntervalOverride" }),
+    setPermissionMode: (permissionMode) =>
+      controlMutation.mutateAsync({ action: "setPermissionMode", permissionMode }),
+    clearPermissionModeOverride: () =>
+      controlMutation.mutateAsync({ action: "clearPermissionModeOverride" }),
     isPending: controlMutation.isPending,
     error: controlMutation.error,
     reset: controlMutation.reset,

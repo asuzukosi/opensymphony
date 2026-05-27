@@ -3,20 +3,11 @@ import { Link } from "react-router-dom";
 import { Badge, cn } from "@symphony/ui";
 import { surfaceNestedCardClass } from "@/renderer/lib/surface-styles";
 import type { RuntimeRunningEntry } from "@/ipc";
+import { formatSessionPhase } from "@/renderer/lib/format-session-phase";
 
 type AgentRunningCardProps = {
   entry: RuntimeRunningEntry;
 };
-
-function formatRuntimeKind(kind: string | null): string {
-  if (kind === "mock-acp") {
-    return "Mock";
-  }
-  if (kind === "acp-cli") {
-    return "CLI";
-  }
-  return kind ?? "Unknown";
-}
 
 function formatStartedAt(startedAt: string): string {
   const parsed = Date.parse(startedAt);
@@ -24,6 +15,16 @@ function formatStartedAt(startedAt: string): string {
     return startedAt;
   }
   return new Date(parsed).toLocaleString();
+}
+
+function formatLastEventSummary(summary: string): string {
+  if (summary === "agent_message_chunk") {
+    return "streaming response";
+  }
+  if (summary === "tool_call") {
+    return "tool call";
+  }
+  return summary.replace(/_/g, " ");
 }
 
 export function AgentRunningCard({ entry }: AgentRunningCardProps): React.JSX.Element {
@@ -37,7 +38,14 @@ export function AgentRunningCard({ entry }: AgentRunningCardProps): React.JSX.El
           >
             {entry.identifier}
           </Link>
-          <Badge variant="secondary">{entry.sessionStatus ?? "unknown"}</Badge>
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            {entry.phase ? (
+              <Badge variant="outline" className="font-normal capitalize">
+                {formatSessionPhase(entry.phase)}
+              </Badge>
+            ) : null}
+            <Badge variant="secondary">{entry.sessionStatus ?? "unknown"}</Badge>
+          </div>
         </div>
         <div className="space-y-1 text-sm">
           <p>
@@ -50,10 +58,14 @@ export function AgentRunningCard({ entry }: AgentRunningCardProps): React.JSX.El
           </p>
           <p className="text-muted-foreground">Attempt {entry.attemptNumber}</p>
           <p className="text-muted-foreground">Started {formatStartedAt(entry.startedAt)}</p>
+          {entry.lastEventSummary ? (
+            <p className="text-xs text-muted-foreground">
+              Last event: {formatLastEventSummary(entry.lastEventSummary)}
+            </p>
+          ) : null}
           <p className="font-mono text-xs text-muted-foreground">
             Session {entry.sessionId ?? "pending"}
           </p>
-          <p className="text-xs text-muted-foreground">{formatRuntimeKind(entry.runtimeKind)}</p>
         </div>
       </div>
     </div>

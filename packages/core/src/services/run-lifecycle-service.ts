@@ -28,10 +28,13 @@ export class RunLifecycleService {
     this.sessions.createSession({
       id: input.sessionId,
       runAttemptId: input.runAttemptId,
-      runtimeKind: input.runtimeKind,
       sessionRef: input.sessionRef ?? null,
       status: "running",
     });
+  }
+
+  syncSessionRef(sessionId: string, sessionRef: string): void {
+    this.sessions.updateSessionRef(sessionId, sessionRef);
   }
 
   finishSession(sessionId: string, status: "succeeded" | "failed" | "cancelled"): void {

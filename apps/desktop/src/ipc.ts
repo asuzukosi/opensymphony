@@ -1,7 +1,5 @@
 export type RuntimeStatus = "idle" | "running" | "stopped";
 
-export type RuntimeAdapterKind = "mock-acp" | "acp-cli";
-
 export type PollIntervalSource = "workflow" | "override";
 
 export type PermissionMode = "auto_approve" | "requires_approval";
@@ -31,6 +29,10 @@ export interface RuntimeAuditEvent {
   createdAt: string;
 }
 
+import type { RuntimeSessionPhase } from "@/runtime/acp/types";
+
+export type { RuntimeSessionPhase } from "@/runtime/acp/types";
+
 export interface RuntimeRunningEntry {
   runAttemptId: string;
   issueId: string;
@@ -38,8 +40,9 @@ export interface RuntimeRunningEntry {
   attemptNumber: number;
   startedAt: string;
   sessionId: string | null;
-  runtimeKind: string | null;
   sessionStatus: string | null;
+  phase: RuntimeSessionPhase | null;
+  lastEventSummary: string | null;
 }
 
 export interface RuntimeRetryEntry {
@@ -76,14 +79,11 @@ export interface RuntimeStateCounts {
 
 export interface RuntimeAgentTotals {
   activeSessions: number;
-  mockAcp: number;
-  acpCli: number;
 }
 
 export interface RuntimeStateSnapshot {
   generatedAt: string;
   status: RuntimeStatus;
-  runtimeAdapterKind: RuntimeAdapterKind;
   workflowPath: string;
   workflowVersion: string | null;
   workflowLastReloadedAt: string | null;
@@ -132,13 +132,29 @@ export interface IssueDetailComment {
   createdAt: string;
 }
 
+export type SessionEventKind =
+  | "prompt"
+  | "stream_chunk"
+  | "tool_call"
+  | "permission_request"
+  | "permission_resolve"
+  | "session_update"
+  | "error";
+
+export interface SessionEvent {
+  id: string;
+  kind: SessionEventKind;
+  payload: unknown;
+  createdAt: string;
+}
+
 export interface IssueDetailSession {
   sessionId: string;
-  runtimeKind: string;
   sessionRef: string | null;
   status: string;
   startedAt: string;
   finishedAt: string | null;
+  events: SessionEvent[];
 }
 
 export interface IssueDetailRunAttempt {
@@ -208,24 +224,22 @@ export interface SettingsProjectMeta {
   slug: string;
 }
 
-export interface SettingsAcpConfig {
-  mode: "mock" | "subprocess";
+export interface SettingsACPConfig {
   command: string;
   args: string[];
-  mockCompletionDelayMs: number;
 }
 
 export interface SettingsView {
   status: RuntimeStatus;
   workflowPath: string;
   workflowVersion: string | null;
-  runtimeAdapterKind: RuntimeAdapterKind;
+  promptTemplate: string;
   pollIntervalMs: number;
   pollIntervalSource: PollIntervalSource;
   permissionMode: PermissionMode;
   permissionModeSource: PermissionModeSource;
   project: SettingsProjectMeta;
-  acp: SettingsAcpConfig;
+  acp: SettingsACPConfig;
   startedAt: string | null;
   nextTickAt: string | null;
   tickCount: number;

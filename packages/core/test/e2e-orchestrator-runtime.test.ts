@@ -14,6 +14,7 @@ import { RunLifecycleService } from "@core/services/run-lifecycle-service";
 import { TrackerService } from "@core/services/tracker-service";
 import { WorkspaceManagerService } from "@core/services/workspace-manager-service";
 import { makeOrchestratorRuntimeConfig } from "./fixtures/runtime-config";
+import { DEMO_ACP_SERVER_PATH } from "./fixtures/demo-acp-server-path";
 
 const tempDirs: string[] = [];
 
@@ -24,10 +25,8 @@ function makeRuntimeConfig(workspaceRoot: string) {
     retryMaxBackoffMs: 3000,
     workspaceRoot,
     acp: {
-      mode: "mock",
       command: process.execPath,
-      args: ["-e", "setTimeout(() => process.exit(0), 50)"],
-      mockCompletionDelayMs: 50,
+      args: [DEMO_ACP_SERVER_PATH],
       permissionMode: "auto_approve",
     },
     hooks: {
@@ -75,8 +74,7 @@ describe("orchestrator e2e integration", () => {
     lifecycle.attachSession({
       sessionId: "sess-1",
       runAttemptId: dispatched.runAttemptId,
-      runtimeKind: "mock-acp",
-      sessionRef: "acp://p1-1/1",
+      sessionRef: "11111111-1111-4111-8111-111111111111",
     });
     lifecycle.finishSession("sess-1", "succeeded");
     lifecycle.finishRun(dispatched.runAttemptId, "succeeded");

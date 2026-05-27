@@ -5,24 +5,27 @@ import {
   formatRuntimeConfigValidationErrors,
   validateRuntimeConfig,
 } from "@symphony/core";
-import { ACP_RUNTIME_KIND } from "@/runtime/acp";
 import type {
   PollIntervalSource,
   RuntimeAgentTotals,
   RuntimeAuditEvent,
-  RuntimeAdapterKind,
   RuntimeCandidateEntry,
   RuntimeRetryEntry,
   RuntimeRecentFinishedEntry,
   RuntimeRunningEntry,
+  RuntimeSessionPhase,
   RuntimeStateCounts,
   RuntimeStateSnapshot,
   RuntimeStatus,
 } from "@/ipc";
 
+export interface RuntimeSessionObservability {
+  getSessionPhase(sessionId: string): RuntimeSessionPhase | null;
+  getLastEventSummary(sessionId: string): string | null;
+}
+
 export interface RuntimeSnapshotState {
   status: RuntimeStatus;
-  runtimeAdapterKind: RuntimeAdapterKind;
   workflowPath: string;
   workflowVersion: string | null;
   workflowLastReloadedAt: string | null;
@@ -45,6 +48,7 @@ export interface BuildRuntimeSnapshotInput {
   state: RuntimeSnapshotState;
   candidates: RuntimeCandidateEntry[];
   recentEvents: RuntimeAuditEvent[];
+  sessionObservability?: RuntimeSessionObservability | null;
 }
 
 export function buildRunningEntries(
@@ -58,9 +62,31 @@ export function buildRunningEntries(
     attemptNumber: row.attemptNumber,
     startedAt: row.startedAt,
     sessionId: row.sessionId,
-    runtimeKind: row.runtimeKind,
     sessionStatus: row.sessionStatus,
+    phase: null,
+    lastEventSummary: null,
   }));
+}
+
+export function enrichRunningEntries(
+  running: RuntimeRunningEntry[],
+  observability: RuntimeSessionObservability | null | undefined,
+): RuntimeRunningEntry[] {
+  if (!observability) {
+    return running;
+  }
+
+  return running.map((entry) => {
+    if (!entry.sessionId) {
+      return entry;
+    }
+
+    return {
+      ...entry,
+      phase: observability.getSessionPhase(entry.sessionId),
+      lastEventSummary: observability.getLastEventSummary(entry.sessionId),
+    };
+  });
 }
 
 export function buildRetryingEntries(
@@ -108,8 +134,6 @@ export function buildCounts(
 
 export function buildAgentTotals(running: RuntimeRunningEntry[]): RuntimeAgentTotals {
   let activeSessions = 0;
-  let mockAcp = 0;
-  let acpCli = 0;
 
   for (const entry of running) {
     if (entry.sessionStatus !== "running" || !entry.sessionId) {
@@ -117,15 +141,9 @@ export function buildAgentTotals(running: RuntimeRunningEntry[]): RuntimeAgentTo
     }
 
     activeSessions += 1;
-    if (entry.runtimeKind === ACP_RUNTIME_KIND.mock) {
-      mockAcp += 1;
-    }
-    if (entry.runtimeKind === ACP_RUNTIME_KIND.subprocess) {
-      acpCli += 1;
-    }
   }
 
-  return { activeSessions, mockAcp, acpCli };
+  return { activeSessions };
 }
 
 export function resolveWorkflowValidationError(workflowPath: string): string | null {
@@ -147,7 +165,10 @@ export function resolveWorkflowValidationError(workflowPath: string): string | n
 }
 
 export function buildRuntimeSnapshot(input: BuildRuntimeSnapshotInput): RuntimeStateSnapshot {
-  const running = buildRunningEntries(input.store, input.projectId);
+  const running = enrichRunningEntries(
+    buildRunningEntries(input.store, input.projectId),
+    input.sessionObservability,
+  );
   const retrying = buildRetryingEntries(input.store, input.projectId);
   const recentFinished = buildRecentFinishedEntries(input.store, input.projectId);
 

@@ -3,15 +3,11 @@ export interface WorkflowDefinition {
   promptTemplate: string;
 }
 
-export type ACPMode = "mock" | "subprocess";
-
 export type PermissionMode = "auto_approve" | "requires_approval";
 
 export interface ACPConfig {
-  mode: ACPMode;
   command: string;
   args: string[];
-  mockCompletionDelayMs: number;
   permissionMode: PermissionMode;
 }
 
@@ -33,11 +29,16 @@ export interface RuntimeConfig {
   acp: ACPConfig;
 }
 
+export interface LoadedWorkflow {
+  config: RuntimeConfig;
+  promptTemplate: string;
+}
+
 export const DEFAULT_RETRY_BASE_DELAY_MS = 10_000;
 
 export const DEFAULT_ACTIVE_STATE_CATEGORIES = ["active", "backlog"] as const;
 
-export type RuntimeConfigValidationField = "project_id" | "acp.mode";
+export type RuntimeConfigValidationField = "project_id" | "acp.command";
 
 export interface RuntimeConfigValidationError {
   field: RuntimeConfigValidationField;

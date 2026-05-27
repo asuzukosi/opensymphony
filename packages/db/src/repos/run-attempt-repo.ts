@@ -71,7 +71,6 @@ export class RunAttemptRepo implements IRunAttemptRepo {
                 r.attempt_number as attemptNumber,
                 r.started_at as startedAt,
                 s.id as sessionId,
-                s.runtime_kind as runtimeKind,
                 s.status as sessionStatus
          FROM run_attempts r
          JOIN issues i ON i.id = r.issue_id

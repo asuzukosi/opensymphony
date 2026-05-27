@@ -29,7 +29,8 @@ JSON log fields from `StructuredLoggerService`:
 - `issueId`: internal SQLite issue id
 - `runAttemptId`: orchestrator run attempt id
 - `sessionId`: ACP agent session id
-- `runtimeKind`: `mock-acp` or `acp-cli`
+- `sessionId`: symphony-side session row id
+- `sessionRef`: acp agent session id from `session/new`
 - `event`: stable event name for filtering (`dispatch_started`, `session_finished`, etc.)
 
 Use these fields as join keys during debugging.
@@ -40,7 +41,7 @@ Use these fields as join keys during debugging.
 2. Find recent JSON lines for the ticket (`issueIdentifier` or `issueId`).
 3. Extract `sessionId` and `runAttemptId` from matching lines.
 4. Trace that session across start, poll updates, completion/failure, and retry scheduling.
-5. Decide class of failure: ACP subprocess exit, mock timeout, reconciliation cancel, or retry loop.
+5. Decide class of failure: ACP subprocess/protocol error, early process exit, reconciliation cancel, or retry loop.
 
 ## Commands
 
@@ -70,8 +71,7 @@ rg -n 'session_failed|run_failed|retry_scheduled|reconcile_cancelled|"level":"er
    - Identify dispatch / session start events for the `runAttemptId`.
    - Follow with session poll updates and terminal session/run events.
 3. Classify the problem:
-   - ACP subprocess failure: non-zero exit or spawn error in `runtimeKind: acp-cli` sessions.
-   - Mock failure: deterministic mock adapter failure for fail-tagged issues.
+   - ACP subprocess failure: spawn error, early process exit, or protocol error.
    - Reconciliation cancel: issue left active workflow states while a run was in flight.
    - Retry loop: failed run with scheduled retry entry in snapshot/retry queue.
 4. Validate scope:

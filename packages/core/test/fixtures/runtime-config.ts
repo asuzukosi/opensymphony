@@ -1,4 +1,5 @@
 import type { RuntimeConfig } from "@core/types/workflow";
+import { DEMO_ACP_SERVER_PATH } from "./demo-acp-server-path";
 
 export function makeOrchestratorRuntimeConfig(
   overrides: Partial<RuntimeConfig> = {},
@@ -10,10 +11,8 @@ export function makeOrchestratorRuntimeConfig(
     retryMaxBackoffMs: 30_000,
     workspaceRoot: ".symphony-workspaces",
     acp: {
-      mode: "mock",
       command: process.execPath,
-      args: ["-e", "setTimeout(() => process.exit(0), 1200)"],
-      mockCompletionDelayMs: 1_200,
+      args: [DEMO_ACP_SERVER_PATH],
       permissionMode: "auto_approve",
     },
     hooks: {

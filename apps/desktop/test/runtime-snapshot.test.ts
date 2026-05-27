@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
+import { demoAcpWorkflowBlock } from "./fixtures/demo-acp-workflow";
 import {
   closeDatabase,
   createTrackerStore,
@@ -16,9 +17,9 @@ import {
   buildRecentFinishedEntries,
   buildRetryingEntries,
   buildRuntimeSnapshot,
+  enrichRunningEntries,
   resolveWorkflowValidationError,
 } from "../src/runtime/runtime-snapshot";
-import { ACP_RUNTIME_KIND } from "../src/runtime/acp";
 
 const tempDirs: string[] = [];
 
@@ -56,8 +57,7 @@ describe("buildRunningEntries", () => {
     lifecycle.attachSession({
       sessionId: "sess-1",
       runAttemptId: "run-1",
-      runtimeKind: "mock-acp",
-      sessionRef: "acp://i1/1",
+      sessionRef: "11111111-1111-4111-8111-111111111111",
     });
 
     expect(buildRunningEntries(store, "p1")).toEqual([
@@ -68,8 +68,9 @@ describe("buildRunningEntries", () => {
         attemptNumber: 1,
         startedAt: expect.any(String),
         sessionId: "sess-1",
-        runtimeKind: "mock-acp",
         sessionStatus: "running",
+        phase: null,
+        lastEventSummary: null,
       },
     ]);
 
@@ -99,12 +100,56 @@ describe("buildRunningEntries", () => {
         attemptNumber: 1,
         startedAt: expect.any(String),
         sessionId: null,
-        runtimeKind: null,
         sessionStatus: null,
+        phase: null,
+        lastEventSummary: null,
       },
     ]);
 
     closeDatabase(db);
+  });
+});
+
+describe("enrichRunningEntries", () => {
+  test("fills phase and last event summary from session observability", () => {
+    const running = buildRunningEntries(
+      {
+        runAttempts: {
+          listRunningRunSnapshots: () => [
+            {
+              runAttemptId: "run-1",
+              issueId: "i1",
+              identifier: "P1-1",
+              attemptNumber: 1,
+              startedAt: "2026-01-01T00:00:00.000Z",
+              sessionId: "sess-1",
+              sessionStatus: "running",
+            },
+          ],
+        },
+      } as never,
+      "p1",
+    );
+
+    expect(
+      enrichRunningEntries(running, {
+        getSessionPhase: (sessionId) => (sessionId === "sess-1" ? "streaming" : null),
+        getLastEventSummary: (sessionId) =>
+          sessionId === "sess-1" ? "agent_message_chunk" : null,
+      }),
+    ).toEqual([
+      {
+        runAttemptId: "run-1",
+        issueId: "i1",
+        identifier: "P1-1",
+        attemptNumber: 1,
+        startedAt: "2026-01-01T00:00:00.000Z",
+        sessionId: "sess-1",
+        sessionStatus: "running",
+        phase: "streaming",
+        lastEventSummary: "agent_message_chunk",
+      },
+    ]);
   });
 });
 
@@ -192,7 +237,7 @@ describe("buildRetryingEntries", () => {
 });
 
 describe("buildAgentTotals", () => {
-  test("counts active sessions by runtime kind", () => {
+  test("counts active sessions with a running session id", () => {
     expect(
       buildAgentTotals([
         {
@@ -202,8 +247,9 @@ describe("buildAgentTotals", () => {
           attemptNumber: 1,
           startedAt: "2026-01-01T00:00:00.000Z",
           sessionId: "sess-1",
-          runtimeKind: "mock-acp",
           sessionStatus: "running",
+          phase: null,
+          lastEventSummary: null,
         },
         {
           runAttemptId: "run-2",
@@ -212,8 +258,9 @@ describe("buildAgentTotals", () => {
           attemptNumber: 1,
           startedAt: "2026-01-01T00:00:00.000Z",
           sessionId: "sess-2",
-          runtimeKind: "acp-cli",
           sessionStatus: "running",
+          phase: null,
+          lastEventSummary: null,
         },
         {
           runAttemptId: "run-3",
@@ -221,15 +268,25 @@ describe("buildAgentTotals", () => {
           identifier: "P1-3",
           attemptNumber: 1,
           startedAt: "2026-01-01T00:00:00.000Z",
+          sessionId: "sess-3",
+          sessionStatus: "running",
+          phase: null,
+          lastEventSummary: null,
+        },
+        {
+          runAttemptId: "run-4",
+          issueId: "i4",
+          identifier: "P1-4",
+          attemptNumber: 1,
+          startedAt: "2026-01-01T00:00:00.000Z",
           sessionId: null,
-          runtimeKind: null,
           sessionStatus: null,
+          phase: null,
+          lastEventSummary: null,
         },
       ]),
     ).toEqual({
-      activeSessions: 2,
-      mockAcp: 1,
-      acpCli: 1,
+      activeSessions: 3,
     });
   });
 });
@@ -243,8 +300,7 @@ describe("resolveWorkflowValidationError", () => {
       workflowPath,
       `---
 project_id: symphony-local
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -269,7 +325,7 @@ Run the issue.
     );
 
     expect(resolveWorkflowValidationError(workflowPath)).toBe(
-      "Missing required config: project_id; Missing required config: acp.mode",
+      "Missing required config: project_id; Missing required config: acp.command",
     );
   });
 });
@@ -322,8 +378,7 @@ function writeValidWorkflow(dir: string, projectId = "p1") {
     workflowPath,
     `---
 project_id: ${projectId}
-acp:
-  mode: mock
+${demoAcpWorkflowBlock()}
 ---
 
 Run the issue.
@@ -392,8 +447,7 @@ describe("buildRuntimeSnapshot", () => {
     lifecycle.attachSession({
       sessionId: "sess-1",
       runAttemptId: "run-1",
-      runtimeKind: "mock-acp",
-      sessionRef: "acp://i1/1",
+      sessionRef: "11111111-1111-4111-8111-111111111111",
     });
 
     store.retryQueue.upsertRetry({
@@ -412,7 +466,6 @@ describe("buildRuntimeSnapshot", () => {
 
     const state = {
       status: "running" as const,
-      runtimeAdapterKind: ACP_RUNTIME_KIND.mock,
       workflowPath,
       workflowVersion: "1",
       workflowLastReloadedAt: "2026-05-26T00:00:00.000Z",
@@ -459,7 +512,7 @@ describe("buildRuntimeSnapshot", () => {
       ...state,
       validationError: null,
       counts: { running: 1, retrying: 1, candidates: 1 },
-      agentTotals: { activeSessions: 1, mockAcp: 1, acpCli: 0 },
+      agentTotals: { activeSessions: 1 },
       running: [
         {
           runAttemptId: "run-1",
@@ -468,8 +521,9 @@ describe("buildRuntimeSnapshot", () => {
           attemptNumber: 1,
           startedAt: expect.any(String),
           sessionId: "sess-1",
-          runtimeKind: "mock-acp",
           sessionStatus: "running",
+          phase: null,
+          lastEventSummary: null,
         },
       ],
       retrying: [
@@ -519,7 +573,6 @@ Run the issue.
       projectId: "p1",
       state: {
         status: "idle",
-        runtimeAdapterKind: ACP_RUNTIME_KIND.mock,
         workflowPath,
         workflowVersion: null,
         workflowLastReloadedAt: null,
@@ -540,10 +593,10 @@ Run the issue.
     });
 
     expect(snapshot.validationError).toBe(
-      "Missing required config: project_id; Missing required config: acp.mode",
+      "Missing required config: project_id; Missing required config: acp.command",
     );
     expect(snapshot.counts).toEqual({ running: 0, retrying: 0, candidates: 0 });
-    expect(snapshot.agentTotals).toEqual({ activeSessions: 0, mockAcp: 0, acpCli: 0 });
+    expect(snapshot.agentTotals).toEqual({ activeSessions: 0 });
 
     closeDatabase(db);
   });

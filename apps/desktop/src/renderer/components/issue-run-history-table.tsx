@@ -16,10 +16,12 @@ import {
 } from "@symphony/ui";
 import { SurfaceCard } from "@/renderer/layout/surface-card";
 import { surfaceEmptyStateClass, surfaceTableWrapClass } from "@/renderer/lib/surface-styles";
-import type { IssueDetailRunAttempt, IssueDetailSession } from "@/ipc";
+import { IssueSessionTimeline } from "@/renderer/components/issue-session-timeline";
+import type { IssueDetailRunAttempt, IssueDetailSession, SessionEvent, SessionEventKind } from "@/ipc";
 
 type IssueRunHistoryTableProps = {
   attempts?: IssueDetailRunAttempt[];
+  sessionEvents?: SessionEvent[];
   isLoading?: boolean;
 };
 
@@ -36,14 +38,16 @@ function formatTimestamp(value: string | null): string {
   return new Date(parsed).toLocaleString();
 }
 
-function formatRuntimeKind(kind: string): string {
-  if (kind === "mock-acp") {
-    return "Mock";
+function formatSessionEventKind(kind: SessionEventKind): string {
+  return kind.replace(/_/g, " ");
+}
+
+function formatLatestSessionEvent(session: IssueDetailSession): string | null {
+  const latestEvent = session.events.at(-1);
+  if (!latestEvent) {
+    return null;
   }
-  if (kind === "acp-cli") {
-    return "CLI";
-  }
-  return kind;
+  return formatSessionEventKind(latestEvent.kind);
 }
 
 function statusBadgeVariant(status: string): NonNullable<BadgeProps["variant"]> {
@@ -105,6 +109,8 @@ function RunHistoryEmptyState(): React.JSX.Element {
 }
 
 function SessionRow({ session }: { session: IssueDetailSession }): React.JSX.Element {
+  const latestEvent = formatLatestSessionEvent(session);
+
   return (
     <TableRow className="bg-muted/20 hover:bg-muted/30">
       <TableCell className="pl-8 font-mono text-xs text-muted-foreground">
@@ -117,7 +123,7 @@ function SessionRow({ session }: { session: IssueDetailSession }): React.JSX.Ele
       <TableCell className="text-muted-foreground">{formatTimestamp(session.finishedAt)}</TableCell>
       <TableCell className="max-w-[320px]">
         <div className="space-y-1 text-xs text-muted-foreground">
-          <p>{formatRuntimeKind(session.runtimeKind)}</p>
+          {latestEvent ? <p>Last event: {latestEvent}</p> : null}
           {session.sessionRef ? (
             <p className="truncate font-mono" title={session.sessionRef}>
               {session.sessionRef}
@@ -162,18 +168,21 @@ function AttemptRows({ attempt }: { attempt: IssueDetailRunAttempt }): React.JSX
 
 export function IssueRunHistoryTable({
   attempts,
+  sessionEvents = [],
   isLoading = false,
 }: IssueRunHistoryTableProps): React.JSX.Element {
+  const hasAttempts = attempts != null && attempts.length > 0;
+
   return (
     <SurfaceCard>
       <CardHeader className="pb-4">
         <CardTitle className="text-base">Run history</CardTitle>
         <CardDescription>Run attempts and agent sessions for this issue.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
         {isLoading ? (
           <RunHistoryTableSkeleton />
-        ) : attempts && attempts.length > 0 ? (
+        ) : hasAttempts ? (
           <div className={surfaceTableWrapClass}>
             <Table>
               <TableHeader>
@@ -195,6 +204,19 @@ export function IssueRunHistoryTable({
         ) : (
           <RunHistoryEmptyState />
         )}
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-sm font-medium">Session timeline</h3>
+            <p className="text-sm text-muted-foreground">
+              Prompt, stream, tool, permission, and error events from agent runs.
+            </p>
+          </div>
+          <IssueSessionTimeline
+            events={sessionEvents}
+            isLoading={isLoading}
+            emptyMessage="Session events will appear here after an agent run records activity."
+          />
+        </div>
       </CardContent>
     </SurfaceCard>
   );

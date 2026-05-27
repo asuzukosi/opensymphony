@@ -2,6 +2,31 @@ export type WorkflowStateCategory = "active" | "terminal" | "backlog" | "other";
 export type RunAttemptStatus = "running" | "succeeded" | "failed" | "cancelled";
 export type AgentSessionStatus = "running" | "succeeded" | "failed" | "cancelled";
 
+export type SessionEventKind =
+  | "prompt"
+  | "stream_chunk"
+  | "tool_call"
+  | "permission_request"
+  | "permission_resolve"
+  | "session_update"
+  | "error";
+
+export interface SessionEventRow {
+  id: string;
+  sessionId: string;
+  kind: SessionEventKind;
+  payloadJson: string;
+  createdAt: string;
+}
+
+export interface AppendSessionEventInput {
+  id?: string;
+  sessionId: string;
+  kind: SessionEventKind;
+  payload: unknown;
+  createdAt?: string;
+}
+
 export interface ProjectRow {
   id: string;
   name: string;
@@ -43,11 +68,11 @@ export interface IssueDetailCommentRow {
 
 export interface IssueDetailSessionRow {
   sessionId: string;
-  runtimeKind: string;
   sessionRef: string | null;
   status: AgentSessionStatus;
   startedAt: string;
   finishedAt: string | null;
+  events: SessionEventRow[];
 }
 
 export interface IssueDetailRunAttemptRow {
@@ -112,7 +137,6 @@ export interface RunningRunSnapshotRow {
   attemptNumber: number;
   startedAt: string;
   sessionId: string | null;
-  runtimeKind: string | null;
   sessionStatus: AgentSessionStatus | null;
 }
 
@@ -129,7 +153,6 @@ export interface RecentFinishedRunSnapshotRow {
 export interface AgentSessionRow {
   id: string;
   runAttemptId: string;
-  runtimeKind: string;
   sessionRef: string | null;
   status: AgentSessionStatus;
   startedAt: string;

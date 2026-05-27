@@ -14,9 +14,7 @@ Electron desktop runtime and React renderer for Symphony.
 - Start/stop/manual tick controls.
 - Poll interval override + persistence.
 - Workflow config hot-reload (path/version/reload timestamp surfaced in snapshot).
-- ACP agent execution:
-  - mock mode for local development
-  - subprocess mode for real ACP CLI agents
+- ACP agent execution via JSON-RPC client (`ACPClientAdapter`) — spawns a configured ACP server on stdio per issue workspace.
 - Startup stale-run recovery and terminal workspace cleanup.
 
 ## Architecture
@@ -29,7 +27,7 @@ Electron desktop runtime and React renderer for Symphony.
 | Preload | `src/preload.ts` | Exposes `window.symphonyDesktop` (`SymphonyDesktopApi`) |
 | Renderer | `src/renderer/` | React routes, shadcn UI, IPC hooks (no direct `window` access) |
 
-Orchestration domain logic lives in `@symphony/core` and `@symphony/db`; the main process hosts the tick loop, ACP adapter (`src/runtime/acp.ts`), and workspace manager.
+Orchestration domain logic lives in `@symphony/core` and `@symphony/db`; the main process hosts the tick loop, ACP adapter (`src/runtime/acp/`), and workspace manager.
 
 ### Renderer IPC hooks
 
@@ -66,7 +64,7 @@ See [`SPEC.md`](../../SPEC.md) for the full orchestration spec. This app impleme
 
 ### Related docs
 
-- [`connecting-acp-agents.md`](../../connecting-acp-agents.md) — subprocess contract, Hermes, mock mode, troubleshooting
+- [`connecting-acp-agents.md`](../../connecting-acp-agents.md) — ACP client architecture, Hermes, demo server, troubleshooting
 - [`WORKFLOW.md`](../../WORKFLOW.md) — default runtime config
 
 ## Setup
@@ -117,7 +115,7 @@ Electron dev and Vitest both share the same native binary, so only one ABI is ac
 
 ### 3. Configure orchestration
 
-Default config lives at [`WORKFLOW.md`](../../WORKFLOW.md) in the repo root (`project_id`, poll interval, `acp.mode`, workspace hooks, agent prompt).
+Default config lives at [`WORKFLOW.md`](../../WORKFLOW.md) in the repo root. The checked-in default uses the demo ACP server for local development (`node` + absolute path to `scripts/demo-acp-server.mjs`). Replace the path with your clone location before dispatching runs.
 
 To use a different file:
 
@@ -125,7 +123,7 @@ To use a different file:
 export SYMPHONY_WORKFLOW_PATH=/absolute/path/to/WORKFLOW.md
 ```
 
-Mock mode (`acp.mode: mock`) works out of the box for local UI development. For real ACP CLIs, see [`connecting-acp-agents.md`](../../connecting-acp-agents.md).
+For production Hermes, swap the `acp` block to `command: hermes`, `args: ["acp"]` — see [`connecting-acp-agents.md`](../../connecting-acp-agents.md).
 
 ### 4. Start the desktop app
 

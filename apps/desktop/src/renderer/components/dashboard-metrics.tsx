@@ -62,17 +62,10 @@ function MetricCardSkeleton(): React.JSX.Element {
 }
 
 function formatActiveSessionDescription(agentTotals: RuntimeAgentTotals): string {
-  const parts: string[] = [];
-  if (agentTotals.mockAcp > 0) {
-    parts.push(`Mock ${agentTotals.mockAcp}`);
-  }
-  if (agentTotals.acpCli > 0) {
-    parts.push(`CLI ${agentTotals.acpCli}`);
-  }
-  if (parts.length === 0) {
+  if (agentTotals.activeSessions === 0) {
     return "No active agent sessions";
   }
-  return parts.join(" · ");
+  return `${agentTotals.activeSessions} ACP ${agentTotals.activeSessions === 1 ? "session" : "sessions"}`;
 }
 
 export function DashboardMetrics({

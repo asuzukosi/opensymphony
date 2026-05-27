@@ -66,7 +66,7 @@ async function runPromptWithPermissionRequest(
   return { child, stdio, promptPromise };
 }
 
-describe("acp permission integration", () => {
+describe("ACP permission integration", () => {
   test("auto_approve completes session/prompt without enqueueing permissions", async () => {
     const harness = createPermissionTestHarness("auto_approve");
     const { child, stdio, promptPromise } = await runPromptWithPermissionRequest(harness);

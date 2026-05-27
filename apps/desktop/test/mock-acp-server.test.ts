@@ -10,7 +10,7 @@ const mockServerPath = fileURLToPath(
   new URL("./fixtures/mock-acp-server.mjs", import.meta.url),
 );
 
-function spawnMockAcpServer(): ChildProcessWithoutNullStreams {
+function spawnMockACPServer(): ChildProcessWithoutNullStreams {
   return spawn(process.execPath, [mockServerPath], {
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -18,7 +18,7 @@ function spawnMockAcpServer(): ChildProcessWithoutNullStreams {
 
 describe("mock-acp-server", () => {
   test("runs initialize → session/new → session/prompt lifecycle", async () => {
-    const child = spawnMockAcpServer();
+    const child = spawnMockACPServer();
     const stdio = createACPStdioStream(child);
     const updates: string[] = [];
 

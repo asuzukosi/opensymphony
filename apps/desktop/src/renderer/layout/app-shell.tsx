@@ -16,6 +16,8 @@ import {
   SidebarTrigger,
   cn,
 } from "@symphony/ui";
+import { ACPPermissionQueue } from "@/renderer/components/acp-permission-queue";
+import { usePendingPermissions } from "@/renderer/hooks/use-pending-permissions";
 
 type NavItem = {
   to: string;
@@ -66,6 +68,16 @@ function SidebarNavLink({ to, label, icon: Icon }: NavItem): React.JSX.Element {
 export function AppShell(): React.JSX.Element {
   const location = useLocation();
   const pageTitle = resolvePageTitle(location.pathname);
+  const {
+    permissions,
+    pendingCount,
+    isApprovalRequired,
+    resolveAsync,
+    isResolving,
+    resolvingId,
+    resolveError,
+  } = usePendingPermissions();
+  const showPermissionQueue = isApprovalRequired && pendingCount > 0;
 
   return (
     <SidebarProvider>
@@ -108,6 +120,16 @@ export function AppShell(): React.JSX.Element {
             "flex flex-1 flex-col bg-gradient-to-b from-background via-background to-muted/10 p-4 md:p-6 lg:p-8",
           )}
         >
+          {showPermissionQueue ? (
+            <ACPPermissionQueue
+              className="mb-4"
+              permissions={permissions}
+              onResolve={resolveAsync}
+              isPending={isResolving}
+              resolvingId={resolvingId}
+              submitError={resolveError}
+            />
+          ) : null}
           <Outlet />
         </main>
       </SidebarInset>

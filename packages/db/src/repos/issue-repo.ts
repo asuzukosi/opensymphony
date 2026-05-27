@@ -9,6 +9,7 @@ import type {
   IssueRow,
   IssuesByWorkflowStateColumn,
   RunAttemptRow,
+  SessionEventRow,
   WorkflowStateCategory,
   WorkflowStateRow,
 } from "@db/types/domain";
@@ -197,7 +198,7 @@ export class IssueRepo implements IIssueRepo {
       const placeholders = attempts.map(() => "?").join(", ");
       const sessions = this.db
         .prepare(
-          `SELECT id, run_attempt_id as runAttemptId, runtime_kind as runtimeKind,
+          `SELECT id, run_attempt_id as runAttemptId,
                   session_ref as sessionRef, status, started_at as startedAt, finished_at as finishedAt
            FROM agent_sessions
            WHERE run_attempt_id IN (${placeholders})
@@ -216,12 +217,44 @@ export class IssueRepo implements IIssueRepo {
         }
         bucket.push({
           sessionId: session.id,
-          runtimeKind: session.runtimeKind,
           sessionRef: session.sessionRef,
           status: session.status,
           startedAt: session.startedAt,
           finishedAt: session.finishedAt,
+          events: [],
         });
+      }
+    }
+
+    const eventsBySession = new Map<string, SessionEventRow[]>();
+    if (attempts.length > 0) {
+      const sessionIds = [...sessionsByAttempt.values()]
+        .flatMap((attemptSessions) => attemptSessions.map((session) => session.sessionId));
+
+      if (sessionIds.length > 0) {
+        const placeholders = sessionIds.map(() => "?").join(", ");
+        const eventRows = this.db
+          .prepare(
+            `SELECT id, session_id as sessionId, kind, payload_json as payloadJson, created_at as createdAt
+             FROM session_events
+             WHERE session_id IN (${placeholders})
+             ORDER BY created_at ASC, rowid ASC`,
+          )
+          .all(...sessionIds) as SessionEventRow[];
+
+        for (const sessionId of sessionIds) {
+          eventsBySession.set(sessionId, []);
+        }
+
+        for (const event of eventRows) {
+          eventsBySession.get(event.sessionId)?.push(event);
+        }
+
+        for (const attemptSessions of sessionsByAttempt.values()) {
+          for (const session of attemptSessions) {
+            session.events = eventsBySession.get(session.sessionId) ?? [];
+          }
+        }
       }
     }
 

@@ -1,11 +1,3 @@
-import type { ACPConfig } from "@symphony/core";
-import type { RuntimeAdapterKind } from "@/ipc";
-
-export const ACP_RUNTIME_KIND = {
-  mock: "mock-acp",
-  subprocess: "acp-cli",
-} as const satisfies Record<ACPConfig["mode"], RuntimeAdapterKind>;
-
 export type RuntimeSessionStatus = "running" | "succeeded" | "failed" | "cancelled";
 
 export interface StartRuntimeSessionInput {
@@ -25,7 +17,6 @@ export interface RuntimeSessionRecord {
   runAttemptId: string;
   issueId: string;
   attemptNumber: number;
-  runtimeKind: RuntimeAdapterKind;
   sessionRef: string | null;
   status: RuntimeSessionStatus;
   startedAt: string;
@@ -33,12 +24,17 @@ export interface RuntimeSessionRecord {
   errorMessage: string | null;
 }
 
-export interface AcpAdapter {
+export type RuntimeSessionPhase =
+  | "spawning"
+  | "initializing"
+  | "prompting"
+  | "streaming"
+  | "terminal";
+
+export interface ACPAdapter {
   startSession(input: StartRuntimeSessionInput): RuntimeSessionRecord;
   pollSessions(nowIso: string, sessionIds: string[]): RuntimeSessionRecord[];
   cancelSession(sessionId: string, nowIso: string): RuntimeSessionRecord | null;
-}
-
-export function runtimeKindFromAcpMode(mode: ACPConfig["mode"]): RuntimeAdapterKind {
-  return ACP_RUNTIME_KIND[mode];
+  getSessionPhase(sessionId: string): RuntimeSessionPhase | null;
+  getLastEventSummary(sessionId: string): string | null;
 }

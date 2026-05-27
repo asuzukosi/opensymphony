@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { ACPConfig } from "@symphony/core";
-import type { RuntimeAdapterKind } from "@/ipc";
+import type { AppendSessionEventInput, SessionEventKind } from "@symphony/db";
 import {
   defaultInitializeRequest,
   getSessionUpdateKind,
@@ -13,25 +13,19 @@ import { renderPromptTemplate } from "@/runtime/acp/prompt-renderer";
 import { createACPStdioStream, type ACPStdioStreamHandle } from "@/runtime/acp/stdio-stream";
 import { createSymphonyACPConnection } from "@/runtime/acp/symphony-client";
 import {
-  ACP_RUNTIME_KIND,
-  type AcpAdapter,
+  type ACPAdapter,
+  type RuntimeSessionPhase,
   type RuntimeSessionRecord,
   type RuntimeSessionStatus,
   type StartRuntimeSessionInput,
 } from "@/runtime/acp/types";
 
-export type AcpClientSessionPhase =
-  | "spawning"
-  | "initializing"
-  | "prompting"
-  | "streaming"
-  | "terminal";
-
-export interface AcpClientAdapterDependencies {
+export interface ACPClientAdapterDependencies {
   getPermissionRouter: () => PermissionRouter;
+  appendSessionEvent?: (input: AppendSessionEventInput) => void;
 }
 
-interface AcpClientStoredSession {
+interface ACPClientStoredSession {
   sessionId: string;
   runAttemptId: string;
   issueId: string;
@@ -40,7 +34,7 @@ interface AcpClientStoredSession {
   finishedAt: string | null;
   status: RuntimeSessionStatus;
   errorMessage: string | null;
-  phase: AcpClientSessionPhase;
+  phase: RuntimeSessionPhase;
   agentSessionId: string | null;
   updateCount: number;
   lastEventSummary: string | null;
@@ -51,19 +45,19 @@ interface AcpClientStoredSession {
   runTask: Promise<void>;
 }
 
-export class AcpClientAdapter implements AcpAdapter {
-  private readonly sessions = new Map<string, AcpClientStoredSession>();
+export class ACPClientAdapter implements ACPAdapter {
+  private readonly sessions = new Map<string, ACPClientStoredSession>();
   private static readonly cancelSigtermFallbackMs = 1500;
 
   constructor(
     private readonly config: ACPConfig,
-    private readonly deps: AcpClientAdapterDependencies,
+    private readonly deps: ACPClientAdapterDependencies,
   ) {}
 
   startSession(input: StartRuntimeSessionInput): RuntimeSessionRecord {
     const workspacePath = input.workspacePath.trim();
     if (!workspacePath) {
-      throw new Error("workspacePath is required for acp client sessions");
+      throw new Error("workspacePath is required for ACP client sessions");
     }
 
     const sessionId = randomUUID();
@@ -81,10 +75,19 @@ export class AcpClientAdapter implements AcpAdapter {
 
     const stdio = createACPStdioStream(child);
     const router = this.deps.getPermissionRouter();
+    const requestPermission = router.createRequestPermissionHandler(input.issueId);
 
-    let stored: AcpClientStoredSession;
+    let stored: ACPClientStoredSession;
     const { connection } = createSymphonyACPConnection(stdio.stream, {
-      requestPermission: router.createRequestPermissionHandler(input.issueId),
+      requestPermission: async (params) => {
+        this.appendSessionEvent(stored.sessionId, "permission_request", params);
+        const response = await requestPermission(params);
+        this.appendSessionEvent(stored.sessionId, "permission_resolve", {
+          request: params,
+          response,
+        });
+        return response;
+      },
       sessionUpdate: async (params) => {
         if (stored.status !== "running") {
           return;
@@ -92,7 +95,13 @@ export class AcpClientAdapter implements AcpAdapter {
 
         stored.phase = "streaming";
         stored.updateCount += 1;
-        stored.lastEventSummary = getSessionUpdateKind(params.update);
+        const updateKind = getSessionUpdateKind(params.update);
+        stored.lastEventSummary = updateKind;
+        this.appendSessionEvent(
+          stored.sessionId,
+          this.sessionUpdateEventKind(updateKind),
+          params,
+        );
       },
     });
 
@@ -146,8 +155,12 @@ export class AcpClientAdapter implements AcpAdapter {
     return this.toRuntimeRecord(stored);
   }
 
-  getSessionPhase(sessionId: string): AcpClientSessionPhase | null {
+  getSessionPhase(sessionId: string): RuntimeSessionPhase | null {
     return this.sessions.get(sessionId)?.phase ?? null;
+  }
+
+  getLastEventSummary(sessionId: string): string | null {
+    return this.sessions.get(sessionId)?.lastEventSummary ?? null;
   }
 
   getSessionUpdateCount(sessionId: string): number {
@@ -178,7 +191,7 @@ export class AcpClientAdapter implements AcpAdapter {
 
     return sessionIds
       .map((sessionId) => this.sessions.get(sessionId))
-      .filter((session): session is AcpClientStoredSession => Boolean(session))
+      .filter((session): session is ACPClientStoredSession => Boolean(session))
       .map((session) => this.toRuntimeRecord(session));
   }
 
@@ -198,7 +211,7 @@ export class AcpClientAdapter implements AcpAdapter {
     return this.toRuntimeRecord(session);
   }
 
-  private async requestSessionCancel(session: AcpClientStoredSession): Promise<void> {
+  private async requestSessionCancel(session: ACPClientStoredSession): Promise<void> {
     if (!session.agentSessionId) {
       return;
     }
@@ -210,18 +223,18 @@ export class AcpClientAdapter implements AcpAdapter {
     }
   }
 
-  private scheduleSigtermFallback(session: AcpClientStoredSession): void {
+  private scheduleSigtermFallback(session: ACPClientStoredSession): void {
     setTimeout(() => {
       if (session.child.exitCode !== null || session.child.killed) {
         return;
       }
 
       session.child.kill("SIGTERM");
-    }, AcpClientAdapter.cancelSigtermFallbackMs);
+    }, ACPClientAdapter.cancelSigtermFallbackMs);
   }
 
   private async runSession(
-    stored: AcpClientStoredSession,
+    stored: ACPClientStoredSession,
     input: StartRuntimeSessionInput,
   ): Promise<void> {
     try {
@@ -236,6 +249,7 @@ export class AcpClientAdapter implements AcpAdapter {
       stored.agentSessionId = agentSession.sessionId;
 
       const promptText = this.renderTaskPrompt(input);
+      this.appendSessionEvent(stored.sessionId, "prompt", { text: promptText });
       stored.phase = "streaming";
       const promptResult = await stored.connection.prompt({
         sessionId: agentSession.sessionId,
@@ -260,6 +274,28 @@ export class AcpClientAdapter implements AcpAdapter {
     }
   }
 
+  private sessionUpdateEventKind(updateKind: string): SessionEventKind {
+    if (updateKind === "agent_message_chunk") {
+      return "stream_chunk";
+    }
+    if (updateKind === "tool_call") {
+      return "tool_call";
+    }
+    return "session_update";
+  }
+
+  private appendSessionEvent(
+    sessionId: string,
+    kind: SessionEventKind,
+    payload: unknown,
+  ): void {
+    this.deps.appendSessionEvent?.({
+      sessionId,
+      kind,
+      payload,
+    });
+  }
+
   private renderTaskPrompt(input: StartRuntimeSessionInput): string {
     if (input.promptTemplate.trim().length === 0) {
       return [input.identifier, input.title, input.description ?? ""].filter(Boolean).join("\n");
@@ -275,7 +311,7 @@ export class AcpClientAdapter implements AcpAdapter {
     });
   }
 
-  private completeFromStopReason(stored: AcpClientStoredSession, stopReason: StopReason): void {
+  private completeFromStopReason(stored: ACPClientStoredSession, stopReason: StopReason): void {
     stored.phase = "terminal";
 
     if (stopReason === "end_turn") {
@@ -291,7 +327,7 @@ export class AcpClientAdapter implements AcpAdapter {
     this.finishSession(stored, "failed", `stop_reason:${stopReason}`);
   }
 
-  private failSession(stored: AcpClientStoredSession, errorMessage: string): void {
+  private failSession(stored: ACPClientStoredSession, errorMessage: string): void {
     if (stored.status !== "running") {
       return;
     }
@@ -301,7 +337,7 @@ export class AcpClientAdapter implements AcpAdapter {
   }
 
   private finishSession(
-    stored: AcpClientStoredSession,
+    stored: ACPClientStoredSession,
     status: RuntimeSessionStatus,
     errorMessage: string | null,
     finishedAt = new Date().toISOString(),
@@ -310,23 +346,22 @@ export class AcpClientAdapter implements AcpAdapter {
       return;
     }
 
+    if (errorMessage) {
+      this.appendSessionEvent(stored.sessionId, "error", { message: errorMessage });
+    }
+
     stored.status = status;
     stored.errorMessage = errorMessage;
     stored.finishedAt = finishedAt;
     stored.phase = "terminal";
   }
 
-  private runtimeKind(): RuntimeAdapterKind {
-    return ACP_RUNTIME_KIND.subprocess;
-  }
-
-  private toRuntimeRecord(session: AcpClientStoredSession): RuntimeSessionRecord {
+  private toRuntimeRecord(session: ACPClientStoredSession): RuntimeSessionRecord {
     return {
       sessionId: session.sessionId,
       runAttemptId: session.runAttemptId,
       issueId: session.issueId,
       attemptNumber: session.attemptNumber,
-      runtimeKind: this.runtimeKind(),
       sessionRef: session.agentSessionId,
       status: session.status,
       startedAt: session.startedAt,
@@ -336,9 +371,9 @@ export class AcpClientAdapter implements AcpAdapter {
   }
 }
 
-export function createAcpClientAdapter(
+export function createACPClientAdapter(
   config: ACPConfig,
-  deps: AcpClientAdapterDependencies,
-): AcpClientAdapter {
-  return new AcpClientAdapter(config, deps);
+  deps: ACPClientAdapterDependencies,
+): ACPClientAdapter {
+  return new ACPClientAdapter(config, deps);
 }

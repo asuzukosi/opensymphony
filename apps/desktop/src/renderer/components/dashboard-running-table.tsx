@@ -17,21 +17,12 @@ import {
 import { SurfaceCard } from "@/renderer/layout/surface-card";
 import { surfaceEmptyStateClass, surfaceTableWrapClass } from "@/renderer/lib/surface-styles";
 import type { RuntimeRunningEntry } from "@/ipc";
+import { formatSessionPhase } from "@/renderer/lib/format-session-phase";
 
 type DashboardRunningTableProps = {
   running?: RuntimeRunningEntry[];
   isLoading?: boolean;
 };
-
-function formatRuntimeKind(kind: string | null): string {
-  if (kind === "mock-acp") {
-    return "Mock";
-  }
-  if (kind === "acp-cli") {
-    return "CLI";
-  }
-  return kind ?? "Unknown";
-}
 
 function formatStartedAt(startedAt: string): string {
   const parsed = Date.parse(startedAt);
@@ -49,7 +40,7 @@ function RunningTableSkeleton(): React.JSX.Element {
           <TableHead>Issue</TableHead>
           <TableHead>Attempt</TableHead>
           <TableHead>Started</TableHead>
-          <TableHead>Runtime</TableHead>
+          <TableHead>Phase</TableHead>
           <TableHead>Status</TableHead>
         </TableRow>
       </TableHeader>
@@ -113,7 +104,7 @@ export function DashboardRunningTable({
                   <TableHead className="text-xs uppercase tracking-wide">Issue</TableHead>
                   <TableHead className="text-xs uppercase tracking-wide">Attempt</TableHead>
                   <TableHead className="text-xs uppercase tracking-wide">Started</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wide">Runtime</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wide">Phase</TableHead>
                   <TableHead className="text-xs uppercase tracking-wide">Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -124,8 +115,8 @@ export function DashboardRunningTable({
                     <TableCell className="font-mono tabular-nums">{entry.attemptNumber}</TableCell>
                     <TableCell className="text-muted-foreground">{formatStartedAt(entry.startedAt)}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="font-normal">
-                        {formatRuntimeKind(entry.runtimeKind)}
+                      <Badge variant="outline" className="font-normal capitalize">
+                        {formatSessionPhase(entry.phase)}
                       </Badge>
                     </TableCell>
                     <TableCell>

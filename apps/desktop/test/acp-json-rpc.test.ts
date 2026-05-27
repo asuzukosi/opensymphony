@@ -30,7 +30,7 @@ const issue = {
   description: "Integrate session/prompt with the orchestrator.",
 };
 
-function spawnMockAcpServer(): ChildProcessWithoutNullStreams {
+function spawnMockACPServer(): ChildProcessWithoutNullStreams {
   return spawn(process.execPath, [mockServerPath], {
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -58,10 +58,10 @@ function agentMessageChunkText(update: SessionUpdate): string | null {
   return content.type === "text" ? content.text : null;
 }
 
-describe("acp json-rpc wire layer", () => {
+describe("ACP json-rpc wire layer", () => {
   describe("stdio transport", () => {
     test("round-trips initialize over mock agent stdio", async () => {
-      const child = spawnMockAcpServer();
+      const child = spawnMockACPServer();
       const stdio = createACPStdioStream(child);
 
       const writer = stdio.stream.writable.getWriter();
@@ -90,13 +90,13 @@ describe("acp json-rpc wire layer", () => {
           stdin: null as unknown as NodeJS.WritableStream,
           stdout: null as unknown as NodeJS.ReadableStream,
         }),
-      ).toThrow("acp stdio bridge requires piped stdin and stdout");
+      ).toThrow("ACP stdio bridge requires piped stdin and stdout");
     });
   });
 
   describe("symphony client rpc", () => {
     test("negotiates initialize with symphony defaults", async () => {
-      const child = spawnMockAcpServer();
+      const child = spawnMockACPServer();
       const stdio = createACPStdioStream(child);
       const { connection } = createSymphonyACPConnection(stdio.stream);
 
@@ -108,7 +108,7 @@ describe("acp json-rpc wire layer", () => {
     });
 
     test("completes session/new and session/prompt with session/update stream", async () => {
-      const child = spawnMockAcpServer();
+      const child = spawnMockACPServer();
       const stdio = createACPStdioStream(child);
       const updateKinds: string[] = [];
       const messageChunks: string[] = [];
@@ -129,7 +129,7 @@ describe("acp json-rpc wire layer", () => {
         mcpServers: [],
       });
 
-      const promptText = "ship the acp adapter";
+      const promptText = "ship the ACP adapter";
       const promptResult = await connection.prompt({
         sessionId: session.sessionId,
         prompt: [{ type: "text", text: promptText }],
@@ -151,7 +151,7 @@ describe("acp json-rpc wire layer", () => {
         issue,
       });
 
-      const child = spawnMockAcpServer();
+      const child = spawnMockACPServer();
       const stdio = createACPStdioStream(child);
       let firstChunk = "";
 
