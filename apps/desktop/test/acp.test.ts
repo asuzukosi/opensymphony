@@ -1,11 +1,32 @@
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import type { ACPConfig } from "@symphony/core";
-import { ACP_RUNTIME_KIND, createAcpAdapter, formatSubprocessExitError, runtimeKindFromAcpMode, SUBPROCESS_STDERR_TAIL_MAX_CHARS, tailStderr } from "@/runtime/acp";
+import {
+  createPermissionRouter,
+} from "@/runtime/acp/permission-router";
+import { createPermissionStore } from "@/runtime/acp/permission-store";
+import {
+  ACP_RUNTIME_KIND,
+  createAcpAdapter,
+  runtimeKindFromAcpMode,
+  type StartRuntimeSessionInput,
+} from "@/runtime/acp";
+import { createAcpClientAdapter } from "@/runtime/acp/acp-client-adapter";
+
+const mockServerPath = fileURLToPath(
+  new URL("./fixtures/mock-acp-server.mjs", import.meta.url),
+);
 
 const tempDirs: string[] = [];
+
+const defaultPromptTemplate = [
+  "Issue: {{identifier}}",
+  "Title: {{title}}",
+  "{{description}}",
+].join("\n");
 
 function testAcpConfig(overrides: Partial<ACPConfig> & Pick<ACPConfig, "mode">): ACPConfig {
   return {
@@ -13,6 +34,34 @@ function testAcpConfig(overrides: Partial<ACPConfig> & Pick<ACPConfig, "mode">):
     args: [],
     mockCompletionDelayMs: 100,
     permissionMode: "auto_approve",
+    ...overrides,
+  };
+}
+
+function createClientAdapterDeps() {
+  const store = createPermissionStore();
+  const router = createPermissionRouter({
+    store,
+    getPermissionMode: () => "auto_approve",
+  });
+
+  return {
+    getPermissionRouter: () => router,
+  };
+}
+
+function makeStartSessionInput(
+  overrides: Partial<StartRuntimeSessionInput> &
+    Pick<
+      StartRuntimeSessionInput,
+      "runAttemptId" | "issueId" | "attemptNumber" | "startedAt" | "workspacePath"
+    >,
+): StartRuntimeSessionInput {
+  return {
+    identifier: "SYM-1",
+    title: "Test issue",
+    description: null,
+    promptTemplate: defaultPromptTemplate,
     ...overrides,
   };
 }
@@ -36,32 +85,63 @@ describe("acp adapter factory", () => {
       mode: "mock",
     }));
 
-    const session = adapter.startSession({
+    const session = adapter.startSession(makeStartSessionInput({
       runAttemptId: "r1",
       issueId: "i1",
       attemptNumber: 1,
       startedAt: new Date().toISOString(),
       workspacePath: makeWorkspacePath(),
-    });
+    }));
 
     expect(session.runtimeKind).toBe(ACP_RUNTIME_KIND.mock);
   });
 
-  test("creates subprocess adapter when selected", () => {
-    const adapter = createAcpAdapter(testAcpConfig({
-      mode: "subprocess",
-      args: ["-e", "process.exit(0)"],
-    }));
+  test("creates acp client adapter when subprocess mode is selected", () => {
+    const adapter = createAcpAdapter(
+      testAcpConfig({
+        mode: "subprocess",
+        args: [mockServerPath],
+      }),
+      createClientAdapterDeps(),
+    );
 
-    const session = adapter.startSession({
+    const session = adapter.startSession(makeStartSessionInput({
       runAttemptId: "r1",
       issueId: "i1",
       attemptNumber: 1,
       startedAt: new Date().toISOString(),
       workspacePath: makeWorkspacePath(),
-    });
+    }));
 
     expect(session.runtimeKind).toBe(ACP_RUNTIME_KIND.subprocess);
+  });
+
+  test("requires permission router dependencies for subprocess mode", () => {
+    expect(() =>
+      createAcpAdapter(testAcpConfig({
+        mode: "subprocess",
+        args: [mockServerPath],
+      })),
+    ).toThrow("acp client adapter requires permission router dependencies");
+  });
+
+  test("accepts issue context fields on startSession input", () => {
+    const adapter = createAcpAdapter(testAcpConfig({ mode: "mock" }));
+    const session = adapter.startSession(
+      makeStartSessionInput({
+        runAttemptId: "run-ctx",
+        issueId: "issue-ctx",
+        attemptNumber: 1,
+        startedAt: new Date().toISOString(),
+        workspacePath: makeWorkspacePath(),
+        identifier: "SYM-42",
+        title: "Add session context",
+        description: "Issue body",
+        promptTemplate: "Issue: {{identifier}}",
+      }),
+    );
+
+    expect(session.issueId).toBe("issue-ctx");
   });
 
   test("maps ACP mode to runtime kind", () => {
@@ -78,13 +158,13 @@ describe("mock acp adapter", () => {
     }));
     const start = "2026-01-01T00:00:00.000Z";
 
-    const session = adapter.startSession({
+    const session = adapter.startSession(makeStartSessionInput({
       runAttemptId: "run-1",
       issueId: "issue-1",
       attemptNumber: 1,
       startedAt: start,
       workspacePath: makeWorkspacePath(),
-    });
+    }));
     expect(session.runtimeKind).toBe(ACP_RUNTIME_KIND.mock);
 
     const before = adapter.pollSessions("2026-01-01T00:00:00.500Z", [session.sessionId])[0];
@@ -99,13 +179,13 @@ describe("mock acp adapter", () => {
       mode: "mock",
       mockCompletionDelayMs: 0,
     }));
-    const session = adapter.startSession({
+    const session = adapter.startSession(makeStartSessionInput({
       runAttemptId: "run-fail-1",
       issueId: "issue-fail-fast",
       attemptNumber: 1,
       startedAt: "2026-01-01T00:00:00.000Z",
       workspacePath: makeWorkspacePath(),
-    });
+    }));
 
     const terminal = adapter.pollSessions("2026-01-01T00:00:01.000Z", [session.sessionId])[0];
     expect(terminal?.status).toBe("failed");
@@ -117,13 +197,13 @@ describe("mock acp adapter", () => {
       mode: "mock",
       mockCompletionDelayMs: 0,
     }));
-    const session = adapter.startSession({
+    const session = adapter.startSession(makeStartSessionInput({
       runAttemptId: "run-fail-3",
       issueId: "issue-fail-retry",
       attemptNumber: 3,
       startedAt: "2026-01-01T00:00:00.000Z",
       workspacePath: makeWorkspacePath(),
-    });
+    }));
 
     const terminal = adapter.pollSessions("2026-01-01T00:00:01.000Z", [session.sessionId])[0];
     expect(terminal?.status).toBe("succeeded");
@@ -135,13 +215,13 @@ describe("mock acp adapter", () => {
       mode: "mock",
       mockCompletionDelayMs: 60_000,
     }));
-    const session = adapter.startSession({
+    const session = adapter.startSession(makeStartSessionInput({
       runAttemptId: "run-cancel",
       issueId: "issue-cancel",
       attemptNumber: 1,
       startedAt: "2026-01-01T00:00:00.000Z",
       workspacePath: makeWorkspacePath(),
-    });
+    }));
 
     const cancelled = adapter.cancelSession(session.sessionId, "2026-01-01T00:00:01.000Z");
     expect(cancelled?.status).toBe("cancelled");
@@ -155,7 +235,7 @@ describe("mock acp adapter", () => {
 async function waitForTerminalStatus(
   adapter: ReturnType<typeof createAcpAdapter>,
   sessionId: string,
-  timeoutMs = 2000,
+  timeoutMs = 5000,
 ): Promise<"succeeded" | "failed" | "cancelled"> {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
@@ -168,158 +248,122 @@ async function waitForTerminalStatus(
   throw new Error("timed out waiting for terminal status");
 }
 
-describe("subprocess stderr helpers", () => {
-  test("tailStderr keeps the end of long output", () => {
-    const stderr = `${"x".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS + 50)}tail-marker`;
-    expect(tailStderr(stderr)).toBe("x".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS - "tail-marker".length) + "tail-marker");
-  });
-
-  test("formatSubprocessExitError includes bounded stderr tail", () => {
-    const stderr = `${"y".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS + 20)}boom`;
-    expect(formatSubprocessExitError(2, stderr)).toBe(
-      `exit_2:${"y".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS - "boom".length)}boom`,
+describe("acp client adapter", () => {
+  test("marks session succeeded when mock acp server returns end_turn", async () => {
+    const adapter = createAcpAdapter(
+      testAcpConfig({
+        mode: "subprocess",
+        args: [mockServerPath],
+      }),
+      createClientAdapterDeps(),
     );
-  });
 
-  test("formatSubprocessExitError omits colon when stderr is empty", () => {
-    expect(formatSubprocessExitError(1, "   ")).toBe("exit_1");
-  });
-});
-
-describe("subprocess acp adapter", () => {
-  test("marks session succeeded when subprocess exits 0", async () => {
-    const adapter = createAcpAdapter(testAcpConfig({
-      mode: "subprocess",
-      args: ["-e", "setTimeout(() => process.exit(0), 25)"],
-    }));
-
-    const session = adapter.startSession({
+    const session = adapter.startSession(makeStartSessionInput({
       runAttemptId: "run-ok",
       issueId: "issue-ok",
       attemptNumber: 1,
       startedAt: new Date().toISOString(),
       workspacePath: makeWorkspacePath(),
-    });
+    }));
 
     const status = await waitForTerminalStatus(adapter, session.sessionId);
     expect(status).toBe("succeeded");
-  });
-
-  test("marks session failed when subprocess exits non-zero", async () => {
-    const adapter = createAcpAdapter(testAcpConfig({
-      mode: "subprocess",
-      args: ["-e", 'process.stderr.write("boom"); process.exit(2)'],
-    }));
-
-    const session = adapter.startSession({
-      runAttemptId: "run-fail",
-      issueId: "issue-fail",
-      attemptNumber: 1,
-      startedAt: new Date().toISOString(),
-      workspacePath: makeWorkspacePath(),
-    });
-
-    const status = await waitForTerminalStatus(adapter, session.sessionId);
-    expect(status).toBe("failed");
 
     const snapshot = adapter.pollSessions(new Date().toISOString(), [session.sessionId])[0];
-    expect(snapshot?.errorMessage).toBe("exit_2:boom");
+    expect(snapshot?.sessionRef).toMatch(/^[0-9a-f-]{36}$/);
+    expect(snapshot?.errorMessage).toBeNull();
   });
 
-  test("stores bounded stderr tail when subprocess emits long stderr", async () => {
-    const marker = "stderr-tail-marker";
-    const adapter = createAcpAdapter(testAcpConfig({
-      mode: "subprocess",
-      args: [
-        "-e",
-        `process.stderr.write("${"z".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS + 100)}${marker}"); process.exit(3)`,
-      ],
-    }));
-
-    const session = adapter.startSession({
-      runAttemptId: "run-long-stderr",
-      issueId: "issue-long-stderr",
-      attemptNumber: 1,
-      startedAt: new Date().toISOString(),
-      workspacePath: makeWorkspacePath(),
-    });
-
-    const status = await waitForTerminalStatus(adapter, session.sessionId);
-    expect(status).toBe("failed");
-
-    const snapshot = adapter.pollSessions(new Date().toISOString(), [session.sessionId])[0];
-    expect(snapshot?.errorMessage).toContain(`exit_3:`);
-    expect(snapshot?.errorMessage?.endsWith(marker)).toBe(true);
-    expect(snapshot?.errorMessage?.length).toBeLessThanOrEqual(
-      `exit_3:${"z".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS)}`.length,
+  test("runs session phases from spawning through terminal", async () => {
+    const adapter = createAcpClientAdapter(
+      testAcpConfig({
+        mode: "subprocess",
+        args: [mockServerPath],
+      }),
+      createClientAdapterDeps(),
     );
-  });
 
-  test("spawns subprocess with issue workspace cwd", async () => {
-    const workspacePath = makeWorkspacePath();
-    const markerPath = path.join(workspacePath, "cwd.txt");
-    const adapter = createAcpAdapter(testAcpConfig({
-      mode: "subprocess",
-      args: ["-e", "require('fs').writeFileSync('cwd.txt', process.cwd())"],
-    }));
-
-    const session = adapter.startSession({
-      runAttemptId: "run-cwd",
-      issueId: "issue-cwd",
+    const session = adapter.startSession(makeStartSessionInput({
+      runAttemptId: "run-phases",
+      issueId: "issue-phases",
       attemptNumber: 1,
       startedAt: new Date().toISOString(),
-      workspacePath,
-    });
+      workspacePath: makeWorkspacePath(),
+    }));
 
     const status = await waitForTerminalStatus(adapter, session.sessionId);
     expect(status).toBe("succeeded");
-    expect(realpathSync(readFileSync(markerPath, "utf8"))).toBe(realpathSync(workspacePath));
-    expect(realpathSync(workspacePath)).not.toBe(realpathSync(process.cwd()));
+    expect(adapter.getSessionPhase(session.sessionId)).toBe("terminal");
+    expect(adapter.getSessionUpdateCount(session.sessionId)).toBeGreaterThan(0);
   });
 
-  test("passes symphony env vars to subprocess", async () => {
-    const workspacePath = makeWorkspacePath();
-    const markerPath = path.join(workspacePath, "env.json");
-    const adapter = createAcpAdapter(testAcpConfig({
-      mode: "subprocess",
-      args: [
-        "-e",
-        "require('fs').writeFileSync('env.json', JSON.stringify({ SYMPHONY_RUN_ATTEMPT_ID: process.env.SYMPHONY_RUN_ATTEMPT_ID, SYMPHONY_ISSUE_ID: process.env.SYMPHONY_ISSUE_ID, SYMPHONY_ATTEMPT_NUMBER: process.env.SYMPHONY_ATTEMPT_NUMBER, SYMPHONY_WORKSPACE_PATH: process.env.SYMPHONY_WORKSPACE_PATH }))",
-      ],
-    }));
-
-    const session = adapter.startSession({
-      runAttemptId: "run-env-1",
-      issueId: "issue-env-1",
-      attemptNumber: 2,
-      startedAt: new Date().toISOString(),
-      workspacePath,
-    });
-
-    const status = await waitForTerminalStatus(adapter, session.sessionId);
-    expect(status).toBe("succeeded");
-    expect(JSON.parse(readFileSync(markerPath, "utf8"))).toEqual({
-      SYMPHONY_RUN_ATTEMPT_ID: "run-env-1",
-      SYMPHONY_ISSUE_ID: "issue-env-1",
-      SYMPHONY_ATTEMPT_NUMBER: "2",
-      SYMPHONY_WORKSPACE_PATH: workspacePath,
-    });
-  });
-
-  test("requires workspace path for subprocess sessions", () => {
-    const adapter = createAcpAdapter(testAcpConfig({
-      mode: "subprocess",
-      args: ["-e", "process.exit(0)"],
-    }));
+  test("requires workspace path for acp client sessions", () => {
+    const adapter = createAcpAdapter(
+      testAcpConfig({
+        mode: "subprocess",
+        args: [mockServerPath],
+      }),
+      createClientAdapterDeps(),
+    );
 
     expect(() =>
-      adapter.startSession({
+      adapter.startSession(makeStartSessionInput({
         runAttemptId: "run-missing-cwd",
         issueId: "issue-missing-cwd",
         attemptNumber: 1,
         startedAt: new Date().toISOString(),
         workspacePath: "   ",
+      })),
+    ).toThrow("workspacePath is required for acp client sessions");
+  });
+
+  test("cancels running acp client sessions", async () => {
+    const adapter = createAcpClientAdapter(
+      testAcpConfig({
+        mode: "subprocess",
+        args: [mockServerPath],
       }),
-    ).toThrow("workspacePath is required for subprocess acp sessions");
+      createClientAdapterDeps(),
+    );
+
+    const session = adapter.startSession(makeStartSessionInput({
+      runAttemptId: "run-cancel-client",
+      issueId: "issue-cancel-client",
+      attemptNumber: 1,
+      startedAt: new Date().toISOString(),
+      workspacePath: makeWorkspacePath(),
+    }));
+
+    const cancelled = adapter.cancelSession(session.sessionId, new Date().toISOString());
+    expect(cancelled?.status).toBe("cancelled");
+    expect(cancelled?.errorMessage).toBe("cancelled_by_reconciliation");
+
+    const polled = adapter.pollSessions(new Date().toISOString(), [session.sessionId])[0];
+    expect(polled?.status).toBe("cancelled");
+  });
+
+  test("fails when child exits before protocol completion", async () => {
+    const adapter = createAcpClientAdapter(
+      testAcpConfig({
+        mode: "subprocess",
+        command: process.execPath,
+        args: ["-e", "process.exit(1)"],
+      }),
+      createClientAdapterDeps(),
+    );
+
+    const session = adapter.startSession(makeStartSessionInput({
+      runAttemptId: "run-early-exit",
+      issueId: "issue-early-exit",
+      attemptNumber: 1,
+      startedAt: new Date().toISOString(),
+      workspacePath: makeWorkspacePath(),
+    }));
+
+    const status = await waitForTerminalStatus(adapter, session.sessionId);
+    expect(status).toBe("failed");
+
+    const polled = adapter.pollSessions(new Date().toISOString(), [session.sessionId])[0];
+    expect(polled?.errorMessage).toMatch(/^early_process_exit_/);
   });
 });

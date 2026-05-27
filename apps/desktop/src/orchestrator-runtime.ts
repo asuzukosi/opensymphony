@@ -100,6 +100,7 @@ let store: ITrackerStore | null = null;
 let orchestrator: OrchestratorService | null = null;
 let runtimeAdapter: AcpAdapter | null = null;
 let loadedConfig: RuntimeConfig | null = null;
+let loadedPromptTemplate = "";
 let loadedWorkflowVersion: string | null = null;
 let workspaceManager: WorkspaceManagerService | null = null;
 const runAttemptWorkspacePath = new Map<string, string>();
@@ -146,37 +147,56 @@ function scheduleTimer(): void {
   state.nextTickAt = new Date(Date.now() + state.pollIntervalMs).toISOString();
 }
 
-function ensureRuntimeConfig(): RuntimeConfig {
+interface LoadedWorkflow {
+  config: RuntimeConfig;
+  promptTemplate: string;
+}
+
+function fallbackRuntimeConfig(): RuntimeConfig {
+  return {
+    projectId: "desktop-default",
+    pollIntervalMs: 30000,
+    maxConcurrency: 2,
+    retryMaxBackoffMs: 300000,
+    workspaceRoot: ".symphony-workspaces",
+    acp: {
+      mode: "mock",
+      command: process.execPath,
+      args: ["-e", "setTimeout(() => process.exit(0), 1200)"],
+      mockCompletionDelayMs: 1200,
+      permissionMode: "auto_approve",
+    },
+    hooks: {
+      afterCreate: [],
+      beforeAgentRun: [],
+      afterRun: [],
+      beforeRemove: [],
+      timeoutMs: 60_000,
+    },
+  };
+}
+
+function loadWorkflow(): LoadedWorkflow {
   const loader = new WorkflowLoaderService();
   const configService = new RuntimeConfigService();
   const workflowPath = resolveWorkflowPath();
 
   try {
     const definition = loader.loadFromFile(workflowPath);
-    return configService.toRuntimeConfig(definition);
+    return {
+      config: configService.toRuntimeConfig(definition),
+      promptTemplate: definition.promptTemplate,
+    };
   } catch {
     return {
-      projectId: "desktop-default",
-      pollIntervalMs: 30000,
-      maxConcurrency: 2,
-      retryMaxBackoffMs: 300000,
-      workspaceRoot: ".symphony-workspaces",
-      acp: {
-        mode: "mock",
-        command: process.execPath,
-        args: ["-e", "setTimeout(() => process.exit(0), 1200)"],
-        mockCompletionDelayMs: 1200,
-        permissionMode: "auto_approve",
-      },
-      hooks: {
-        afterCreate: [],
-        beforeAgentRun: [],
-        afterRun: [],
-        beforeRemove: [],
-        timeoutMs: 60_000,
-      },
+      config: fallbackRuntimeConfig(),
+      promptTemplate: "",
     };
   }
+}
+
+function ensureRuntimeConfig(): RuntimeConfig {
+  return loadWorkflow().config;
 }
 
 function getWorkflowPath(): string {
@@ -198,7 +218,7 @@ function applyWorkflowConfig(
   loadedConfig = config;
   loadedWorkflowVersion = version;
   orchestrator = store ? new OrchestratorService(store, config) : null;
-  runtimeAdapter = createAcpAdapter(config.acp);
+  runtimeAdapter = createAcpAdapter(config.acp, { getPermissionRouter });
   workspaceManager = new WorkspaceManagerService(
     path.resolve(process.cwd(), config.workspaceRoot),
     config.hooks,
@@ -258,8 +278,9 @@ function ensureDbAndOrchestrator(): {
   const workflowVersion = computeWorkflowVersion(workflowPath);
   const hasWorkflowChanged = loadedWorkflowVersion !== workflowVersion;
   if (!loadedConfig || hasWorkflowChanged) {
-    const config = ensureRuntimeConfig();
-    applyWorkflowConfig(config, workflowPath, workflowVersion);
+    const loaded = loadWorkflow();
+    applyWorkflowConfig(loaded.config, workflowPath, workflowVersion);
+    loadedPromptTemplate = loaded.promptTemplate;
   }
 
   const config = loadedConfig ?? ensureRuntimeConfig();
@@ -283,7 +304,7 @@ function ensureDbAndOrchestrator(): {
     orchestrator = new OrchestratorService(store, config);
   }
   if (!runtimeAdapter) {
-    runtimeAdapter = createAcpAdapter(config.acp);
+    runtimeAdapter = createAcpAdapter(config.acp, { getPermissionRouter });
     state.runtimeAdapterKind = runtimeKindFromAcpMode(config.acp.mode);
   }
 
@@ -351,7 +372,7 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
   try {
     const runtime = ensureDbAndOrchestrator();
     if (!runtimeAdapter) {
-      runtimeAdapter = createAcpAdapter(runtime.config.acp);
+      runtimeAdapter = createAcpAdapter(runtime.config.acp, { getPermissionRouter });
     }
     const pollResult = runtime.orchestrator.runPollCycle(nowIso);
     const runLifecycle = new RunLifecycleService(
@@ -368,9 +389,14 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
       manager.runBeforeAgentRun(workspace.workspacePath);
       runAttemptWorkspacePath.set(dispatched.runAttemptId, workspace.workspacePath);
 
+      const issue = runtime.store.issues.getIssueById(dispatched.issueId);
       const startedSession = runtimeAdapter.startSession({
         runAttemptId: dispatched.runAttemptId,
         issueId: dispatched.issueId,
+        identifier: dispatched.identifier,
+        title: issue?.title ?? dispatched.identifier,
+        description: issue?.description ?? null,
+        promptTemplate: loadedPromptTemplate,
         attemptNumber: dispatched.attemptNumber,
         startedAt: nowIso,
         workspacePath: workspace.workspacePath,
