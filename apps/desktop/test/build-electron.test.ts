@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, test } from "vitest";
@@ -18,5 +18,11 @@ describe("electron build output", () => {
     for (const channel of Object.values(IPC_CHANNELS)) {
       expect(preload).toContain(channel);
     }
+  });
+
+  test("copies db migrations next to bundled main process", () => {
+    const migrationsDir = path.join(appRoot, ".electron/migrations");
+    expect(existsSync(migrationsDir)).toBe(true);
+    expect(existsSync(path.join(migrationsDir, "001_init.up.sql"))).toBe(true);
   });
 });

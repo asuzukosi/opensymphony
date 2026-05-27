@@ -1,5 +1,5 @@
 import path from "node:path";
-import { existsSync } from "node:fs";
+import { cpSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { build, context } from "esbuild";
 
@@ -14,6 +14,12 @@ const mainEntry = path.join(appRoot, "src/main.ts");
 const preloadEntry = path.join(appRoot, "src/preload.ts");
 const mainOutfile = path.join(outDir, "main.js");
 const preloadOutfile = path.join(outDir, "preload.js");
+const migrationsSrc = path.join(repoRoot, "packages/db/migrations");
+const migrationsDest = path.join(outDir, "migrations");
+
+function copyMigrations() {
+  cpSync(migrationsSrc, migrationsDest, { recursive: true });
+}
 
 function resolveAliasTarget(basePath) {
   if (existsSync(`${basePath}.ts`)) return `${basePath}.ts`;
@@ -69,6 +75,7 @@ export async function buildElectronEntrypoints() {
       outfile: preloadOutfile,
     }),
   ]);
+  copyMigrations();
 }
 
 export async function watchElectronEntrypoints() {
@@ -83,6 +90,7 @@ export async function watchElectronEntrypoints() {
     outfile: preloadOutfile,
   });
 
+  copyMigrations();
   await Promise.all([mainCtx.watch(), preloadCtx.watch()]);
 
   return { mainCtx, preloadCtx };
