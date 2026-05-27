@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
   ACP_BASELINE_CLIENT_CAPABILITIES,
-  ACP_EXPERIMENTAL_CLIENT_CAPABILITY_GROUPS,
   ACP_METHOD,
   AGENT_METHODS,
   CLIENT_METHODS,
@@ -26,27 +25,10 @@ describe("acp-protocol", () => {
     expect(ACP_METHOD.session_new).toBe("session/new");
   });
 
-  test("default client capabilities include stable fs and terminal only", () => {
+  test("default client capabilities are empty", () => {
     const capabilities = defaultSymphonyClientCapabilities();
     expect(capabilities).toEqual(ACP_BASELINE_CLIENT_CAPABILITIES);
-    expect(capabilities.fs).toEqual({
-      readTextFile: true,
-      writeTextFile: true,
-    });
-    expect(capabilities.terminal).toBe(true);
-    expect(capabilities.auth).toBeUndefined();
-    expect(capabilities.elicitation).toBeUndefined();
-    expect(capabilities.nes).toBeUndefined();
-    expect(capabilities.positionEncodings).toBeUndefined();
-  });
-
-  test("documents experimental client capability groups", () => {
-    expect(ACP_EXPERIMENTAL_CLIENT_CAPABILITY_GROUPS.auth).toBe("auth");
-    expect(ACP_EXPERIMENTAL_CLIENT_CAPABILITY_GROUPS.elicitation).toBe("elicitation");
-    expect(ACP_EXPERIMENTAL_CLIENT_CAPABILITY_GROUPS.nes).toBe("nes");
-    expect(ACP_EXPERIMENTAL_CLIENT_CAPABILITY_GROUPS.positionEncodings).toBe(
-      "positionEncodings",
-    );
+    expect(capabilities).toEqual({});
   });
 
   test("builds default initialize request with symphony client capabilities", () => {
