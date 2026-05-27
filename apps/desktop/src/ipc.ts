@@ -4,6 +4,26 @@ export type RuntimeAdapterKind = "mock-acp" | "acp-cli";
 
 export type PollIntervalSource = "workflow" | "override";
 
+export type PermissionMode = "auto_approve" | "requires_approval";
+
+export type PermissionModeSource = "workflow" | "override";
+
+export type PermissionDecision = "approve" | "deny";
+
+export interface PendingPermission {
+  id: string;
+  sessionId: string;
+  issueId: string;
+  summary: string;
+  payload: unknown;
+  createdAt: string;
+}
+
+export interface ResolvePermissionRequest {
+  id: string;
+  decision: PermissionDecision;
+}
+
 export interface RuntimeAuditEvent {
   action: string;
   issueId: string | null;
@@ -178,7 +198,9 @@ export type ControlRuntimeRequest =
   | { action: "stop" }
   | { action: "tick" }
   | { action: "setPollInterval"; pollIntervalMs: number }
-  | { action: "clearPollIntervalOverride" };
+  | { action: "clearPollIntervalOverride" }
+  | { action: "setPermissionMode"; permissionMode: PermissionMode }
+  | { action: "clearPermissionModeOverride" };
 
 export interface SettingsProjectMeta {
   id: string;
@@ -200,6 +222,8 @@ export interface SettingsView {
   runtimeAdapterKind: RuntimeAdapterKind;
   pollIntervalMs: number;
   pollIntervalSource: PollIntervalSource;
+  permissionMode: PermissionMode;
+  permissionModeSource: PermissionModeSource;
   project: SettingsProjectMeta;
   acp: SettingsAcpConfig;
   startedAt: string | null;
@@ -217,6 +241,8 @@ export interface SymphonyDesktopApi {
   mutateIssue(request: MutateIssueRequest): Promise<void>;
   controlRuntime(request: ControlRuntimeRequest): Promise<RuntimeStateSnapshot>;
   getSettings(): Promise<SettingsView>;
+  getPendingPermissions(): Promise<PendingPermission[]>;
+  resolvePermission(request: ResolvePermissionRequest): Promise<void>;
 }
 
 export const IPC_CHANNELS = {
@@ -226,6 +252,8 @@ export const IPC_CHANNELS = {
   mutateIssue: "symphony:mutate-issue",
   controlRuntime: "symphony:control-runtime",
   getSettings: "symphony:get-settings",
+  getPendingPermissions: "symphony:get-pending-permissions",
+  resolvePermission: "symphony:resolve-permission",
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

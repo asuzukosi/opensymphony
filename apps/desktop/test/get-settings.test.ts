@@ -67,6 +67,8 @@ Run the issue.
     expect(settings.workflowVersion).toEqual(expect.any(String));
     expect(settings.pollIntervalMs).toBe(45_000);
     expect(settings.pollIntervalSource).toBe("workflow");
+    expect(settings.permissionMode).toBe("auto_approve");
+    expect(settings.permissionModeSource).toBe("workflow");
     expect(settings.runtimeAdapterKind).toBe("mock-acp");
     expect(settings.project).toEqual({
       id: "symphony-local",
@@ -98,6 +100,27 @@ Run the issue.
 
     expect(settings.pollIntervalMs).toBe(12_000);
     expect(settings.pollIntervalSource).toBe("override");
+
+    stopOrchestratorRuntime();
+  });
+
+  test("reflects permission mode override from controlRuntime", async () => {
+    const { controlRuntime, getSettings, stopOrchestratorRuntime } = await loadRuntime(`---
+project_id: symphony-local
+poll_interval_ms: 30000
+acp:
+  mode: mock
+  permission_mode: auto_approve
+---
+
+Run the issue.
+`);
+
+    controlRuntime({ action: "setPermissionMode", permissionMode: "requires_approval" });
+    const settings = getSettings();
+
+    expect(settings.permissionMode).toBe("requires_approval");
+    expect(settings.permissionModeSource).toBe("override");
 
     stopOrchestratorRuntime();
   });

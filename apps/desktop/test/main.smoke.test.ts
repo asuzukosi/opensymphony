@@ -59,6 +59,8 @@ const getIssueMock = vi.fn(async () => ({
 }));
 
 const mutateIssueMock = vi.fn();
+const getPendingPermissionsMock = vi.fn(async () => []);
+const resolvePermissionMock = vi.fn(async () => undefined);
 
 const getSettingsMock = vi.fn(async () => ({
   status: "idle",
@@ -67,6 +69,8 @@ const getSettingsMock = vi.fn(async () => ({
   runtimeAdapterKind: "mock-acp",
   pollIntervalMs: 30_000,
   pollIntervalSource: "workflow",
+  permissionMode: "auto_approve",
+  permissionModeSource: "workflow",
   project: {
     id: "symphony-local",
     name: "symphony-local",
@@ -136,6 +140,8 @@ vi.mock("../src/orchestrator-runtime", () => ({
   mutateIssue: mutateIssueMock,
   controlRuntime: controlRuntimeMock,
   getSettings: getSettingsMock,
+  getPendingPermissions: getPendingPermissionsMock,
+  resolvePermission: resolvePermissionMock,
   runOrchestratorTick: vi.fn(),
   startOrchestratorRuntime: vi.fn(),
   stopOrchestratorRuntime: vi.fn(),
@@ -148,6 +154,8 @@ const EXPECTED_CHANNELS = [
   IPC_CHANNELS.mutateIssue,
   IPC_CHANNELS.controlRuntime,
   IPC_CHANNELS.getSettings,
+  IPC_CHANNELS.getPendingPermissions,
+  IPC_CHANNELS.resolvePermission,
 ] as const;
 
 function registerHandlersAndFind(channel: string) {
@@ -179,11 +187,11 @@ describe("desktop bootstrap smoke", () => {
     expect(options.webPreferences.sandbox).toBe(false);
   });
 
-  test("registers exactly six IPC handlers with slim channel names", async () => {
+  test("registers exactly eight IPC handlers with slim channel names", async () => {
     const { registerIpcHandlers } = await import("../src/main");
     registerIpcHandlers();
 
-    expect(ipcHandle).toHaveBeenCalledTimes(6);
+    expect(ipcHandle).toHaveBeenCalledTimes(8);
 
     const registeredChannels = ipcHandle.mock.calls.map(([channel]) => channel);
     expect(registeredChannels.sort()).toEqual([...EXPECTED_CHANNELS].sort());
@@ -271,5 +279,25 @@ describe("desktop bootstrap smoke", () => {
       project: { id: "symphony-local", slug: "symphony-local" },
       acp: { mode: "mock" },
     });
+  });
+
+  test("getPendingPermissions handler delegates to orchestrator runtime", async () => {
+    getPendingPermissionsMock.mockClear();
+    const handler = await registerHandlersAndFind(IPC_CHANNELS.getPendingPermissions);
+
+    const pending = await handler({});
+
+    expect(getPendingPermissionsMock).toHaveBeenCalledTimes(1);
+    expect(pending).toEqual([]);
+  });
+
+  test("resolvePermission handler delegates to orchestrator runtime", async () => {
+    resolvePermissionMock.mockClear();
+    const handler = await registerHandlersAndFind(IPC_CHANNELS.resolvePermission);
+    const request = { id: "perm-1", decision: "approve" as const };
+
+    await handler({}, request);
+
+    expect(resolvePermissionMock).toHaveBeenCalledWith(request);
   });
 });

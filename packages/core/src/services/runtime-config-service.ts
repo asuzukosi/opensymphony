@@ -1,5 +1,6 @@
 import type {
   ACPMode,
+  PermissionMode,
   RuntimeConfig,
   RuntimeConfigValidationError,
   RuntimeConfigValidationField,
@@ -68,6 +69,7 @@ const DEFAULT_ACP = {
   mockCompletionDelayMs: 1200,
   command: process.execPath,
   args: ["-e", "setTimeout(() => process.exit(0), 1200)"],
+  permissionMode: "auto_approve" as const,
 };
 
 export class RuntimeConfigService {
@@ -104,6 +106,7 @@ export class RuntimeConfigService {
           acp.mock_completion_delay_ms,
           DEFAULT_ACP.mockCompletionDelayMs,
         ),
+        permissionMode: this.readPermissionMode(acp.permission_mode),
       },
       hooks: {
         afterCreate: this.readStringArray(hooks.after_create, []),
@@ -138,6 +141,13 @@ export class RuntimeConfigService {
       return value;
     }
     return DEFAULT_ACP.mode;
+  }
+
+  private readPermissionMode(value: unknown): PermissionMode {
+    if (value === "auto_approve" || value === "requires_approval") {
+      return value;
+    }
+    return DEFAULT_ACP.permissionMode;
   }
 
   private readStringOrFallback(value: unknown, fallback: string): string {

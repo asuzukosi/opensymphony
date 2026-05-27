@@ -5,11 +5,14 @@ export interface WorkflowDefinition {
 
 export type ACPMode = "mock" | "subprocess";
 
+export type PermissionMode = "auto_approve" | "requires_approval";
+
 export interface ACPConfig {
   mode: ACPMode;
   command: string;
   args: string[];
   mockCompletionDelayMs: number;
+  permissionMode: PermissionMode;
 }
 
 export interface RuntimeHooksConfig {

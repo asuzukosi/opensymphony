@@ -63,6 +63,8 @@ function makeMockClient(overrides: Partial<SymphonyDesktopApi> = {}): SymphonyDe
     mutateIssue: vi.fn(),
     controlRuntime: vi.fn().mockResolvedValue(makeRuntimeSnapshot()),
     getSettings: vi.fn(),
+    getPendingPermissions: vi.fn().mockResolvedValue([]),
+    resolvePermission: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -153,7 +155,7 @@ describe("useIpcMutation", () => {
     getIpcClient.mockReturnValue(mockClient);
 
     let resolveControl!: (value: RuntimeStateSnapshot) => void;
-    mockClient.controlRuntime.mockImplementationOnce(
+    vi.mocked(mockClient.controlRuntime).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           resolveControl = resolve;

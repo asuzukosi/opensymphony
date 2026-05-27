@@ -14,6 +14,7 @@ export function makeOrchestratorRuntimeConfig(
       command: process.execPath,
       args: ["-e", "setTimeout(() => process.exit(0), 1200)"],
       mockCompletionDelayMs: 1_200,
+      permissionMode: "auto_approve",
     },
     hooks: {
       afterCreate: [],

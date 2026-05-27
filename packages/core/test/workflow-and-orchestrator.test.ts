@@ -73,6 +73,7 @@ describe("RuntimeConfigService", () => {
     expect(config.pollIntervalMs).toBe(30000);
     expect(config.retryMaxBackoffMs).toBe(300000);
     expect(config.acp.mode).toBe("mock");
+    expect(config.acp.permissionMode).toBe("auto_approve");
     expect(config.acp.command.length).toBeGreaterThan(0);
     expect(config.workspaceRoot).toBe(".symphony-workspaces");
     expect(config.hooks.timeoutMs).toBe(60000);
@@ -113,6 +114,54 @@ describe("RuntimeConfigService", () => {
     expect(config.acp.mockCompletionDelayMs).toBe(500);
     expect(config.workspaceRoot).toBe("./workspaces");
     expect(config.hooks.timeoutMs).toBe(30_000);
+  });
+
+  test("resolves permission_mode from acp block with auto_approve default", () => {
+    const configService = new RuntimeConfigService();
+    const defaultConfig = configService.toRuntimeConfig({
+      config: {
+        project_id: "p1",
+        acp: { mode: "mock" },
+      },
+      promptTemplate: "Ship code",
+    });
+    expect(defaultConfig.acp.permissionMode).toBe("auto_approve");
+
+    const autoApproveConfig = configService.toRuntimeConfig({
+      config: {
+        project_id: "p1",
+        acp: {
+          mode: "subprocess",
+          permission_mode: "auto_approve",
+        },
+      },
+      promptTemplate: "Ship code",
+    });
+    expect(autoApproveConfig.acp.permissionMode).toBe("auto_approve");
+
+    const requiresApprovalConfig = configService.toRuntimeConfig({
+      config: {
+        project_id: "p1",
+        acp: {
+          mode: "mock",
+          permission_mode: "requires_approval",
+        },
+      },
+      promptTemplate: "Ship code",
+    });
+    expect(requiresApprovalConfig.acp.permissionMode).toBe("requires_approval");
+
+    const invalidConfig = configService.toRuntimeConfig({
+      config: {
+        project_id: "p1",
+        acp: {
+          mode: "mock",
+          permission_mode: "ask_every_time",
+        },
+      },
+      promptTemplate: "Ship code",
+    });
+    expect(invalidConfig.acp.permissionMode).toBe("auto_approve");
   });
 });
 

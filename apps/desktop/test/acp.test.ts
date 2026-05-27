@@ -2,9 +2,20 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
+import type { ACPConfig } from "@symphony/core";
 import { ACP_RUNTIME_KIND, createAcpAdapter, formatSubprocessExitError, runtimeKindFromAcpMode, SUBPROCESS_STDERR_TAIL_MAX_CHARS, tailStderr } from "@/runtime/acp";
 
 const tempDirs: string[] = [];
+
+function testAcpConfig(overrides: Partial<ACPConfig> & Pick<ACPConfig, "mode">): ACPConfig {
+  return {
+    command: process.execPath,
+    args: [],
+    mockCompletionDelayMs: 100,
+    permissionMode: "auto_approve",
+    ...overrides,
+  };
+}
 
 afterEach(() => {
   while (tempDirs.length > 0) {
@@ -21,12 +32,9 @@ function makeWorkspacePath(): string {
 
 describe("acp adapter factory", () => {
   test("creates mock adapter when selected", () => {
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "mock",
-      command: process.execPath,
-      args: [],
-      mockCompletionDelayMs: 100,
-    });
+    }));
 
     const session = adapter.startSession({
       runAttemptId: "r1",
@@ -40,12 +48,10 @@ describe("acp adapter factory", () => {
   });
 
   test("creates subprocess adapter when selected", () => {
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "subprocess",
-      command: process.execPath,
       args: ["-e", "process.exit(0)"],
-      mockCompletionDelayMs: 100,
-    });
+    }));
 
     const session = adapter.startSession({
       runAttemptId: "r1",
@@ -66,12 +72,10 @@ describe("acp adapter factory", () => {
 
 describe("mock acp adapter", () => {
   test("transitions to succeeded after completion delay", () => {
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "mock",
-      command: process.execPath,
-      args: [],
       mockCompletionDelayMs: 1000,
-    });
+    }));
     const start = "2026-01-01T00:00:00.000Z";
 
     const session = adapter.startSession({
@@ -91,12 +95,10 @@ describe("mock acp adapter", () => {
   });
 
   test("uses deterministic fail heuristic for fail-tagged issues", () => {
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "mock",
-      command: process.execPath,
-      args: [],
       mockCompletionDelayMs: 0,
-    });
+    }));
     const session = adapter.startSession({
       runAttemptId: "run-fail-1",
       issueId: "issue-fail-fast",
@@ -111,12 +113,10 @@ describe("mock acp adapter", () => {
   });
 
   test("succeeds fail-tagged issues after attempt two", () => {
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "mock",
-      command: process.execPath,
-      args: [],
       mockCompletionDelayMs: 0,
-    });
+    }));
     const session = adapter.startSession({
       runAttemptId: "run-fail-3",
       issueId: "issue-fail-retry",
@@ -131,12 +131,10 @@ describe("mock acp adapter", () => {
   });
 
   test("cancels running mock sessions", () => {
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "mock",
-      command: process.execPath,
-      args: [],
       mockCompletionDelayMs: 60_000,
-    });
+    }));
     const session = adapter.startSession({
       runAttemptId: "run-cancel",
       issueId: "issue-cancel",
@@ -190,12 +188,10 @@ describe("subprocess stderr helpers", () => {
 
 describe("subprocess acp adapter", () => {
   test("marks session succeeded when subprocess exits 0", async () => {
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "subprocess",
-      command: process.execPath,
       args: ["-e", "setTimeout(() => process.exit(0), 25)"],
-      mockCompletionDelayMs: 100,
-    });
+    }));
 
     const session = adapter.startSession({
       runAttemptId: "run-ok",
@@ -210,12 +206,10 @@ describe("subprocess acp adapter", () => {
   });
 
   test("marks session failed when subprocess exits non-zero", async () => {
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "subprocess",
-      command: process.execPath,
       args: ["-e", 'process.stderr.write("boom"); process.exit(2)'],
-      mockCompletionDelayMs: 100,
-    });
+    }));
 
     const session = adapter.startSession({
       runAttemptId: "run-fail",
@@ -234,15 +228,13 @@ describe("subprocess acp adapter", () => {
 
   test("stores bounded stderr tail when subprocess emits long stderr", async () => {
     const marker = "stderr-tail-marker";
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "subprocess",
-      command: process.execPath,
       args: [
         "-e",
         `process.stderr.write("${"z".repeat(SUBPROCESS_STDERR_TAIL_MAX_CHARS + 100)}${marker}"); process.exit(3)`,
       ],
-      mockCompletionDelayMs: 100,
-    });
+    }));
 
     const session = adapter.startSession({
       runAttemptId: "run-long-stderr",
@@ -266,12 +258,10 @@ describe("subprocess acp adapter", () => {
   test("spawns subprocess with issue workspace cwd", async () => {
     const workspacePath = makeWorkspacePath();
     const markerPath = path.join(workspacePath, "cwd.txt");
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "subprocess",
-      command: process.execPath,
       args: ["-e", "require('fs').writeFileSync('cwd.txt', process.cwd())"],
-      mockCompletionDelayMs: 100,
-    });
+    }));
 
     const session = adapter.startSession({
       runAttemptId: "run-cwd",
@@ -290,15 +280,13 @@ describe("subprocess acp adapter", () => {
   test("passes symphony env vars to subprocess", async () => {
     const workspacePath = makeWorkspacePath();
     const markerPath = path.join(workspacePath, "env.json");
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "subprocess",
-      command: process.execPath,
       args: [
         "-e",
         "require('fs').writeFileSync('env.json', JSON.stringify({ SYMPHONY_RUN_ATTEMPT_ID: process.env.SYMPHONY_RUN_ATTEMPT_ID, SYMPHONY_ISSUE_ID: process.env.SYMPHONY_ISSUE_ID, SYMPHONY_ATTEMPT_NUMBER: process.env.SYMPHONY_ATTEMPT_NUMBER, SYMPHONY_WORKSPACE_PATH: process.env.SYMPHONY_WORKSPACE_PATH }))",
       ],
-      mockCompletionDelayMs: 100,
-    });
+    }));
 
     const session = adapter.startSession({
       runAttemptId: "run-env-1",
@@ -319,12 +307,10 @@ describe("subprocess acp adapter", () => {
   });
 
   test("requires workspace path for subprocess sessions", () => {
-    const adapter = createAcpAdapter({
+    const adapter = createAcpAdapter(testAcpConfig({
       mode: "subprocess",
-      command: process.execPath,
       args: ["-e", "process.exit(0)"],
-      mockCompletionDelayMs: 100,
-    });
+    }));
 
     expect(() =>
       adapter.startSession({

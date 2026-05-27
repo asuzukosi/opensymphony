@@ -33,6 +33,8 @@ function makeSettingsView(): SettingsView {
     runtimeAdapterKind: "mock-acp",
     pollIntervalMs: 30_000,
     pollIntervalSource: "workflow",
+    permissionMode: "auto_approve",
+    permissionModeSource: "workflow",
     project: { id: "symphony-local", name: "symphony-local", slug: "symphony-local" },
     acp: {
       mode: "mock",
@@ -57,6 +59,8 @@ function makeMockClient(overrides: Partial<SymphonyDesktopApi> = {}): SymphonyDe
     mutateIssue: vi.fn(),
     controlRuntime: vi.fn(),
     getSettings: vi.fn().mockResolvedValue(makeSettingsView()),
+    getPendingPermissions: vi.fn().mockResolvedValue([]),
+    resolvePermission: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -217,7 +221,7 @@ describe("useIpcQuery", () => {
     );
 
     let resolveRefetch!: (value: SettingsView) => void;
-    mockClient.getSettings.mockImplementationOnce(
+    vi.mocked(mockClient.getSettings).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           resolveRefetch = resolve;

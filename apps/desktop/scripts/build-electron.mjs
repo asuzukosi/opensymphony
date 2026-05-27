@@ -16,9 +16,12 @@ const mainOutfile = path.join(outDir, "main.js");
 const preloadOutfile = path.join(outDir, "preload.js");
 
 function resolveAliasTarget(basePath) {
-  if (existsSync(basePath)) return basePath;
   if (existsSync(`${basePath}.ts`)) return `${basePath}.ts`;
   if (existsSync(`${basePath}.tsx`)) return `${basePath}.tsx`;
+  if (existsSync(path.join(basePath, "index.ts"))) {
+    return path.join(basePath, "index.ts");
+  }
+  if (existsSync(basePath)) return basePath;
   return basePath;
 }
 

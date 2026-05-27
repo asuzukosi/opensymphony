@@ -21,6 +21,12 @@ export function createDesktopApi(): SymphonyDesktopApi {
     async getSettings() {
       return ipcRenderer.invoke(IPC_CHANNELS.getSettings);
     },
+    async getPendingPermissions() {
+      return ipcRenderer.invoke(IPC_CHANNELS.getPendingPermissions);
+    },
+    async resolvePermission(request) {
+      return ipcRenderer.invoke(IPC_CHANNELS.resolvePermission, request);
+    },
   };
 }
 

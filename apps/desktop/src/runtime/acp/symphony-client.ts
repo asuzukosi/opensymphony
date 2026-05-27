@@ -7,6 +7,7 @@ import {
   type SessionNotification,
   type Stream,
 } from "@/runtime/acp/acp-protocol";
+import { buildPermissionResponse } from "@/runtime/acp/permission-store";
 
 export type SymphonyClientHandlers = {
   sessionUpdate?: Client["sessionUpdate"];
@@ -32,7 +33,7 @@ export class SymphonyACPClient implements Client {
       return this.handlers.requestPermission(params);
     }
 
-    return { outcome: { outcome: "cancelled" } };
+    return buildPermissionResponse(params, "approve");
   }
 }
 

@@ -28,6 +28,7 @@ function makeRuntimeConfig(workspaceRoot: string) {
       command: process.execPath,
       args: ["-e", "setTimeout(() => process.exit(0), 50)"],
       mockCompletionDelayMs: 50,
+      permissionMode: "auto_approve",
     },
     hooks: {
       afterCreate: [],

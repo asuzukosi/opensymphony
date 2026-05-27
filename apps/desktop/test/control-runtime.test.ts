@@ -126,4 +126,36 @@ Run the issue.
 
     stopOrchestratorRuntime();
   });
+
+  test("setPermissionMode and clearPermissionModeOverride update permission settings", async () => {
+    const { controlRuntime, getSettings, stopOrchestratorRuntime } = await loadRuntime();
+
+    controlRuntime({ action: "start" });
+
+    controlRuntime({
+      action: "setPermissionMode",
+      permissionMode: "requires_approval",
+    });
+    expect(getSettings().permissionMode).toBe("requires_approval");
+    expect(getSettings().permissionModeSource).toBe("override");
+
+    controlRuntime({ action: "clearPermissionModeOverride" });
+    expect(getSettings().permissionMode).toBe("auto_approve");
+    expect(getSettings().permissionModeSource).toBe("workflow");
+
+    stopOrchestratorRuntime();
+  });
+
+  test("rejects invalid permission modes", async () => {
+    const { controlRuntime, stopOrchestratorRuntime } = await loadRuntime();
+
+    expect(() =>
+      controlRuntime({
+        action: "setPermissionMode",
+        permissionMode: "ask_every_time" as "auto_approve",
+      }),
+    ).toThrow("permissionMode must be auto_approve or requires_approval");
+
+    stopOrchestratorRuntime();
+  });
 });

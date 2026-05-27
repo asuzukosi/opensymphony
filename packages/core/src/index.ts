@@ -32,6 +32,7 @@ export type {
 export type {
   ACPConfig,
   ACPMode,
+  PermissionMode,
   RuntimeConfig,
   RuntimeConfigValidationError,
   RuntimeConfigValidationField,

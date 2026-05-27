@@ -6,7 +6,9 @@ import {
   type ControlRuntimeRequest,
   type IssueDetail,
   type MutateIssueRequest,
+  type PendingPermission,
   type ProjectBoard,
+  type ResolvePermissionRequest,
   type RuntimeStateSnapshot,
   type RuntimeStatus,
   type SettingsView,
@@ -14,10 +16,12 @@ import {
 import {
   controlRuntime,
   getIssue,
+  getPendingPermissions,
   getProjectBoard,
   getRuntimeState,
   getSettings,
   mutateIssue,
+  resolvePermission,
   runOrchestratorTick,
   startOrchestratorRuntime,
   stopOrchestratorRuntime,
@@ -64,6 +68,20 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.getSettings, async (): Promise<SettingsView> => {
     return getSettings();
   });
+
+  ipcMain.handle(
+    IPC_CHANNELS.getPendingPermissions,
+    async (): Promise<PendingPermission[]> => {
+      return getPendingPermissions();
+    },
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.resolvePermission,
+    async (_event, request: ResolvePermissionRequest): Promise<void> => {
+      resolvePermission(request);
+    },
+  );
 }
 
 export function createMainWindow(): BrowserWindow {

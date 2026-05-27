@@ -21,13 +21,16 @@ import {
   TrackerService,
   WorkflowLoaderService,
   WorkspaceManagerService,
+  type PermissionMode,
   type RuntimeConfig,
 } from "@symphony/core";
 import type {
   ControlRuntimeRequest,
   IssueDetail,
   MutateIssueRequest,
+  PendingPermission,
   ProjectBoard,
+  ResolvePermissionRequest,
   RuntimeAuditEvent,
   RuntimeCandidateEntry,
   RuntimeAdapterKind,
@@ -37,6 +40,15 @@ import type {
 } from "@/ipc";
 import type { AcpAdapter } from "@/runtime/acp";
 import { createAcpAdapter, ACP_RUNTIME_KIND, runtimeKindFromAcpMode } from "@/runtime/acp";
+import {
+  createPermissionRouter,
+  type PermissionRouter,
+} from "@/runtime/acp/permission-router";
+import {
+  createPermissionStore,
+  type PendingPermission as StorePendingPermission,
+  type PermissionStore,
+} from "@/runtime/acp/permission-store";
 import { resolveWorkflowPath } from "@/runtime/workflow-path";
 import { buildProjectSeedInput, ensureProjectSeededOnce } from "@/runtime/project-seed";
 import { buildRuntimeSnapshot } from "@/runtime/runtime-snapshot";
@@ -50,6 +62,8 @@ interface RuntimeState {
   startedAt: string | null;
   pollIntervalMs: number;
   pollIntervalSource: "workflow" | "override";
+  permissionMode: PermissionMode;
+  permissionModeSource: "workflow" | "override";
   nextTickAt: string | null;
   tickCount: number;
   lastTickAt: string | null;
@@ -69,6 +83,8 @@ const state: RuntimeState = {
   startedAt: null,
   pollIntervalMs: 30000,
   pollIntervalSource: "workflow",
+  permissionMode: "auto_approve",
+  permissionModeSource: "workflow",
   nextTickAt: null,
   tickCount: 0,
   lastTickAt: null,
@@ -89,7 +105,29 @@ let workspaceManager: WorkspaceManagerService | null = null;
 const runAttemptWorkspacePath = new Map<string, string>();
 const seededProjectIds = new Set<string>();
 const logger = new StructuredLoggerService();
+let permissionStore: PermissionStore | null = null;
+let permissionRouter: PermissionRouter | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
+
+function ensurePermissionStore(): PermissionStore {
+  permissionStore ??= createPermissionStore();
+  return permissionStore;
+}
+
+export function getPermissionStore(): PermissionStore {
+  return ensurePermissionStore();
+}
+
+function toPendingPermissionView(entry: StorePendingPermission): PendingPermission {
+  return {
+    id: entry.id,
+    sessionId: entry.sessionId,
+    issueId: entry.issueId,
+    summary: entry.summary,
+    payload: entry.payload,
+    createdAt: entry.createdAt,
+  };
+}
 
 function scheduleTimer(): void {
   if (timer) {
@@ -128,6 +166,7 @@ function ensureRuntimeConfig(): RuntimeConfig {
         command: process.execPath,
         args: ["-e", "setTimeout(() => process.exit(0), 1200)"],
         mockCompletionDelayMs: 1200,
+        permissionMode: "auto_approve",
       },
       hooks: {
         afterCreate: [],
@@ -173,6 +212,9 @@ function applyWorkflowConfig(
     if (state.status === "running" && previousPollIntervalMs !== state.pollIntervalMs) {
       scheduleTimer();
     }
+  }
+  if (state.permissionModeSource === "workflow") {
+    state.permissionMode = config.acp.permissionMode;
   }
 }
 
@@ -279,6 +321,7 @@ export function startOrchestratorRuntime(): void {
   state.status = "running";
   state.startedAt = state.startedAt ?? new Date().toISOString();
   state.pollIntervalMs = config.pollIntervalMs;
+  state.permissionMode = config.acp.permissionMode;
   state.lastAction = "runtime_started";
   state.lastError = null;
   logger.info({
@@ -526,6 +569,56 @@ export function clearOrchestratorPollIntervalOverride(): void {
   state.lastError = null;
 }
 
+export function getOrchestratorPermissionMode(): PermissionMode {
+  return state.permissionMode;
+}
+
+export function getPermissionRouter(): PermissionRouter {
+  permissionRouter ??= createPermissionRouter({
+    store: ensurePermissionStore(),
+    getPermissionMode: getOrchestratorPermissionMode,
+  });
+  return permissionRouter;
+}
+
+export function setOrchestratorPermissionMode(permissionMode: PermissionMode): void {
+  if (permissionMode !== "auto_approve" && permissionMode !== "requires_approval") {
+    throw new Error("permissionMode must be auto_approve or requires_approval");
+  }
+
+  state.permissionMode = permissionMode;
+  state.permissionModeSource = "override";
+  state.lastAction = "permission_mode_updated";
+  state.lastError = null;
+}
+
+export function clearOrchestratorPermissionModeOverride(): void {
+  const workflowConfig = ensureRuntimeConfig();
+  state.permissionMode = workflowConfig.acp.permissionMode;
+  state.permissionModeSource = "workflow";
+  state.lastAction = "permission_mode_reset_to_workflow";
+  state.lastError = null;
+}
+
+export function getPendingPermissions(): PendingPermission[] {
+  if (getOrchestratorPermissionMode() === "auto_approve") {
+    return [];
+  }
+
+  return ensurePermissionStore().listPending().map(toPendingPermissionView);
+}
+
+export function resolvePermission(request: ResolvePermissionRequest): void {
+  if (getOrchestratorPermissionMode() === "auto_approve") {
+    throw new Error("resolvePermission is unavailable when permission mode is auto_approve");
+  }
+
+  const resolved = ensurePermissionStore().resolve(request.id, request.decision);
+  if (!resolved) {
+    throw new Error(`pending permission not found: ${request.id}`);
+  }
+}
+
 export function getRuntimeState(eventLimit = 20): RuntimeStateSnapshot {
   const runtime = ensureDbAndOrchestrator();
   const candidateSelection = new CandidateSelectionService(
@@ -587,6 +680,8 @@ export function getSettings(): SettingsView {
     runtimeAdapterKind: state.runtimeAdapterKind,
     pollIntervalMs: state.pollIntervalMs,
     pollIntervalSource: state.pollIntervalSource,
+    permissionMode: state.permissionMode,
+    permissionModeSource: state.permissionModeSource,
     project: projectRow
       ? { id: projectRow.id, name: projectRow.name, slug: projectRow.slug }
       : { id: projectSeed.id, name: projectSeed.name, slug: projectSeed.slug },
@@ -769,6 +864,12 @@ export function controlRuntime(request: ControlRuntimeRequest): RuntimeStateSnap
       break;
     case "clearPollIntervalOverride":
       clearOrchestratorPollIntervalOverride();
+      break;
+    case "setPermissionMode":
+      setOrchestratorPermissionMode(request.permissionMode);
+      break;
+    case "clearPermissionModeOverride":
+      clearOrchestratorPermissionModeOverride();
       break;
   }
   return getRuntimeState();

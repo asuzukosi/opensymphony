@@ -20,6 +20,8 @@ const EXPECTED_METHODS = [
   "mutateIssue",
   "controlRuntime",
   "getSettings",
+  "getPendingPermissions",
+  "resolvePermission",
 ] as const satisfies ReadonlyArray<keyof SymphonyDesktopApi>;
 
 describe("preload contract", () => {
@@ -28,7 +30,7 @@ describe("preload contract", () => {
     exposeInMainWorld.mockClear();
   });
 
-  test("exposes exactly six symphonyDesktop API methods", async () => {
+  test("exposes exactly eight symphonyDesktop API methods", async () => {
     const { createDesktopApi } = await import("../src/preload");
     const api = createDesktopApi();
 
@@ -55,6 +57,8 @@ describe("preload contract", () => {
         mutateIssue: expect.any(Function),
         controlRuntime: expect.any(Function),
         getSettings: expect.any(Function),
+        getPendingPermissions: expect.any(Function),
+        resolvePermission: expect.any(Function),
       }),
     );
   });
@@ -117,5 +121,24 @@ describe("preload contract", () => {
     await api.getSettings();
 
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.getSettings);
+  });
+
+  test("getPendingPermissions invokes symphony:get-pending-permissions", async () => {
+    const { createDesktopApi } = await import("../src/preload");
+    const api = createDesktopApi();
+
+    await api.getPendingPermissions();
+
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.getPendingPermissions);
+  });
+
+  test("resolvePermission invokes symphony:resolve-permission with request payload", async () => {
+    const { createDesktopApi } = await import("../src/preload");
+    const api = createDesktopApi();
+    const request = { id: "perm-1", decision: "approve" as const };
+
+    await api.resolvePermission(request);
+
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.resolvePermission, request);
   });
 });

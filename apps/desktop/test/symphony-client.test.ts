@@ -49,13 +49,15 @@ describe("symphony-client", () => {
     await once(child, "exit");
   });
 
-  test("returns cancelled when requestPermission has no handler", async () => {
+  test("auto approves when requestPermission has no handler", async () => {
     const client = new SymphonyACPClient();
 
     await expect(
       client.requestPermission({
         sessionId: "session-1",
-        options: [],
+        options: [
+          { optionId: "allow-once", name: "Allow once", kind: "allow_once" },
+        ],
         toolCall: {
           toolCallId: "tool-1",
           title: "run command",
@@ -63,7 +65,9 @@ describe("symphony-client", () => {
           status: "pending",
         },
       }),
-    ).resolves.toEqual({ outcome: { outcome: "cancelled" } });
+    ).resolves.toEqual({
+      outcome: { outcome: "selected", optionId: "allow-once" },
+    });
   });
 
   test("delegates sessionUpdate to configured handler", async () => {
