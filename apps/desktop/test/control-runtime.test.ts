@@ -41,7 +41,7 @@ describe("controlRuntime", () => {
 
   async function loadRuntime(workflowBody = `---
 project_id: symphony-local
-poll_interval_ms: 30000
+poll_interval_ms: 3000
 ${demoAcpWorkflowBlock()}
 ---
 
@@ -105,7 +105,7 @@ Run the issue.
     expect(overridden.pollIntervalSource).toBe("override");
 
     const reset = controlRuntime({ action: "clearPollIntervalOverride" });
-    expect(reset.pollIntervalMs).toBe(30_000);
+    expect(reset.pollIntervalMs).toBe(3_000);
     expect(reset.pollIntervalSource).toBe("workflow");
 
     stopOrchestratorRuntime();
@@ -148,7 +148,7 @@ Run the issue.
   test("clearPermissionModeOverride restores workflow requires_approval default", async () => {
     const { controlRuntime, getSettings, stopOrchestratorRuntime } = await loadRuntime(`---
 project_id: symphony-local
-poll_interval_ms: 30000
+poll_interval_ms: 3000
 ${demoAcpWorkflowBlock(["  permission_mode: requires_approval"])}
 ---
 
@@ -173,7 +173,7 @@ Run the issue.
     const { controlRuntime, getRuntimeState, getSettings, stopOrchestratorRuntime, workflowPath } =
       await loadRuntime(`---
 project_id: symphony-local
-poll_interval_ms: 30000
+poll_interval_ms: 3000
 ${demoAcpWorkflowBlock(["  permission_mode: requires_approval"])}
 ---
 
@@ -189,7 +189,7 @@ Run the issue.
       workflowPath,
       `---
 project_id: symphony-local
-poll_interval_ms: 30000
+poll_interval_ms: 3000
 ${demoAcpWorkflowBlock(["  permission_mode: requires_approval"])}
 ---
 
@@ -209,7 +209,7 @@ Run the issue with updated workflow body.
   test("setPermissionMode to auto_approve via controlRuntime", async () => {
     const { controlRuntime, getSettings, stopOrchestratorRuntime } = await loadRuntime(`---
 project_id: symphony-local
-poll_interval_ms: 30000
+poll_interval_ms: 3000
 ${demoAcpWorkflowBlock(["  permission_mode: requires_approval"])}
 ---
 

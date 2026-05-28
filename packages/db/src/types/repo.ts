@@ -87,6 +87,7 @@ export interface IRunAttemptRepo {
   listRunningRunSnapshots(projectId: string): RunningRunSnapshotRow[];
   listRecentFinishedRunSnapshots(projectId: string, limit?: number): RecentFinishedRunSnapshotRow[];
   listRunAttemptsByIssue(issueId: string, limit?: number): RunAttemptRow[];
+  hasSucceededRunAttempt(issueId: string): boolean;
 }
 
 export interface IAgentSessionRepo {

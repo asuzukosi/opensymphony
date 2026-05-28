@@ -59,7 +59,7 @@ interface RuntimeConfigDefaults {
 }
 
 const DEFAULTS: RuntimeConfigDefaults = {
-  pollIntervalMs: 30_000,
+  pollIntervalMs: 3_000,
   maxConcurrency: 3,
   retryMaxBackoffMs: 300_000,
   hookTimeoutMs: 60_000,

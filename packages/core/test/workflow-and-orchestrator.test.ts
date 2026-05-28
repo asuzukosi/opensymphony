@@ -89,7 +89,7 @@ Issue {{identifier}}: {{title}}
 
     expect(config.projectId).toBe("p1");
     expect(config.maxConcurrency).toBe(4);
-    expect(config.pollIntervalMs).toBe(30000);
+    expect(config.pollIntervalMs).toBe(3000);
     expect(config.retryMaxBackoffMs).toBe(300000);
     expect(config.acp.permissionMode).toBe("auto_approve");
     expect(config.acp.command.length).toBeGreaterThan(0);

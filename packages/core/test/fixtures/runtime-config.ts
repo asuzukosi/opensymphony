@@ -7,7 +7,7 @@ export function makeOrchestratorRuntimeConfig(
   return {
     projectId: "p1",
     maxConcurrency: 2,
-    pollIntervalMs: 30_000,
+    pollIntervalMs: 3_000,
     retryMaxBackoffMs: 30_000,
     workspaceRoot: ".symphony-workspaces",
     acp: {

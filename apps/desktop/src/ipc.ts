@@ -43,6 +43,7 @@ export interface RuntimeRunningEntry {
   sessionStatus: string | null;
   phase: RuntimeSessionPhase | null;
   lastEventSummary: string | null;
+  paused: boolean;
 }
 
 export interface RuntimeRetryEntry {
@@ -61,6 +62,7 @@ export interface RuntimeRecentFinishedEntry {
   status: "succeeded" | "failed" | "cancelled";
   finishedAt: string;
   errorMessage: string | null;
+  reviewStatus: "approved" | "pending_review" | null;
 }
 
 export interface RuntimeCandidateEntry {
@@ -108,6 +110,8 @@ export interface RuntimeStateSnapshot {
   recentEvents: RuntimeAuditEvent[];
 }
 
+export type WorkflowStateCategory = "active" | "terminal" | "backlog" | "other";
+
 export interface ProjectBoardIssue {
   issueId: string;
   identifier: string;
@@ -118,6 +122,7 @@ export interface ProjectBoardIssue {
 export interface ProjectBoardColumn {
   stateId: string;
   stateName: string;
+  category: WorkflowStateCategory;
   issues: ProjectBoardIssue[];
 }
 
@@ -216,7 +221,10 @@ export type ControlRuntimeRequest =
   | { action: "setPollInterval"; pollIntervalMs: number }
   | { action: "clearPollIntervalOverride" }
   | { action: "setPermissionMode"; permissionMode: PermissionMode }
-  | { action: "clearPermissionModeOverride" };
+  | { action: "clearPermissionModeOverride" }
+  | { action: "pauseRun"; runAttemptId: string }
+  | { action: "resumeRun"; runAttemptId: string }
+  | { action: "cancelRun"; runAttemptId: string };
 
 export interface SettingsProjectMeta {
   id: string;

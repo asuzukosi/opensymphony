@@ -39,6 +39,7 @@ const getProjectBoardMock = vi.fn(async () => ({
     {
       stateId: "symphony-local:todo",
       stateName: "Todo",
+      category: "backlog",
       issues: [],
     },
   ],
@@ -175,9 +176,13 @@ describe("desktop bootstrap smoke", () => {
 
     expect(browserWindowCtor).toHaveBeenCalledTimes(1);
     const options = browserWindowCtor.mock.calls[0][0] as {
+      minWidth: number;
+      minHeight: number;
       webPreferences: Record<string, unknown>;
     };
 
+    expect(options.minWidth).toBe(960);
+    expect(options.minHeight).toBe(640);
     expect(options.webPreferences.contextIsolation).toBe(true);
     expect(options.webPreferences.nodeIntegration).toBe(false);
     expect(options.webPreferences.sandbox).toBe(false);
@@ -215,7 +220,7 @@ describe("desktop bootstrap smoke", () => {
 
     expect(getProjectBoardMock).toHaveBeenCalledTimes(1);
     expect(board).toMatchObject({
-      columns: [{ stateId: "symphony-local:todo", stateName: "Todo", issues: [] }],
+      columns: [{ stateId: "symphony-local:todo", stateName: "Todo", category: "backlog", issues: [] }],
     });
   });
 

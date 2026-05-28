@@ -3,8 +3,13 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { ACPConfig } from "@symphony/core";
 import type { AppendSessionEventInput, SessionEventKind } from "@symphony/db";
 import {
+  createAgentMessageTracker,
+  resolveLastAgentMessage,
+  trackAgentMessageFromUpdate,
+  type AgentMessageTracker,
+} from "@/runtime/acp/agent-message-tracker";
+import {
   defaultInitializeRequest,
-  getSessionUpdateKind,
   type ClientSideConnection,
   type StopReason,
 } from "@/runtime/acp/acp-protocol";
@@ -13,12 +18,19 @@ import { renderPromptTemplate } from "@/runtime/acp/prompt-renderer";
 import { createACPStdioStream, type ACPStdioStreamHandle } from "@/runtime/acp/stdio-stream";
 import { createSymphonyACPConnection } from "@/runtime/acp/symphony-client";
 import {
+  createStreamBuffers,
+  flushStreamBuffers,
+  handleSessionUpdateForPersistence,
+  type StreamBuffers,
+} from "@/runtime/acp/session-event-recorder";
+import {
   type ACPAdapter,
   type RuntimeSessionPhase,
   type RuntimeSessionRecord,
   type RuntimeSessionStatus,
   type StartRuntimeSessionInput,
 } from "@/runtime/acp/types";
+import { SessionPauseGate } from "@/runtime/acp/session-pause-gate";
 
 export interface ACPClientAdapterDependencies {
   getPermissionRouter: () => PermissionRouter;
@@ -42,7 +54,10 @@ interface ACPClientStoredSession {
   stdio: ACPStdioStreamHandle;
   connection: ClientSideConnection;
   cancelled: boolean;
+  pauseGate: SessionPauseGate;
   runTask: Promise<void>;
+  streamBuffers: StreamBuffers;
+  agentMessageTracker: AgentMessageTracker;
 }
 
 export class ACPClientAdapter implements ACPAdapter {
@@ -80,8 +95,10 @@ export class ACPClientAdapter implements ACPAdapter {
     let stored: ACPClientStoredSession;
     const { connection } = createSymphonyACPConnection(stdio.stream, {
       requestPermission: async (params) => {
+        await stored.pauseGate.waitIfPaused();
         this.appendSessionEvent(stored.sessionId, "permission_request", params);
         const response = await requestPermission(params);
+        await stored.pauseGate.waitIfPaused();
         this.appendSessionEvent(stored.sessionId, "permission_resolve", {
           request: params,
           response,
@@ -95,13 +112,15 @@ export class ACPClientAdapter implements ACPAdapter {
 
         stored.phase = "streaming";
         stored.updateCount += 1;
-        const updateKind = getSessionUpdateKind(params.update);
-        stored.lastEventSummary = updateKind;
-        this.appendSessionEvent(
-          stored.sessionId,
-          this.sessionUpdateEventKind(updateKind),
+        const result = handleSessionUpdateForPersistence({
           params,
-        );
+          buffers: stored.streamBuffers,
+          persist: (kind, payload) => {
+            this.appendSessionEvent(stored.sessionId, kind, payload);
+          },
+        });
+        trackAgentMessageFromUpdate(stored.agentMessageTracker, params.update);
+        stored.lastEventSummary = result.lastEventSummary;
       },
     });
 
@@ -122,7 +141,10 @@ export class ACPClientAdapter implements ACPAdapter {
       stdio,
       connection,
       cancelled: false,
+      pauseGate: new SessionPauseGate(),
       runTask: Promise.resolve(),
+      streamBuffers: createStreamBuffers(),
+      agentMessageTracker: createAgentMessageTracker(),
     };
 
     this.sessions.set(sessionId, stored);
@@ -163,6 +185,14 @@ export class ACPClientAdapter implements ACPAdapter {
     return this.sessions.get(sessionId)?.lastEventSummary ?? null;
   }
 
+  getLastAgentMessage(sessionId: string): string | null {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return null;
+    }
+    return resolveLastAgentMessage(session.agentMessageTracker);
+  }
+
   getSessionUpdateCount(sessionId: string): number {
     return this.sessions.get(sessionId)?.updateCount ?? 0;
   }
@@ -195,7 +225,11 @@ export class ACPClientAdapter implements ACPAdapter {
       .map((session) => this.toRuntimeRecord(session));
   }
 
-  cancelSession(sessionId: string, nowIso: string): RuntimeSessionRecord | null {
+  cancelSession(
+    sessionId: string,
+    nowIso: string,
+    reason = "cancelled_by_reconciliation",
+  ): RuntimeSessionRecord | null {
     const session = this.sessions.get(sessionId);
     if (!session) {
       return null;
@@ -203,12 +237,65 @@ export class ACPClientAdapter implements ACPAdapter {
 
     if (session.status === "running") {
       session.cancelled = true;
+      session.pauseGate.resume();
       void this.requestSessionCancel(session);
-      this.finishSession(session, "cancelled", "cancelled_by_reconciliation", nowIso);
+      this.finishSession(session, "cancelled", reason, nowIso);
       this.scheduleSigtermFallback(session);
     }
 
     return this.toRuntimeRecord(session);
+  }
+
+  pauseSession(sessionId: string): RuntimeSessionRecord | null {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.status !== "running" || session.pauseGate.isPaused()) {
+      return session ? this.toRuntimeRecord(session) : null;
+    }
+
+    session.pauseGate.pause();
+    session.phase = "paused";
+    this.pauseChildProcess(session.child);
+    return this.toRuntimeRecord(session);
+  }
+
+  resumeSession(sessionId: string): RuntimeSessionRecord | null {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.status !== "running" || !session.pauseGate.isPaused()) {
+      return session ? this.toRuntimeRecord(session) : null;
+    }
+
+    session.pauseGate.resume();
+    session.phase = session.updateCount > 0 ? "streaming" : "prompting";
+    this.resumeChildProcess(session.child);
+    return this.toRuntimeRecord(session);
+  }
+
+  isSessionPaused(sessionId: string): boolean {
+    return this.sessions.get(sessionId)?.pauseGate.isPaused() ?? false;
+  }
+
+  private pauseChildProcess(child: ChildProcessWithoutNullStreams): void {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    try {
+      child.kill("SIGSTOP");
+    } catch {
+      // permission gate still blocks progress when signal pause is unavailable
+    }
+  }
+
+  private resumeChildProcess(child: ChildProcessWithoutNullStreams): void {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    try {
+      child.kill("SIGCONT");
+    } catch {
+      // ignore resume signal failures
+    }
   }
 
   private async requestSessionCancel(session: ACPClientStoredSession): Promise<void> {
@@ -238,9 +325,11 @@ export class ACPClientAdapter implements ACPAdapter {
     input: StartRuntimeSessionInput,
   ): Promise<void> {
     try {
+      await stored.pauseGate.waitIfPaused();
       stored.phase = "initializing";
       await stored.connection.initialize(defaultInitializeRequest());
 
+      await stored.pauseGate.waitIfPaused();
       stored.phase = "prompting";
       const agentSession = await stored.connection.newSession({
         cwd: input.workspacePath,
@@ -250,6 +339,7 @@ export class ACPClientAdapter implements ACPAdapter {
 
       const promptText = this.renderTaskPrompt(input);
       this.appendSessionEvent(stored.sessionId, "prompt", { text: promptText });
+      await stored.pauseGate.waitIfPaused();
       stored.phase = "streaming";
       const promptResult = await stored.connection.prompt({
         sessionId: agentSession.sessionId,
@@ -274,16 +364,6 @@ export class ACPClientAdapter implements ACPAdapter {
     }
   }
 
-  private sessionUpdateEventKind(updateKind: string): SessionEventKind {
-    if (updateKind === "agent_message_chunk") {
-      return "stream_chunk";
-    }
-    if (updateKind === "tool_call") {
-      return "tool_call";
-    }
-    return "session_update";
-  }
-
   private appendSessionEvent(
     sessionId: string,
     kind: SessionEventKind,
@@ -293,6 +373,12 @@ export class ACPClientAdapter implements ACPAdapter {
       sessionId,
       kind,
       payload,
+    });
+  }
+
+  private flushBufferedStreamEvents(stored: ACPClientStoredSession): void {
+    flushStreamBuffers(stored.streamBuffers, (kind, payload) => {
+      this.appendSessionEvent(stored.sessionId, kind, payload);
     });
   }
 
@@ -346,6 +432,8 @@ export class ACPClientAdapter implements ACPAdapter {
       return;
     }
 
+    this.flushBufferedStreamEvents(stored);
+
     if (errorMessage) {
       this.appendSessionEvent(stored.sessionId, "error", { message: errorMessage });
     }
@@ -367,6 +455,7 @@ export class ACPClientAdapter implements ACPAdapter {
       startedAt: session.startedAt,
       finishedAt: session.finishedAt,
       errorMessage: session.errorMessage,
+      paused: session.pauseGate.isPaused(),
     };
   }
 }

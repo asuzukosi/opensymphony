@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, AlertDescription, AlertTitle } from "@symphony/ui";
+import { Alert, AlertDescription, AlertTitle, cn } from "@symphony/ui";
 import { AgentsColumns } from "@/renderer/components/agents-columns";
 import { AgentsEmptyState } from "@/renderer/components/agents-empty-state";
 import { AgentsErrorAlert } from "@/renderer/components/agents-error-alert";
@@ -14,11 +14,24 @@ export function Agents(): React.JSX.Element {
   const { snapshot, error, isLoading, isRefreshing, refetch } = useRuntimeState();
   const {
     tick,
-    isPending: isTickPending,
+    pauseRun,
+    resumeRun,
+    cancelRun,
+    isPending: isControlPending,
     error: tickError,
     reset: resetTick,
   } = useRuntimeControls();
   const isInitialLoading = isLoading && !snapshot;
+
+  const runControl = async (action: (runAttemptId: string) => Promise<unknown>, runAttemptId: string) => {
+    resetTick();
+    try {
+      await action(runAttemptId);
+      await refetch();
+    } catch {
+      // surfaced via tickError
+    }
+  };
 
   const handleRefresh = (): void => {
     resetTick();
@@ -47,7 +60,7 @@ export function Agents(): React.JSX.Element {
           status="idle"
           hasError={Boolean(error)}
           isRefreshing={isRefreshing}
-          isTickPending={isTickPending}
+          isTickPending={isControlPending}
           onRefresh={handleRefresh}
         />
         {error ? <AgentsErrorAlert error={error} /> : <AgentsEmptyState />}
@@ -62,30 +75,38 @@ export function Agents(): React.JSX.Element {
   }
 
   return (
-    <PageShell width="full" className="min-h-0 flex-1">
+    <PageShell width="full" className="min-h-0 flex-1 overflow-hidden">
       <AgentsHeader
         status={snapshot.status}
         hasError={Boolean(error)}
         isRefreshing={isRefreshing}
-        isTickPending={isTickPending}
+        isTickPending={isControlPending}
         onRefresh={handleRefresh}
       />
 
-      {error ? <AgentsErrorAlert error={error} /> : null}
+      {error ? <div className="shrink-0"><AgentsErrorAlert error={error} /></div> : null}
       {tickError ? (
-        <Alert variant="destructive" className={surfaceAlertClass}>
+        <Alert variant="destructive" className={cn(surfaceAlertClass, "shrink-0")}>
           <AlertTitle>Tick failed</AlertTitle>
           <AlertDescription>{tickError.message}</AlertDescription>
         </Alert>
       ) : null}
-      <DashboardValidationAlert validationError={snapshot.validationError} />
+      <div className="shrink-0">
+        <DashboardValidationAlert validationError={snapshot.validationError} />
+      </div>
 
-      <AgentsColumns
-        candidates={snapshot.candidates}
-        running={snapshot.running}
-        retrying={snapshot.retrying}
-        recentFinished={snapshot.recentFinished}
-      />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <AgentsColumns
+          candidates={snapshot.candidates}
+          running={snapshot.running}
+          retrying={snapshot.retrying}
+          recentFinished={snapshot.recentFinished}
+          runControlsDisabled={isControlPending}
+          onPauseRun={(runAttemptId) => runControl(pauseRun, runAttemptId)}
+          onResumeRun={(runAttemptId) => runControl(resumeRun, runAttemptId)}
+          onCancelRun={(runAttemptId) => runControl(cancelRun, runAttemptId)}
+        />
+      </div>
     </PageShell>
   );
 }

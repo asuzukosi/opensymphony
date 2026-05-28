@@ -18,6 +18,7 @@ function makeEntry(overrides: Partial<RuntimeRunningEntry> = {}): RuntimeRunning
     sessionStatus: "running",
     phase: null,
     lastEventSummary: null,
+    paused: false,
     ...overrides,
   };
 }

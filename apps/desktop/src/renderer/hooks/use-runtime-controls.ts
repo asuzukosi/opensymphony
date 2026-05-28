@@ -9,6 +9,9 @@ export type UseRuntimeControlsResult = {
   clearPollIntervalOverride: () => Promise<RuntimeStateSnapshot>;
   setPermissionMode: (permissionMode: PermissionMode) => Promise<RuntimeStateSnapshot>;
   clearPermissionModeOverride: () => Promise<RuntimeStateSnapshot>;
+  pauseRun: (runAttemptId: string) => Promise<RuntimeStateSnapshot>;
+  resumeRun: (runAttemptId: string) => Promise<RuntimeStateSnapshot>;
+  cancelRun: (runAttemptId: string) => Promise<RuntimeStateSnapshot>;
   isPending: boolean;
   error: Error | null;
   reset: () => void;
@@ -31,6 +34,12 @@ export function useRuntimeControls(): UseRuntimeControlsResult {
       controlMutation.mutateAsync({ action: "setPermissionMode", permissionMode }),
     clearPermissionModeOverride: () =>
       controlMutation.mutateAsync({ action: "clearPermissionModeOverride" }),
+    pauseRun: (runAttemptId) =>
+      controlMutation.mutateAsync({ action: "pauseRun", runAttemptId }),
+    resumeRun: (runAttemptId) =>
+      controlMutation.mutateAsync({ action: "resumeRun", runAttemptId }),
+    cancelRun: (runAttemptId) =>
+      controlMutation.mutateAsync({ action: "cancelRun", runAttemptId }),
     isPending: controlMutation.isPending,
     error: controlMutation.error,
     reset: controlMutation.reset,

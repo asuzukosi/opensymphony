@@ -91,6 +91,7 @@ describe("run attempt repo", () => {
         status: "failed",
         finishedAt: "2026-01-02T00:01:00.000Z",
         errorMessage: "mock_acp_failure",
+        workflowStateCategory: "backlog",
       },
       {
         runAttemptId: "run-1",
@@ -100,6 +101,7 @@ describe("run attempt repo", () => {
         status: "succeeded",
         finishedAt: "2026-01-01T00:01:00.000Z",
         errorMessage: null,
+        workflowStateCategory: "backlog",
       },
     ]);
 

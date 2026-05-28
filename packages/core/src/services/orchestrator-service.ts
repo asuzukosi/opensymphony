@@ -1,5 +1,8 @@
 import type { ITrackerStore } from "@symphony/db";
+import { AgentWorkflowService } from "@core/services/agent-workflow-service";
+import { AuditService } from "@core/services/audit-service";
 import { CandidateSelectionService } from "@core/services/candidate-selection-service";
+import { IssueService } from "@core/services/issue-service";
 import { RetryService } from "@core/services/retry-service";
 import { RunLifecycleService } from "@core/services/run-lifecycle-service";
 import { DbTrackerAdapter } from "@core/services/db-tracker-adapter";
@@ -21,15 +24,25 @@ export class OrchestratorService {
   private readonly retryService: RetryService;
   private readonly runLifecycle: RunLifecycleService;
   private readonly trackerAdapter: DbTrackerAdapter;
+  private readonly agentWorkflow: AgentWorkflowService;
 
   constructor(
     private readonly store: ITrackerStore,
     private readonly config: RuntimeConfig,
   ) {
+    const auditService = new AuditService(store.audits);
+    const issueService = new IssueService(
+      store.projects,
+      store.issues,
+      store.workflowStates,
+      auditService,
+    );
+    this.agentWorkflow = new AgentWorkflowService(store.issues, issueService);
     this.candidateSelection = new CandidateSelectionService(
       store.issues,
       store.dependencies,
       store.workflowStates,
+      store.runAttempts,
     );
     this.retryService = new RetryService(store.retryQueue);
     this.runLifecycle = new RunLifecycleService(store.runAttempts, store.agentSessions);
@@ -76,6 +89,10 @@ export class OrchestratorService {
     }
 
     return { dispatched, deferred };
+  }
+
+  markAttemptSucceeded(issueId: string): void {
+    this.agentWorkflow.markReadyForHumanReview(issueId, this.config.projectId);
   }
 
   markAttemptFailed(
@@ -143,6 +160,7 @@ export class OrchestratorService {
       issueId,
       attemptNumber,
     });
+    this.agentWorkflow.markInProgress(issueId, this.config.projectId);
     return runAttemptId;
   }
 }

@@ -1,12 +1,18 @@
 import React from "react";
-import { CardDescription, CardHeader, CardTitle, ScrollArea } from "@symphony/ui";
+import { CardDescription, CardHeader, CardTitle } from "@symphony/ui";
 import { SurfaceCard } from "@/renderer/layout/surface-card";
+import {
+  surfaceColumnBodyClass,
+  surfaceColumnScrollClass,
+  surfaceColumnShellClass,
+} from "@/renderer/lib/surface-styles";
 
 type AgentsColumnProps = {
   title: string;
   description: string;
   count: number;
   emptyMessage: string;
+  showActiveIndicator?: boolean;
   children: React.ReactNode;
 };
 
@@ -15,25 +21,34 @@ export function AgentsColumn({
   description,
   count,
   emptyMessage,
+  showActiveIndicator = false,
   children,
 }: AgentsColumnProps): React.JSX.Element {
   const isEmpty = count === 0;
 
   return (
-    <SurfaceCard className="flex max-h-[calc(100vh-12rem)] min-h-[28rem] flex-col">
+    <SurfaceCard className={surfaceColumnShellClass}>
       <CardHeader className="shrink-0 space-y-1 pb-3">
-        <CardTitle className="text-base">{title}</CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base">{title}</CardTitle>
+          {showActiveIndicator ? (
+            <span
+              className="h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse"
+              aria-label="active agent sessions"
+            />
+          ) : null}
+        </div>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
-      <ScrollArea className="min-h-0 flex-1 px-3 pb-3">
-        <div className="min-h-[20rem] space-y-2 rounded-lg border border-dashed border-border/70 bg-muted/20 p-2">
+      <div className={surfaceColumnScrollClass}>
+        <div className={surfaceColumnBodyClass}>
           {isEmpty ? (
             <p className="px-2 py-8 text-center text-sm text-muted-foreground">{emptyMessage}</p>
           ) : (
             children
           )}
         </div>
-      </ScrollArea>
+      </div>
     </SurfaceCard>
   );
 }

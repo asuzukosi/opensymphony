@@ -1,3 +1,4 @@
+export { AgentWorkflowService } from "@core/services/agent-workflow-service";
 export { TrackerService } from "@core/services/tracker-service";
 export { CandidateSelectionService } from "@core/services/candidate-selection-service";
 export { RetryService } from "@core/services/retry-service";
@@ -42,6 +43,8 @@ export type {
 } from "@core/types/workflow";
 export {
   DEFAULT_ACTIVE_STATE_CATEGORIES,
+  DEFAULT_CANDIDATE_STATE_CATEGORIES,
+  DEFAULT_POLL_INTERVAL_MS,
   DEFAULT_RETRY_BASE_DELAY_MS,
 } from "@core/types/workflow";
 

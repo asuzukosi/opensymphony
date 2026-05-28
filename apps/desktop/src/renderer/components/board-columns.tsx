@@ -1,5 +1,6 @@
 import React from "react";
 import { BoardColumn } from "@/renderer/components/board-column";
+import { ColumnTrack, ColumnsScroller } from "@/renderer/layout/columns-scroller";
 import type { ProjectBoardColumn } from "@/ipc";
 
 type BoardColumnsProps = {
@@ -16,15 +17,17 @@ export function BoardColumns({
   disabled = false,
 }: BoardColumnsProps): React.JSX.Element {
   return (
-    <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <ColumnsScroller>
       {columns.map((column) => (
-        <BoardColumn
-          key={column.stateId}
-          column={column}
-          disabled={disabled}
-          onAddTask={(stateId) => onAddTask(stateId, column.stateName)}
-        />
+        <ColumnTrack key={column.stateId}>
+          <BoardColumn
+            column={column}
+            disabled={disabled}
+            onIssueOpen={onIssueOpen}
+            onAddTask={(stateId) => onAddTask(stateId, column.stateName)}
+          />
+        </ColumnTrack>
       ))}
-    </div>
+    </ColumnsScroller>
   );
 }

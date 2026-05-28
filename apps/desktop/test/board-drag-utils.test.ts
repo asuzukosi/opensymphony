@@ -11,6 +11,7 @@ const board: ProjectBoard = {
     {
       stateId: "p:todo",
       stateName: "Todo",
+      category: "backlog",
       issues: [
         {
           issueId: "i1",
@@ -23,6 +24,7 @@ const board: ProjectBoard = {
     {
       stateId: "p:in_progress",
       stateName: "In Progress",
+      category: "active",
       issues: [],
     },
   ],

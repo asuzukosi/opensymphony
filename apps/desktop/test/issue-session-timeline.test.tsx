@@ -65,6 +65,24 @@ describe("IssueSessionTimeline", () => {
     expect(container.textContent).toContain("Fix the bug");
   });
 
+  test("renders consolidated thought stream events", async () => {
+    await renderTimeline([
+      makeEvent({
+        id: "event-thought",
+        kind: "stream_chunk",
+        payload: {
+          update: {
+            sessionUpdate: "agent_thought",
+            content: { type: "text", text: "plan the fix" },
+          },
+        },
+      }),
+    ]);
+
+    expect(container.textContent).toContain("Thought");
+    expect(container.textContent).toContain("plan the fix");
+  });
+
   test("renders stream chunk text from session update payload", async () => {
     await renderTimeline([
       makeEvent({
@@ -80,7 +98,7 @@ describe("IssueSessionTimeline", () => {
       }),
     ]);
 
-    expect(container.textContent).toContain("Stream");
+    expect(container.textContent).toContain("Message");
     expect(container.textContent).toContain("working on it");
   });
 
@@ -139,6 +157,58 @@ describe("IssueSessionTimeline", () => {
     expect(container.textContent).toContain("Run tests");
     expect(container.textContent).toContain("Decision");
     expect(container.textContent).toContain("Approved: Run tests");
+  });
+
+  test("wraps long tool call text within the timeline card", async () => {
+    const longPath =
+      "read: /Users/kosisochukwuasuzu/Developer/interfaces/symphony/.symphony-workspaces/symphonylocal-1/helloworld.txt";
+
+    await renderTimeline([
+      makeEvent({
+        id: "event-tool-long-path",
+        kind: "tool_call",
+        payload: {
+          update: {
+            sessionUpdate: "tool_call",
+            toolCallId: "tool-1",
+            title: longPath,
+            kind: "read",
+            status: "completed",
+          },
+        },
+      }),
+    ]);
+
+    const card = container.querySelector("li > div");
+    const body = container.querySelector("p");
+
+    expect(card?.className).toContain("overflow-hidden");
+    expect(card?.className).toContain("min-w-0");
+    expect(body?.className).toContain("break-words");
+    expect(body?.className).toContain("overflow-wrap:anywhere");
+    expect(container.textContent).toContain(longPath);
+  });
+
+  test("renders newest events first", async () => {
+    await renderTimeline([
+      makeEvent({
+        id: "event-old",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        payload: { text: "older event" },
+      }),
+      makeEvent({
+        id: "event-new",
+        createdAt: "2026-01-02T00:00:00.000Z",
+        payload: { text: "newer event" },
+      }),
+    ]);
+
+    const bodies = Array.from(container.querySelectorAll("li p")).map(
+      (element) => element.textContent ?? "",
+    );
+
+    expect(bodies[0]).toContain("newer event");
+    expect(bodies[1]).toContain("older event");
   });
 
   test("renders error events", async () => {

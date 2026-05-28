@@ -220,6 +220,57 @@ describe("ACP client adapter lifecycle", () => {
     expect(events.every((event) => event.sessionId === session.sessionId)).toBe(true);
   });
 
+  test("persists consolidated stream events instead of raw chunks", async () => {
+    const events: Array<{ kind: SessionEventKind; updateKind?: string }> = [];
+    const adapter = createACPClientAdapter(
+      testACPConfig(),
+      createAdapterDeps({
+        appendSessionEvent: (input) => {
+          const payload = input.payload as { update?: { sessionUpdate?: string } };
+          events.push({
+            kind: input.kind,
+            updateKind: payload.update?.sessionUpdate,
+          });
+        },
+      }),
+    );
+
+    const session = adapter.startSession(
+      makeStartSessionInput({
+        runAttemptId: "run-consolidated-stream",
+        issueId: "issue-consolidated-stream",
+        attemptNumber: 1,
+        startedAt: new Date().toISOString(),
+        workspacePath: makeWorkspacePath(),
+      }),
+    );
+
+    await waitForTerminalStatus(adapter, session.sessionId);
+
+    const streamEvents = events.filter((event) => event.kind === "stream_chunk");
+    expect(streamEvents.every((event) => event.updateKind !== "agent_message_chunk")).toBe(true);
+    expect(streamEvents.every((event) => event.updateKind !== "agent_thought_chunk")).toBe(true);
+    expect(streamEvents.some((event) => event.updateKind === "agent_message")).toBe(true);
+  });
+
+  test("captures the final agent message for issue comments", async () => {
+    const adapter = createACPClientAdapter(testACPConfig(), createAdapterDeps());
+
+    const session = adapter.startSession(
+      makeStartSessionInput({
+        runAttemptId: "run-final-message",
+        issueId: "issue-final-message",
+        attemptNumber: 1,
+        startedAt: new Date().toISOString(),
+        workspacePath: makeWorkspacePath(),
+      }),
+    );
+
+    await waitForTerminalStatus(adapter, session.sessionId);
+
+    expect(adapter.getLastAgentMessage(session.sessionId)).toContain("demo acp agent: done");
+  });
+
   test("maps session/update kinds to persisted event kinds", async () => {
     const events: Array<{ kind: SessionEventKind; updateKind?: string }> = [];
     const adapter = createACPClientAdapter(
@@ -249,7 +300,7 @@ describe("ACP client adapter lifecycle", () => {
 
     expect(events).toEqual(
       expect.arrayContaining([
-        { kind: "stream_chunk", updateKind: "agent_message_chunk" },
+        { kind: "stream_chunk", updateKind: "agent_message" },
         { kind: "tool_call", updateKind: "tool_call" },
       ]),
     );
@@ -291,6 +342,30 @@ describe("ACP client adapter lifecycle", () => {
     const polled = adapter.pollSessions(new Date().toISOString(), [session.sessionId])[0];
     expect(polled?.status).toBe("cancelled");
     expect(adapter.getSessionPhase(session.sessionId)).toBe("terminal");
+  });
+
+  test("pauses and resumes running sessions", async () => {
+    const adapter = createACPClientAdapter(testACPConfig(), createAdapterDeps());
+
+    const session = adapter.startSession(
+      makeStartSessionInput({
+        runAttemptId: "run-pause",
+        issueId: "issue-pause",
+        attemptNumber: 1,
+        startedAt: new Date().toISOString(),
+        workspacePath: makeWorkspacePath(),
+      }),
+    );
+
+    const paused = adapter.pauseSession(session.sessionId);
+    expect(paused?.paused).toBe(true);
+    expect(paused?.status).toBe("running");
+    expect(adapter.getSessionPhase(session.sessionId)).toBe("paused");
+    expect(adapter.isSessionPaused(session.sessionId)).toBe(true);
+
+    const resumed = adapter.resumeSession(session.sessionId);
+    expect(resumed?.paused).toBe(false);
+    expect(adapter.isSessionPaused(session.sessionId)).toBe(false);
   });
 
   test("marks early child exit as failed with error events", async () => {

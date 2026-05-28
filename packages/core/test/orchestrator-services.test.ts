@@ -10,9 +10,12 @@ import {
   seedProjectWithDefaultStates,
 } from "@symphony/db";
 import { CandidateSelectionService } from "@core/services/candidate-selection-service";
+import { OrchestratorService } from "@core/services/orchestrator-service";
 import { RetryService } from "@core/services/retry-service";
 import { RunLifecycleService } from "@core/services/run-lifecycle-service";
 import { TrackerService } from "@core/services/tracker-service";
+
+import { makeOrchestratorRuntimeConfig } from "./fixtures/runtime-config";
 
 const tempDirs: string[] = [];
 
@@ -65,6 +68,7 @@ describe("orchestrator groundwork services", () => {
       store.issues,
       store.dependencies,
       store.workflowStates,
+      store.runAttempts,
     );
 
     const selected = service.select({ projectId: "p1", maxCount: 5 });
@@ -173,4 +177,75 @@ describe("orchestrator groundwork services", () => {
 
     closeDatabase(db);
   });
+
+  test("candidate selection excludes non-backlog states and succeeded attempts", () => {
+    const db = openDatabase(dbPath());
+    migrateUp(db);
+    seedProjectWithDefaultStates(db, { id: "p1", name: "Project", slug: "project" });
+
+    const tracker = TrackerService.fromDatabase(db);
+    tracker.createIssue({ id: "i1", projectId: "p1", identifier: "P1-1", title: "Todo issue" });
+    tracker.createIssue({ id: "i2", projectId: "p1", identifier: "P1-2", title: "In progress issue" });
+    tracker.createIssue({ id: "i3", projectId: "p1", identifier: "P1-3", title: "Succeeded once" });
+    tracker.transitionIssue("i2", "p1:in_progress");
+    tracker.transitionIssue("i3", "p1:human_review");
+
+    const store = createTrackerStore(db);
+    store.runAttempts.createRunAttempt({
+      id: "i3:attempt:1",
+      issueId: "i3",
+      attemptNumber: 1,
+      status: "succeeded",
+    });
+
+    const service = new CandidateSelectionService(
+      store.issues,
+      store.dependencies,
+      store.workflowStates,
+      store.runAttempts,
+    );
+
+    expect(service.listEligible("p1").map((item) => item.issueId)).toEqual(["i1"]);
+
+    closeDatabase(db);
+  });
+
+  test("orchestrator moves issues to in progress on dispatch and human review on success", () => {
+    const db = openDatabase(dbPath());
+    migrateUp(db);
+    seedProjectWithDefaultStates(db, { id: "p1", name: "Project", slug: "project" });
+
+    const tracker = TrackerService.fromDatabase(db);
+    tracker.createIssue({ id: "i1", projectId: "p1", identifier: "P1-1", title: "Ship feature" });
+
+    const store = createTrackerStore(db);
+    const orchestrator = new OrchestratorService(
+      store,
+      makeOrchestratorRuntimeConfig({ projectId: "p1", maxConcurrency: 1 }),
+    );
+
+    const poll = orchestrator.runPollCycle(new Date().toISOString());
+    expect(poll.dispatched).toHaveLength(1);
+
+    const issueAfterDispatch = store.issues.getIssueById("i1");
+    expect(issueAfterDispatch?.workflowStateId).toBe("p1:in_progress");
+
+    orchestrator.markAttemptSucceeded("i1");
+
+    const issueAfterSuccess = store.issues.getIssueById("i1");
+    expect(issueAfterSuccess?.workflowStateId).toBe("p1:human_review");
+    expect(serviceListEligible(store, "p1")).toEqual([]);
+
+    closeDatabase(db);
+  });
 });
+
+function serviceListEligible(store: ReturnType<typeof createTrackerStore>, projectId: string): string[] {
+  const service = new CandidateSelectionService(
+    store.issues,
+    store.dependencies,
+    store.workflowStates,
+    store.runAttempts,
+  );
+  return service.listEligible(projectId).map((item) => item.issueId);
+}

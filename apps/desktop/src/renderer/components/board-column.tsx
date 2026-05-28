@@ -7,11 +7,15 @@ import {
   CardHeader,
   CardTitle,
   cn,
-  ScrollArea,
 } from "@symphony/ui";
 import { IssueCard } from "@/renderer/components/issue-card";
 import { BoardColumnEmptyState } from "@/renderer/components/board-column-empty-state";
 import { SurfaceCard } from "@/renderer/layout/surface-card";
+import { canCreateIssueInColumn } from "@/renderer/lib/board-create-utils";
+import {
+  surfaceColumnScrollClass,
+  surfaceColumnShellClass,
+} from "@/renderer/lib/surface-styles";
 import type { ProjectBoardColumn } from "@/ipc";
 
 type BoardColumnProps = {
@@ -27,6 +31,7 @@ export function BoardColumn({
   onIssueOpen,
   disabled = false,
 }: BoardColumnProps): React.JSX.Element {
+  const canCreateIssue = canCreateIssueInColumn(column);
   const { setNodeRef, isOver } = useDroppable({
     id: column.stateId,
     data: { column },
@@ -34,7 +39,7 @@ export function BoardColumn({
   });
 
   return (
-    <SurfaceCard className="flex max-h-[calc(100vh-12rem)] min-h-[28rem] flex-col">
+    <SurfaceCard className={surfaceColumnShellClass}>
       <CardHeader className="flex shrink-0 flex-row items-start justify-between gap-2 space-y-0 pb-3">
         <div className="space-y-1">
           <CardTitle className="text-base">{column.stateName}</CardTitle>
@@ -42,23 +47,25 @@ export function BoardColumn({
             {column.issues.length} {column.issues.length === 1 ? "task" : "tasks"}
           </CardDescription>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8 shrink-0"
-          aria-label={`Add task to ${column.stateName}`}
-          disabled={disabled}
-          onClick={() => onAddTask(column.stateId)}
-        >
-          <Plus className="size-4" />
-        </Button>
+        {canCreateIssue ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            aria-label={`Add task to ${column.stateName}`}
+            disabled={disabled}
+            onClick={() => onAddTask(column.stateId)}
+          >
+            <Plus className="size-4" />
+          </Button>
+        ) : null}
       </CardHeader>
-      <ScrollArea className="min-h-0 flex-1 px-3 pb-3">
+      <div className={surfaceColumnScrollClass}>
         <div
           ref={setNodeRef}
           className={cn(
-            "min-h-[20rem] space-y-2 rounded-lg border border-dashed border-transparent bg-muted/20 p-2 transition-colors",
+            "min-h-[12rem] space-y-2 rounded-lg border border-dashed border-transparent bg-muted/20 p-2 transition-colors",
             isOver && "border-primary/40 bg-accent/40",
             column.issues.length === 0 && "border-border/70",
           )}
@@ -71,7 +78,7 @@ export function BoardColumn({
             ))
           )}
         </div>
-      </ScrollArea>
+      </div>
     </SurfaceCard>
   );
 }

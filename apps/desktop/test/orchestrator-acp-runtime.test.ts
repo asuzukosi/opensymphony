@@ -103,6 +103,9 @@ Run the issue.
 
     runOrchestratorTick("2026-01-01T00:00:00.000Z");
 
+    let issue = store.issues.getIssueById("issue-acp-client");
+    expect(issue?.workflowStateId).toBe("symphony-local:in_progress");
+
     let run = store.runAttempts.getLatestRunAttempt("issue-acp-client");
     expect(run?.status).toBe("running");
     expect(store.agentSessions.listSessionsByRunAttempt(run!.id)).toEqual([
@@ -114,6 +117,12 @@ Run the issue.
     run = store.runAttempts.getLatestRunAttempt("issue-acp-client");
     expect(run?.status).toBe("succeeded");
     expect(store.retryQueue.getRetry("issue-acp-client")).toBeNull();
+
+    issue = store.issues.getIssueById("issue-acp-client");
+    expect(issue?.workflowStateId).toBe("symphony-local:human_review");
+
+    const comments = store.comments.listComments("issue-acp-client");
+    expect(comments.some((comment) => comment.body.includes("demo acp agent: done"))).toBe(true);
 
     const sessions = store.agentSessions.listSessionsByRunAttempt(run!.id);
     expect(sessions).toHaveLength(1);

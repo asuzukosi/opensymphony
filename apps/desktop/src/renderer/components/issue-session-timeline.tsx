@@ -87,6 +87,19 @@ function formatPromptBody(payload: unknown): string {
   return typeof text === "string" ? truncateText(text) : "Prompt sent to agent";
 }
 
+function streamChunkLabel(payload: unknown): string {
+  const record = asRecord(payload);
+  const update = asRecord(record?.update);
+  const sessionUpdate = update?.sessionUpdate;
+  if (sessionUpdate === "agent_thought" || sessionUpdate === "agent_thought_chunk") {
+    return "Thought";
+  }
+  if (sessionUpdate === "agent_message" || sessionUpdate === "agent_message_chunk") {
+    return "Message";
+  }
+  return "Stream";
+}
+
 function formatStreamChunkBody(payload: unknown): string {
   const record = asRecord(payload);
   const update = asRecord(record?.update);
@@ -155,6 +168,18 @@ function formatSessionUpdateBody(payload: unknown): string {
   const record = asRecord(payload);
   const update = asRecord(record?.update);
   const kind = update?.sessionUpdate;
+
+  if (kind === "tool_call_update") {
+    const status = update?.status;
+    const toolCallId = update?.toolCallId;
+    const parts = [
+      "Tool completed",
+      typeof toolCallId === "string" ? toolCallId : null,
+      typeof status === "string" ? status : null,
+    ].filter(Boolean);
+    return parts.join(" · ");
+  }
+
   return typeof kind === "string" ? `Session update: ${kind}` : "Session update";
 }
 
@@ -180,13 +205,14 @@ function formatEventBody(event: SessionEvent): string {
 }
 
 function eventBodyClassName(kind: SessionEventKind): string {
+  const wrap = "min-w-0 max-w-full break-words [overflow-wrap:anywhere]";
   if (kind === "error") {
-    return "text-destructive";
+    return cn(wrap, "text-destructive text-sm");
   }
   if (kind === "prompt" || kind === "stream_chunk") {
-    return "whitespace-pre-wrap font-mono text-xs";
+    return cn(wrap, "whitespace-pre-wrap font-mono text-xs");
   }
-  return "text-sm";
+  return cn(wrap, "text-sm");
 }
 
 function TimelineSkeleton(): React.JSX.Element {
@@ -221,18 +247,19 @@ function TimelineItem({ event }: TimelineItemProps): React.JSX.Element {
   const config = timelineKindConfig[event.kind];
   const Icon = config.icon;
   const body = formatEventBody(event);
+  const label = event.kind === "stream_chunk" ? streamChunkLabel(event.payload) : config.label;
 
   return (
-    <li className="relative pl-6">
+    <li className="relative min-w-0 pl-6">
       <span className="absolute left-0 top-1 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-border/60 bg-background">
         <Icon className="h-2.5 w-2.5 text-muted-foreground" />
       </span>
-      <div className="space-y-1 rounded-lg border border-border/60 bg-muted/20 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="min-w-0 space-y-1 overflow-hidden rounded-lg border border-border/60 bg-muted/20 p-3">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <Badge variant="outline" className={cn("text-[10px] uppercase", config.badgeClassName)}>
-            {config.label}
+            {label}
           </Badge>
-          <time className="text-xs text-muted-foreground" dateTime={event.createdAt}>
+          <time className="shrink-0 text-xs text-muted-foreground" dateTime={event.createdAt}>
             {formatTimestamp(event.createdAt)}
           </time>
         </div>
@@ -240,6 +267,17 @@ function TimelineItem({ event }: TimelineItemProps): React.JSX.Element {
       </div>
     </li>
   );
+}
+
+function sortTimelineEvents(events: SessionEvent[]): SessionEvent[] {
+  return [...events].sort((left, right) => {
+    const leftTime = Date.parse(left.createdAt);
+    const rightTime = Date.parse(right.createdAt);
+    if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+      return right.createdAt.localeCompare(left.createdAt);
+    }
+    return rightTime - leftTime;
+  });
 }
 
 export function IssueSessionTimeline({
@@ -265,9 +303,9 @@ export function IssueSessionTimeline({
   }
 
   return (
-    <div className={className}>
-      <ol className="relative space-y-4 border-l border-border/60">
-        {events.map((event) => (
+    <div className={cn("min-w-0", className)}>
+      <ol className="relative min-w-0 space-y-4 border-l border-border/60">
+        {sortTimelineEvents(events).map((event) => (
           <TimelineItem key={event.id} event={event} />
         ))}
       </ol>

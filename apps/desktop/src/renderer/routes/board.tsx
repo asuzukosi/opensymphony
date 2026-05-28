@@ -10,7 +10,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { Kanban } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@symphony/ui";
+import { Alert, AlertDescription, AlertTitle, cn } from "@symphony/ui";
 import { BoardColumns } from "@/renderer/components/board-columns";
 import { BoardEmptyState } from "@/renderer/components/board-empty-state";
 import { BoardErrorAlert } from "@/renderer/components/board-error-alert";
@@ -28,6 +28,7 @@ import {
   moveIssueBetweenColumns,
   resolveDropTargetStateId,
 } from "@/renderer/lib/board-drag-utils";
+import { canCreateIssueInColumn } from "@/renderer/lib/board-create-utils";
 import type { ProjectBoard, ProjectBoardIssue } from "@/ipc";
 
 type CreateDialogState = {
@@ -162,16 +163,17 @@ export function Board(): React.JSX.Element {
   }
 
   return (
-    <PageShell width="full" className="min-h-0 flex-1">
+    <PageShell width="full" className="min-h-0 flex-1 overflow-hidden">
       <PageHeader
         eyebrow="Workflow"
         icon={Kanban}
         title="Task board"
         description="Drag tasks between columns to update workflow state."
+        className="shrink-0"
       />
 
       {mutateError && failedAction === "transition" ? (
-        <Alert variant="destructive" className={surfaceAlertClass}>
+        <Alert variant="destructive" className={cn(surfaceAlertClass, "shrink-0")}>
           <AlertTitle>Task update failed</AlertTitle>
           <AlertDescription>
             {mutateError.message}. Your change was reverted to the last synced board state.
@@ -185,21 +187,27 @@ export function Board(): React.JSX.Element {
         onDragStart={handleDragStart}
         onDragEnd={(event) => void handleDragEnd(event)}
       >
-        <BoardColumns
-          columns={displayBoard.columns}
-          disabled={isPending}
-          onIssueOpen={(issue) => {
-            setSheetIssueId(issue.issueId);
-          }}
-          onAddTask={(stateId, stateName) => {
-            reset();
-            setFailedAction(null);
-            setCreateDialog({
-              stateId,
-              stateName,
-            });
-          }}
-        />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <BoardColumns
+            columns={displayBoard.columns}
+            disabled={isPending}
+            onIssueOpen={(issue) => {
+              setSheetIssueId(issue.issueId);
+            }}
+            onAddTask={(stateId, stateName) => {
+              const column = displayBoard.columns.find((entry) => entry.stateId === stateId);
+              if (!column || !canCreateIssueInColumn(column)) {
+                return;
+              }
+              reset();
+              setFailedAction(null);
+              setCreateDialog({
+                stateId,
+                stateName,
+              });
+            }}
+          />
+        </div>
 
         <DragOverlay>
           {activeIssue ? <IssueCard issue={activeIssue} isOverlay disabled={isPending} /> : null}

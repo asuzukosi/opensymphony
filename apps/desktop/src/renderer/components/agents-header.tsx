@@ -32,6 +32,7 @@ export function AgentsHeader({
       icon={Bot}
       title="Agents"
       description="Monitor dispatch candidates, active sessions, retries, and recent activity."
+      className="shrink-0"
       metaLabel="Runtime status"
       meta={<RuntimeStatusBadge status={badgeStatus} className="px-3 py-1 text-sm" />}
       actions={

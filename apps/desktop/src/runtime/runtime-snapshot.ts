@@ -18,10 +18,12 @@ import type {
   RuntimeStateSnapshot,
   RuntimeStatus,
 } from "@/ipc";
+import { resolveIssueReviewStatus } from "@/lib/issue-review-status";
 
 export interface RuntimeSessionObservability {
   getSessionPhase(sessionId: string): RuntimeSessionPhase | null;
   getLastEventSummary(sessionId: string): string | null;
+  isSessionPaused(sessionId: string): boolean;
 }
 
 export interface RuntimeSnapshotState {
@@ -65,6 +67,7 @@ export function buildRunningEntries(
     sessionStatus: row.sessionStatus,
     phase: null,
     lastEventSummary: null,
+    paused: false,
   }));
 }
 
@@ -85,6 +88,7 @@ export function enrichRunningEntries(
       ...entry,
       phase: observability.getSessionPhase(entry.sessionId),
       lastEventSummary: observability.getLastEventSummary(entry.sessionId),
+      paused: observability.isSessionPaused(entry.sessionId),
     };
   });
 }
@@ -117,6 +121,7 @@ export function buildRecentFinishedEntries(
     status: row.status,
     finishedAt: row.finishedAt,
     errorMessage: row.errorMessage,
+    reviewStatus: resolveIssueReviewStatus(row.status, row.workflowStateCategory),
   }));
 }
 

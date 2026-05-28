@@ -92,7 +92,40 @@ Run the issue.
     stopOrchestratorRuntime();
   });
 
-  test("transitions created issue when workflowStateId is provided", async () => {
+  test("rejects creating issues outside todo", async () => {
+    const workflowDir = mkdtempSync(path.join(tmpdir(), "symphony-workflow-mutate-state-"));
+    tempDirs.push(workflowDir);
+    const workflowPath = path.join(workflowDir, "WORKFLOW.md");
+    writeFileSync(
+      workflowPath,
+      `---
+project_id: symphony-local
+${demoAcpWorkflowBlock()}
+---
+
+Run the issue.
+`,
+    );
+    process.env.SYMPHONY_WORKFLOW_PATH = workflowPath;
+
+    const { mutateIssue, getProjectBoard, stopOrchestratorRuntime } = await import(
+      "../src/orchestrator-runtime"
+    );
+    getProjectBoard();
+
+    expect(() =>
+      mutateIssue({
+        action: "create",
+        projectId: "symphony-local",
+        title: "Active task",
+        workflowStateId: "symphony-local:in_progress",
+      }),
+    ).toThrow("new issues can only be created in todo");
+
+    stopOrchestratorRuntime();
+  });
+
+  test("creates issue in todo when workflowStateId targets backlog", async () => {
     const workflowDir = mkdtempSync(path.join(tmpdir(), "symphony-workflow-mutate-state-"));
     tempDirs.push(workflowDir);
     const workflowPath = path.join(workflowDir, "WORKFLOW.md");
@@ -116,8 +149,8 @@ Run the issue.
     mutateIssue({
       action: "create",
       projectId: "symphony-local",
-      title: "Active task",
-      workflowStateId: "symphony-local:in_progress",
+      title: "Todo task",
+      workflowStateId: "symphony-local:todo",
     });
 
     const db = openDatabase(path.join(userDataDir, "symphony.sqlite"));
@@ -129,7 +162,7 @@ Run the issue.
       "other",
     ])[0];
 
-    expect(issue?.workflowStateId).toBe("symphony-local:in_progress");
+    expect(issue?.workflowStateId).toBe("symphony-local:todo");
 
     closeDatabase(db);
     stopOrchestratorRuntime();

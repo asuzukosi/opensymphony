@@ -22,6 +22,7 @@ export interface RuntimeSessionRecord {
   startedAt: string;
   finishedAt: string | null;
   errorMessage: string | null;
+  paused: boolean;
 }
 
 export type RuntimeSessionPhase =
@@ -29,12 +30,21 @@ export type RuntimeSessionPhase =
   | "initializing"
   | "prompting"
   | "streaming"
+  | "paused"
   | "terminal";
 
 export interface ACPAdapter {
   startSession(input: StartRuntimeSessionInput): RuntimeSessionRecord;
   pollSessions(nowIso: string, sessionIds: string[]): RuntimeSessionRecord[];
-  cancelSession(sessionId: string, nowIso: string): RuntimeSessionRecord | null;
+  pauseSession(sessionId: string): RuntimeSessionRecord | null;
+  resumeSession(sessionId: string): RuntimeSessionRecord | null;
+  cancelSession(
+    sessionId: string,
+    nowIso: string,
+    reason?: string,
+  ): RuntimeSessionRecord | null;
   getSessionPhase(sessionId: string): RuntimeSessionPhase | null;
   getLastEventSummary(sessionId: string): string | null;
+  getLastAgentMessage(sessionId: string): string | null;
+  isSessionPaused(sessionId: string): boolean;
 }

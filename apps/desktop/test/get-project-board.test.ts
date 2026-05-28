@@ -91,6 +91,7 @@ Run the issue.
     ]);
     expect(board.columns[0]).toMatchObject({
       stateName: "Todo",
+      category: "backlog",
       issues: [
         {
           issueId: "i1",
@@ -102,6 +103,7 @@ Run the issue.
     });
     expect(board.columns[1]).toMatchObject({
       stateName: "In Progress",
+      category: "active",
       issues: [
         {
           issueId: "i2",

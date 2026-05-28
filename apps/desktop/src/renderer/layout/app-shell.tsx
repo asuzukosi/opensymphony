@@ -80,7 +80,7 @@ export function AppShell(): React.JSX.Element {
   const showPermissionQueue = isApprovalRequired && pendingCount > 0;
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="min-h-svh overflow-hidden">
       <Sidebar variant="inset" className="border-r border-sidebar-border">
         <SidebarHeader className="border-b border-sidebar-border">
           <div className="flex items-center gap-2 px-2 py-3">
@@ -106,7 +106,7 @@ export function AppShell(): React.JSX.Element {
           </SidebarGroup>
         </SidebarContent>
       </Sidebar>
-      <SidebarInset>
+      <SidebarInset className="min-h-0 overflow-hidden">
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 md:px-6">
           <SidebarTrigger className="-ml-1" />
           <div className="h-4 w-px bg-border/60" />
@@ -117,7 +117,7 @@ export function AppShell(): React.JSX.Element {
         </header>
         <main
           className={cn(
-            "flex flex-1 flex-col bg-gradient-to-b from-background via-background to-muted/10 p-4 md:p-6 lg:p-8",
+            "flex min-h-0 flex-1 flex-col overflow-hidden bg-gradient-to-b from-background via-background to-muted/10 p-4 md:p-6 lg:p-8",
           )}
         >
           {showPermissionQueue ? (

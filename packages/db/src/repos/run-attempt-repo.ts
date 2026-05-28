@@ -97,9 +97,11 @@ export class RunAttemptRepo implements IRunAttemptRepo {
                 r.attempt_number as attemptNumber,
                 r.status as status,
                 r.finished_at as finishedAt,
-                r.error_message as errorMessage
+                r.error_message as errorMessage,
+                ws.category as workflowStateCategory
          FROM run_attempts r
          JOIN issues i ON i.id = r.issue_id
+         JOIN workflow_states ws ON ws.id = i.workflow_state_id
          WHERE i.project_id = ?
            AND r.status != 'running'
            AND r.finished_at IS NOT NULL
@@ -121,5 +123,17 @@ export class RunAttemptRepo implements IRunAttemptRepo {
          LIMIT ?`,
       )
       .all(issueId, cap) as RunAttemptRow[];
+  }
+
+  hasSucceededRunAttempt(issueId: string): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT 1
+         FROM run_attempts
+         WHERE issue_id = ? AND status = 'succeeded'
+         LIMIT 1`,
+      )
+      .get(issueId);
+    return row != null;
   }
 }

@@ -34,9 +34,13 @@ export interface LoadedWorkflow {
   promptTemplate: string;
 }
 
+export const DEFAULT_POLL_INTERVAL_MS = 3_000;
+
 export const DEFAULT_RETRY_BASE_DELAY_MS = 10_000;
 
 export const DEFAULT_ACTIVE_STATE_CATEGORIES = ["active", "backlog"] as const;
+
+export const DEFAULT_CANDIDATE_STATE_CATEGORIES = ["backlog"] as const;
 
 export type RuntimeConfigValidationField = "project_id" | "acp.command";
 

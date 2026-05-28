@@ -71,6 +71,7 @@ describe("buildRunningEntries", () => {
         sessionStatus: "running",
         phase: null,
         lastEventSummary: null,
+        paused: false,
       },
     ]);
 
@@ -103,6 +104,7 @@ describe("buildRunningEntries", () => {
         sessionStatus: null,
         phase: null,
         lastEventSummary: null,
+        paused: false,
       },
     ]);
 
@@ -136,6 +138,7 @@ describe("enrichRunningEntries", () => {
         getSessionPhase: (sessionId) => (sessionId === "sess-1" ? "streaming" : null),
         getLastEventSummary: (sessionId) =>
           sessionId === "sess-1" ? "agent_message_chunk" : null,
+        isSessionPaused: (sessionId) => sessionId === "sess-1",
       }),
     ).toEqual([
       {
@@ -148,6 +151,7 @@ describe("enrichRunningEntries", () => {
         sessionStatus: "running",
         phase: "streaming",
         lastEventSummary: "agent_message_chunk",
+        paused: true,
       },
     ]);
   });
@@ -250,6 +254,7 @@ describe("buildAgentTotals", () => {
           sessionStatus: "running",
           phase: null,
           lastEventSummary: null,
+          paused: false,
         },
         {
           runAttemptId: "run-2",
@@ -261,6 +266,7 @@ describe("buildAgentTotals", () => {
           sessionStatus: "running",
           phase: null,
           lastEventSummary: null,
+          paused: false,
         },
         {
           runAttemptId: "run-3",
@@ -272,6 +278,7 @@ describe("buildAgentTotals", () => {
           sessionStatus: "running",
           phase: null,
           lastEventSummary: null,
+          paused: false,
         },
         {
           runAttemptId: "run-4",
@@ -283,6 +290,7 @@ describe("buildAgentTotals", () => {
           sessionStatus: null,
           phase: null,
           lastEventSummary: null,
+          paused: false,
         },
       ]),
     ).toEqual({
@@ -365,6 +373,7 @@ describe("buildRecentFinishedEntries", () => {
         status: "succeeded",
         finishedAt: "2026-01-01T00:02:00.000Z",
         errorMessage: null,
+        reviewStatus: "pending_review",
       },
     ]);
 
@@ -524,6 +533,7 @@ describe("buildRuntimeSnapshot", () => {
           sessionStatus: "running",
           phase: null,
           lastEventSummary: null,
+          paused: false,
         },
       ],
       retrying: [
@@ -544,6 +554,7 @@ describe("buildRuntimeSnapshot", () => {
           status: "succeeded",
           finishedAt: "2026-01-01T00:02:00.000Z",
           errorMessage: null,
+          reviewStatus: "approved",
         },
       ],
       candidates,

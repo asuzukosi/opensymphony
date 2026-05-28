@@ -32,6 +32,9 @@ const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 
+export const MAIN_WINDOW_MIN_WIDTH = 960;
+export const MAIN_WINDOW_MIN_HEIGHT = 640;
+
 export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.getRuntimeState,
@@ -91,6 +94,8 @@ export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    minWidth: MAIN_WINDOW_MIN_WIDTH,
+    minHeight: MAIN_WINDOW_MIN_HEIGHT,
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,

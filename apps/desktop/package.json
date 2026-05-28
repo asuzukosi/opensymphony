@@ -12,6 +12,8 @@
     "build:electron": "node scripts/build-electron.mjs",
     "check-types": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "merge-sort": "bun src/runtime/merge-sort.ts",
+    "sorting-algorithms": "bun src/runtime/sorting-algorithms.ts",
     "clean": "rm -rf dist .electron"
   },
   "dependencies": {

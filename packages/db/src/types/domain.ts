@@ -148,6 +148,7 @@ export interface RecentFinishedRunSnapshotRow {
   status: Exclude<RunAttemptStatus, "running">;
   finishedAt: string;
   errorMessage: string | null;
+  workflowStateCategory: WorkflowStateCategory;
 }
 
 export interface AgentSessionRow {

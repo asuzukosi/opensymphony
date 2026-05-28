@@ -84,7 +84,7 @@ const state: RuntimeState = {
   workflowVersion: null,
   workflowLastReloadedAt: null,
   startedAt: null,
-  pollIntervalMs: 30000,
+  pollIntervalMs: 3000,
   pollIntervalSource: "workflow",
   permissionMode: "auto_approve",
   permissionModeSource: "workflow",
@@ -153,7 +153,7 @@ function scheduleTimer(): void {
 function fallbackRuntimeConfig(): RuntimeConfig {
   return {
     projectId: "desktop-default",
-    pollIntervalMs: 30000,
+    pollIntervalMs: 3000,
     maxConcurrency: 2,
     retryMaxBackoffMs: 300000,
     workspaceRoot: ".symphony-workspaces",
@@ -424,6 +424,7 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
       if (cancelledByRunAttemptId.has(session.runAttemptId)) {
         runtimeAdapter.cancelSession(session.id, nowIso);
         runLifecycle.finishSession(session.id, "cancelled");
+        runLifecycle.finishRun(session.runAttemptId, "cancelled", "cancelled_by_reconciliation");
         runAttemptWorkspacePath.delete(session.runAttemptId);
         logger.warn({
           event: "session_cancelled",
@@ -468,8 +469,20 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
       if (!matchingAttempt) continue;
 
       if (status.status === "succeeded") {
+        const finalAgentMessage = runtimeAdapter.getLastAgentMessage(status.sessionId);
         runLifecycle.finishSession(status.sessionId, "succeeded");
         runLifecycle.finishRun(status.runAttemptId, "succeeded");
+        runtime.orchestrator.markAttemptSucceeded(status.issueId);
+        if (finalAgentMessage) {
+          const tracker = new TrackerService(runtime.store);
+          tracker.addComment({
+            id: randomUUID(),
+            issueId: status.issueId,
+            body: finalAgentMessage,
+            authorId: "symphony-agent",
+            actor: "symphony-agent",
+          });
+        }
         runtime.store.retryQueue.removeRetry(status.issueId);
         const workspacePath = runAttemptWorkspacePath.get(status.runAttemptId);
         if (workspacePath) {
@@ -508,6 +521,11 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
         });
       } else if (status.status === "cancelled") {
         runLifecycle.finishSession(status.sessionId, "cancelled");
+        runLifecycle.finishRun(
+          status.runAttemptId,
+          "cancelled",
+          status.errorMessage ?? "cancelled_by_reconciliation",
+        );
         const workspacePath = runAttemptWorkspacePath.get(status.runAttemptId);
         if (workspacePath) {
           manager.runAfterRun(workspacePath);
@@ -640,12 +658,106 @@ export function resolvePermission(request: ResolvePermissionRequest): void {
   }
 }
 
+function ensureRuntimeAdapter(): ACPAdapter {
+  const runtime = ensureDbAndOrchestrator();
+  if (!runtimeAdapter) {
+    runtimeAdapter = createACPAdapter(runtime.config.acp, createACPAdapterDeps());
+  }
+  return runtimeAdapter;
+}
+
+function getRunningSessionForRunAttempt(
+  store: ReturnType<typeof ensureDbAndOrchestrator>["store"],
+  runAttemptId: string,
+) {
+  return (
+    store.agentSessions
+      .listSessionsByRunAttempt(runAttemptId)
+      .find((session) => session.status === "running") ?? null
+  );
+}
+
+export function pauseRunAttempt(runAttemptId: string): void {
+  const runtime = ensureDbAndOrchestrator();
+  const adapter = ensureRuntimeAdapter();
+  const session = getRunningSessionForRunAttempt(runtime.store, runAttemptId);
+  if (!session) {
+    throw new Error(`no running session for run attempt: ${runAttemptId}`);
+  }
+
+  adapter.pauseSession(session.id);
+  state.lastAction = "run_paused";
+  state.lastError = null;
+}
+
+export function resumeRunAttempt(runAttemptId: string): void {
+  const runtime = ensureDbAndOrchestrator();
+  const adapter = ensureRuntimeAdapter();
+  const session = getRunningSessionForRunAttempt(runtime.store, runAttemptId);
+  if (!session) {
+    throw new Error(`no running session for run attempt: ${runAttemptId}`);
+  }
+
+  adapter.resumeSession(session.id);
+  state.lastAction = "run_resumed";
+  state.lastError = null;
+}
+
+export function cancelRunAttempt(
+  runAttemptId: string,
+  nowIso: string = new Date().toISOString(),
+): void {
+  const runtime = ensureDbAndOrchestrator();
+  const adapter = ensureRuntimeAdapter();
+  const manager = ensureWorkspaceManager(runtime.config);
+  const runLifecycle = new RunLifecycleService(
+    runtime.store.runAttempts,
+    runtime.store.agentSessions,
+  );
+
+  const attempt = runtime.store.runAttempts
+    .listRunningRunAttempts(runtime.config.projectId)
+    .find((entry) => entry.id === runAttemptId);
+  if (!attempt) {
+    throw new Error(`run attempt is not running: ${runAttemptId}`);
+  }
+
+  const sessions = runtime.store.agentSessions
+    .listSessionsByRunAttempt(runAttemptId)
+    .filter((session) => session.status === "running");
+
+  for (const session of sessions) {
+    adapter.cancelSession(session.id, nowIso, "cancelled_by_operator");
+    runLifecycle.finishSession(session.id, "cancelled");
+  }
+
+  runLifecycle.finishRun(runAttemptId, "cancelled", "cancelled_by_operator");
+
+  const workspacePath = runAttemptWorkspacePath.get(runAttemptId);
+  if (workspacePath) {
+    manager.runAfterRun(workspacePath);
+    runAttemptWorkspacePath.delete(runAttemptId);
+  }
+
+  logger.warn({
+    event: "run_cancelled_by_operator",
+    message: "Run attempt cancelled by operator",
+    projectId: runtime.config.projectId,
+    issueId: attempt.issueId,
+    runAttemptId,
+  });
+
+  state.lastAction = "run_cancelled";
+  state.lastError = null;
+}
+
 export function getRuntimeState(eventLimit = 20): RuntimeStateSnapshot {
   const runtime = ensureDbAndOrchestrator();
   const candidateSelection = new CandidateSelectionService(
     runtime.store.issues,
     runtime.store.dependencies,
     runtime.store.workflowStates,
+    runtime.store.runAttempts,
   );
   const candidates: RuntimeCandidateEntry[] = candidateSelection
     .listEligible(runtime.config.projectId)
@@ -728,6 +840,7 @@ export function getProjectBoard(): ProjectBoard {
       .map((column) => ({
         stateId: column.workflowStateId,
         stateName: column.workflowStateName,
+        category: column.category,
         issues: column.issues.map((issue) => ({
           issueId: issue.id,
           identifier: issue.identifier,
@@ -808,6 +921,23 @@ function nextIssueIdentifier(store: ITrackerStore, projectId: string): string {
   return `${prefix}-${issueCount + 1}`;
 }
 
+function isTodoWorkflowState(state: {
+  id: string;
+  name: string;
+  category: WorkflowStateCategory;
+}): boolean {
+  if (state.id.endsWith(":todo")) {
+    return true;
+  }
+
+  const normalizedName = state.name.trim().toLowerCase();
+  if (normalizedName === "todo" || normalizedName === "to do") {
+    return true;
+  }
+
+  return state.category === "backlog";
+}
+
 export function mutateIssue(request: MutateIssueRequest): void {
   switch (request.action) {
     case "transition": {
@@ -864,6 +994,12 @@ export function mutateIssue(request: MutateIssueRequest): void {
       });
 
       if (request.workflowStateId && request.workflowStateId !== issue.workflowStateId) {
+        const targetState = runtime.store.workflowStates.getWorkflowStateById(
+          request.workflowStateId,
+        );
+        if (!targetState || !isTodoWorkflowState(targetState)) {
+          throw new Error("new issues can only be created in todo");
+        }
         tracker.transitionIssue(issue.id, request.workflowStateId);
       }
 
@@ -932,6 +1068,15 @@ export function controlRuntime(request: ControlRuntimeRequest): RuntimeStateSnap
       break;
     case "clearPermissionModeOverride":
       clearOrchestratorPermissionModeOverride();
+      break;
+    case "pauseRun":
+      pauseRunAttempt(request.runAttemptId);
+      break;
+    case "resumeRun":
+      resumeRunAttempt(request.runAttemptId);
+      break;
+    case "cancelRun":
+      cancelRunAttempt(request.runAttemptId);
       break;
   }
   return getRuntimeState();

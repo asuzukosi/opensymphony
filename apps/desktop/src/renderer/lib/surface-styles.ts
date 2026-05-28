@@ -13,3 +13,12 @@ export const surfaceEmptyStateClass =
 export const surfaceAlertClass = "border-border/60 bg-card/80";
 
 export const surfaceNestedCardClass = "border-border/50 bg-muted/30 shadow-none";
+
+export const surfaceColumnShellClass =
+  "flex h-full min-h-0 flex-col overflow-hidden";
+
+export const surfaceColumnScrollClass =
+  "min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3";
+
+export const surfaceColumnBodyClass =
+  "space-y-2 rounded-lg border border-dashed border-border/70 bg-muted/20 p-2";
