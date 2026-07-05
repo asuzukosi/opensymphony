@@ -211,3 +211,77 @@ impl ProjectBoard {
         }
     }
 }
+
+/// comment on an issue detail view.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueDetailComment {
+    pub id: String,
+    pub body: String,
+    pub author: Option<String>,
+    pub created_at: String,
+}
+
+/// acp session event kind for issue attempt timelines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionEventKind {
+    Prompt,
+    StreamChunk,
+    ToolCall,
+    PermissionRequest,
+    PermissionResolve,
+    SessionUpdate,
+    Error,
+}
+
+/// one event in an agent session timeline.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionEvent {
+    pub id: String,
+    pub kind: SessionEventKind,
+    pub payload: serde_json::Value,
+    pub created_at: String,
+}
+
+/// agent session nested under a run attempt.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueDetailSession {
+    pub session_id: String,
+    pub session_ref: Option<String>,
+    pub status: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub events: Vec<SessionEvent>,
+}
+
+/// one orchestrator run attempt for an issue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueDetailRunAttempt {
+    pub run_attempt_id: String,
+    pub attempt_number: u32,
+    pub status: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub error_message: Option<String>,
+    pub sessions: Vec<IssueDetailSession>,
+}
+
+/// full issue payload returned by get_issue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueDetail {
+    pub issue_id: String,
+    pub project_id: String,
+    pub identifier: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub priority: Option<i32>,
+    pub workflow_state_id: String,
+    pub workflow_state_name: String,
+    pub comments: Vec<IssueDetailComment>,
+    pub attempts: Vec<IssueDetailRunAttempt>,
+}
