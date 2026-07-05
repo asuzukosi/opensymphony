@@ -12,8 +12,6 @@
     "build:electron": "node scripts/build-electron.mjs",
     "check-types": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "merge-sort": "bun src/runtime/merge-sort.ts",
-    "sorting-algorithms": "bun src/runtime/sorting-algorithms.ts",
     "clean": "rm -rf dist .electron"
   },
   "dependencies": {
@@ -34,11 +32,12 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
-    "happy-dom": "^20.0.10",
-    "esbuild": "^0.28.0",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "electron": "^37.4.0",
+    "esbuild": "^0.28.0",
+    "happy-dom": "^20.0.10",
     "vite": "^7.1.10"
   }
 }

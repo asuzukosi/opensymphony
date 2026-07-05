@@ -84,16 +84,6 @@ export class PermissionStore {
     return [...this.pending.values()].map(({ settle: _settle, ...pending }) => pending);
   }
 
-  getPending(id: string): PendingPermission | null {
-    const entry = this.pending.get(id);
-    if (!entry) {
-      return null;
-    }
-
-    const { settle: _settle, ...pending } = entry;
-    return pending;
-  }
-
   resolve(id: string, decision: PermissionDecision): boolean {
     const entry = this.pending.get(id);
     if (!entry) {
@@ -114,22 +104,6 @@ export class PermissionStore {
     this.pending.delete(id);
     entry.settle({ outcome: { outcome: "cancelled" } });
     return true;
-  }
-
-  cancelForSession(sessionId: SessionId): number {
-    let cancelled = 0;
-
-    for (const [id, entry] of this.pending.entries()) {
-      if (entry.sessionId !== sessionId) {
-        continue;
-      }
-
-      this.pending.delete(id);
-      entry.settle({ outcome: { outcome: "cancelled" } });
-      cancelled += 1;
-    }
-
-    return cancelled;
   }
 }
 

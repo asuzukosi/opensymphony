@@ -1,5 +1,5 @@
 import type { ProjectBoard } from "@/ipc";
-import { useIpcQuery } from "./use-ipc-query";
+import { DEFAULT_IPC_POLL_INTERVAL_MS, useIpcQuery } from "./use-ipc-query";
 
 export type {
   ProjectBoard,
@@ -20,10 +20,8 @@ export type UseProjectBoardResult = {
   refetch: () => Promise<void>;
 };
 
-const DEFAULT_POLL_INTERVAL_MS = 5000;
-
 export function useProjectBoard(options?: UseProjectBoardOptions): UseProjectBoardResult {
-  const { pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, enabled = true } = options ?? {};
+  const { pollIntervalMs = DEFAULT_IPC_POLL_INTERVAL_MS, enabled = true } = options ?? {};
 
   const { data, error, isLoading, isRefreshing, refetch } = useIpcQuery<ProjectBoard>(
     "project-board",

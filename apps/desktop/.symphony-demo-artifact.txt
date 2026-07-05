@@ -1,6 +1,0 @@
-symphony demo acp artifact
-session_id=6a546920-57b7-4a6d-909a-46ec063078bd
-issue_id=unknown
-run_attempt_id=unknown
-
-implement feature x

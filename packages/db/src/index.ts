@@ -51,7 +51,3 @@ export type {
   ITrackerStore,
   IWorkflowStateRepo,
 } from "@db/types/repo";
-
-export function dbReady(): string {
-  return "db-ready";
-}

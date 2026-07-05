@@ -75,29 +75,10 @@ describe("permission-store", () => {
     });
   });
 
-  test("cancelForSession clears all pending permissions for that session", async () => {
-    const store = createPermissionStore();
-    const first = store.enqueue({ issueId: "issue-1", request: sampleRequest("session-a") });
-    const second = store.enqueue({ issueId: "issue-2", request: sampleRequest("session-b") });
-    const third = store.enqueue({ issueId: "issue-3", request: sampleRequest("session-a") });
-
-    expect(store.cancelForSession("session-a")).toBe(2);
-    await expect(first.waitForDecision()).resolves.toEqual({
-      outcome: { outcome: "cancelled" },
-    });
-    await expect(third.waitForDecision()).resolves.toEqual({
-      outcome: { outcome: "cancelled" },
-    });
-    expect(store.listPending()).toEqual([
-      expect.objectContaining({ id: second.id, sessionId: "session-b" }),
-    ]);
-  });
-
   test("resolve returns false for unknown ids", () => {
     const store = createPermissionStore();
 
     expect(store.resolve("missing", "approve" as PermissionDecision)).toBe(false);
     expect(store.cancel("missing")).toBe(false);
-    expect(store.getPending("missing")).toBeNull();
   });
 });

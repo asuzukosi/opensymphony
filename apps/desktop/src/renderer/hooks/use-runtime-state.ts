@@ -1,5 +1,5 @@
 import type { RuntimeStateSnapshot } from "@/ipc";
-import { useIpcQuery } from "./use-ipc-query";
+import { DEFAULT_IPC_POLL_INTERVAL_MS, useIpcQuery } from "./use-ipc-query";
 
 export type UseRuntimeStateOptions = {
   pollIntervalMs?: number;
@@ -15,12 +15,11 @@ export type UseRuntimeStateResult = {
   refetch: () => Promise<void>;
 };
 
-const DEFAULT_POLL_INTERVAL_MS = 5000;
 const DEFAULT_AUDIT_EVENT_LIMIT = 10;
 
 export function useRuntimeState(options?: UseRuntimeStateOptions): UseRuntimeStateResult {
   const {
-    pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+    pollIntervalMs = DEFAULT_IPC_POLL_INTERVAL_MS,
     auditEventLimit = DEFAULT_AUDIT_EVENT_LIMIT,
     enabled = true,
   } = options ?? {};

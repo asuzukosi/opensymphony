@@ -9,6 +9,8 @@ export type UseIpcQueryOptions = {
   enabled?: boolean;
 };
 
+export const DEFAULT_IPC_POLL_INTERVAL_MS = 5000;
+
 export type UseIpcQueryResult<T> = {
   data: T | undefined;
   error: Error | null;

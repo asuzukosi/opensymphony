@@ -39,8 +39,11 @@ import type {
   RuntimeStatus,
   SettingsView,
 } from "@/ipc";
-import type { ACPAdapter } from "@/runtime/acp";
-import { createACPAdapter, type CreateACPAdapterDependencies } from "@/runtime/acp";
+import type { ACPAdapter } from "@/runtime/acp/types";
+import {
+  createACPClientAdapter,
+  type ACPClientAdapterDependencies,
+} from "@/runtime/acp/acp-client-adapter";
 import {
   createPermissionRouter,
   type PermissionRouter,
@@ -186,7 +189,7 @@ function loadWorkflow(): LoadedWorkflow {
   }
 }
 
-function ensureRuntimeConfig(): RuntimeConfig {
+function loadWorkflowConfig(): RuntimeConfig {
   return loadWorkflow().config;
 }
 
@@ -209,7 +212,7 @@ function applyWorkflowConfig(
   loadedConfig = config;
   loadedWorkflowVersion = version;
   orchestrator = store ? new OrchestratorService(store, config) : null;
-  runtimeAdapter = createACPAdapter(config.acp, createACPAdapterDeps());
+  runtimeAdapter = createACPClientAdapter(config.acp, createACPAdapterDeps());
   workspaceManager = new WorkspaceManagerService(
     path.resolve(process.cwd(), config.workspaceRoot),
     config.hooks,
@@ -273,7 +276,7 @@ function ensureDbAndOrchestrator(): {
     loadedPromptTemplate = loaded.promptTemplate;
   }
 
-  const config = loadedConfig ?? ensureRuntimeConfig();
+  const config = loadedConfig ?? loadWorkflowConfig();
   if (!db) {
     const userData = app.getPath("userData");
     const dbPath = path.join(userData, "symphony.sqlite");
@@ -294,7 +297,7 @@ function ensureDbAndOrchestrator(): {
     orchestrator = new OrchestratorService(store, config);
   }
   if (!runtimeAdapter) {
-    runtimeAdapter = createACPAdapter(config.acp, createACPAdapterDeps());
+    runtimeAdapter = createACPClientAdapter(config.acp, createACPAdapterDeps());
   }
 
   return { orchestrator, config, store };
@@ -360,7 +363,7 @@ export function runOrchestratorTick(nowIso: string = new Date().toISOString()): 
   try {
     const runtime = ensureDbAndOrchestrator();
     if (!runtimeAdapter) {
-      runtimeAdapter = createACPAdapter(runtime.config.acp, createACPAdapterDeps());
+      runtimeAdapter = createACPClientAdapter(runtime.config.acp, createACPAdapterDeps());
     }
     const pollResult = runtime.orchestrator.runPollCycle(nowIso);
     const runLifecycle = new RunLifecycleService(
@@ -589,7 +592,7 @@ export function setOrchestratorPollIntervalMs(pollIntervalMs: number): void {
 }
 
 export function clearOrchestratorPollIntervalOverride(): void {
-  const workflowConfig = ensureRuntimeConfig();
+  const workflowConfig = loadedConfig ?? loadWorkflowConfig();
   state.pollIntervalMs = workflowConfig.pollIntervalMs;
   state.pollIntervalSource = "workflow";
   if (state.status === "running") {
@@ -611,7 +614,7 @@ export function getPermissionRouter(): PermissionRouter {
   return permissionRouter;
 }
 
-function createACPAdapterDeps(): CreateACPAdapterDependencies {
+function createACPAdapterDeps(): ACPClientAdapterDependencies {
   return {
     getPermissionRouter,
     appendSessionEvent: (input) => {
@@ -632,7 +635,7 @@ export function setOrchestratorPermissionMode(permissionMode: PermissionMode): v
 }
 
 export function clearOrchestratorPermissionModeOverride(): void {
-  const workflowConfig = ensureRuntimeConfig();
+  const workflowConfig = loadedConfig ?? loadWorkflowConfig();
   state.permissionMode = workflowConfig.acp.permissionMode;
   state.permissionModeSource = "workflow";
   state.lastAction = "permission_mode_reset_to_workflow";
@@ -661,7 +664,7 @@ export function resolvePermission(request: ResolvePermissionRequest): void {
 function ensureRuntimeAdapter(): ACPAdapter {
   const runtime = ensureDbAndOrchestrator();
   if (!runtimeAdapter) {
-    runtimeAdapter = createACPAdapter(runtime.config.acp, createACPAdapterDeps());
+    runtimeAdapter = createACPClientAdapter(runtime.config.acp, createACPAdapterDeps());
   }
   return runtimeAdapter;
 }

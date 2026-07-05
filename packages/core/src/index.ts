@@ -47,7 +47,3 @@ export {
   DEFAULT_POLL_INTERVAL_MS,
   DEFAULT_RETRY_BASE_DELAY_MS,
 } from "@core/types/workflow";
-
-export function coreReady(): string {
-  return "core-ready";
-}

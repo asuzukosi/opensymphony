@@ -1,5 +1,5 @@
 import type { SettingsView } from "@/ipc";
-import { useIpcQuery } from "./use-ipc-query";
+import { DEFAULT_IPC_POLL_INTERVAL_MS, useIpcQuery } from "./use-ipc-query";
 
 export type { SettingsView } from "@/ipc";
 
@@ -16,10 +16,8 @@ export type UseSettingsResult = {
   refetch: () => Promise<void>;
 };
 
-const DEFAULT_POLL_INTERVAL_MS = 5000;
-
 export function useSettings(options?: UseSettingsOptions): UseSettingsResult {
-  const { pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, enabled = true } = options ?? {};
+  const { pollIntervalMs = DEFAULT_IPC_POLL_INTERVAL_MS, enabled = true } = options ?? {};
 
   const { data, error, isLoading, isRefreshing, refetch } = useIpcQuery<SettingsView>(
     "settings",

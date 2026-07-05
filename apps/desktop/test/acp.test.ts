@@ -7,10 +7,9 @@ import type { ACPConfig } from "@symphony/core";
 import { createPermissionRouter } from "@/runtime/acp/permission-router";
 import { createPermissionStore } from "@/runtime/acp/permission-store";
 import {
-  createACPAdapter,
-  type ACPAdapter,
-  type StartRuntimeSessionInput,
-} from "@/runtime/acp";
+  createACPClientAdapter,
+} from "@/runtime/acp/acp-client-adapter";
+import type { ACPAdapter, StartRuntimeSessionInput } from "@/runtime/acp/types";
 
 const demoServerPath = fileURLToPath(
   new URL("./fixtures/mock-acp-server.mjs", import.meta.url),
@@ -90,9 +89,9 @@ async function waitForTerminalStatus(
   throw new Error("timed out waiting for terminal status");
 }
 
-describe("createACPAdapter", () => {
+describe("createACPClientAdapter", () => {
   test("creates ACP client adapter", () => {
-    const adapter = createACPAdapter(testACPConfig(), createClientAdapterDeps());
+    const adapter = createACPClientAdapter(testACPConfig(), createClientAdapterDeps());
 
     const session = adapter.startSession(
       makeStartSessionInput({
@@ -108,14 +107,8 @@ describe("createACPAdapter", () => {
     expect(adapter.getSessionPhase(session.sessionId)).toBeTruthy();
   });
 
-  test("requires permission router dependencies", () => {
-    expect(() => createACPAdapter(testACPConfig())).toThrow(
-      "ACP client adapter requires permission router dependencies",
-    );
-  });
-
   test("accepts issue context fields on startSession input", () => {
-    const adapter = createACPAdapter(testACPConfig(), createClientAdapterDeps());
+    const adapter = createACPClientAdapter(testACPConfig(), createClientAdapterDeps());
     const session = adapter.startSession(
       makeStartSessionInput({
         runAttemptId: "run-ctx",
@@ -134,7 +127,7 @@ describe("createACPAdapter", () => {
   });
 
   test("completes demo ACP server session through factory", async () => {
-    const adapter = createACPAdapter(testACPConfig(), createClientAdapterDeps());
+    const adapter = createACPClientAdapter(testACPConfig(), createClientAdapterDeps());
 
     const session = adapter.startSession(
       makeStartSessionInput({
@@ -157,7 +150,7 @@ describe("createACPAdapter", () => {
   });
 
   test("cancels running sessions through factory", async () => {
-    const adapter = createACPAdapter(testACPConfig(), createClientAdapterDeps());
+    const adapter = createACPClientAdapter(testACPConfig(), createClientAdapterDeps());
 
     const session = adapter.startSession(
       makeStartSessionInput({

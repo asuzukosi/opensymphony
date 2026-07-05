@@ -58,13 +58,9 @@ Defined in [`src/ipc.ts`](src/ipc.ts):
 
 Writes return updated runtime state where applicable; reads support optional polling via `useIpcQuery`.
 
-### SPEC adaptation
-
-See [`SPEC.md`](../../SPEC.md) for the full orchestration spec. This app implements the Electron + SQLite + ACP path summarized in the root [`README.md`](../../README.md#spec-adaptation).
-
 ### Related docs
 
-- [`connecting-acp-agents.md`](../../connecting-acp-agents.md) — ACP client architecture, Hermes, demo server, troubleshooting
+- [`docs/connecting-acp-agents.md`](../../docs/connecting-acp-agents.md) — ACP client architecture, Hermes, demo server, troubleshooting
 - [`WORKFLOW.md`](../../WORKFLOW.md) — default runtime config
 
 ## Setup
@@ -123,7 +119,7 @@ To use a different file:
 export SYMPHONY_WORKFLOW_PATH=/absolute/path/to/WORKFLOW.md
 ```
 
-For production Hermes, swap the `acp` block to `command: hermes`, `args: ["acp"]` — see [`connecting-acp-agents.md`](../../connecting-acp-agents.md).
+For production Hermes, swap the `acp` block to `command: hermes`, `args: ["acp"]` — see [`docs/connecting-acp-agents.md`](../../docs/connecting-acp-agents.md).
 
 ### 4. Start the desktop app
 

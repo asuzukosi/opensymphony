@@ -20,7 +20,3 @@ export * from "./components/ui/textarea";
 export * from "./components/ui/tooltip";
 
 export { useIsMobile } from "./hooks/use-mobile";
-
-export function uiReady(): string {
-  return "ui-ready";
-}

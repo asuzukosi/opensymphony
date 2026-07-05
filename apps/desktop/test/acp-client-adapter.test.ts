@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import type { ACPConfig } from "@symphony/core";
 import type { AppendSessionEventInput, SessionEventKind } from "@symphony/db";
-import type { StartRuntimeSessionInput } from "@/runtime/acp";
+import type { StartRuntimeSessionInput } from "@/runtime/acp/types";
 import {
   createACPClientAdapter,
   type ACPClientAdapter,

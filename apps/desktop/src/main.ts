@@ -10,7 +10,6 @@ import {
   type ProjectBoard,
   type ResolvePermissionRequest,
   type RuntimeStateSnapshot,
-  type RuntimeStatus,
   type SettingsView,
 } from "@/ipc";
 import {
@@ -146,13 +145,4 @@ function isDirectEntryExecution(): boolean {
 
 if (process.env.SYMPHONY_DESKTOP_BOOTSTRAP === "1" || isDirectEntryExecution()) {
   bootstrap();
-}
-
-export function setOrchestratorStatus(status: RuntimeStatus): void {
-  if (status === "running") startOrchestratorRuntime();
-  if (status === "stopped") stopOrchestratorRuntime();
-}
-
-export function getMainWindow(): BrowserWindow | null {
-  return mainWindow;
 }

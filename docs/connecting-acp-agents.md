@@ -2,7 +2,7 @@
 
 This guide explains how Symphony runs agents through the **ACP JSON-RPC client**. Symphony spawns a configured ACP **server** on stdio, acts as the ACP **client**, and drives session completion from protocol messages — not from process exit codes.
 
-Reference implementation: [`apps/desktop/src/runtime/acp/acp-client-adapter.ts`](apps/desktop/src/runtime/acp/acp-client-adapter.ts).
+Reference implementation: [`apps/desktop/src/runtime/acp/acp-client-adapter.ts`](../apps/desktop/src/runtime/acp/acp-client-adapter.ts).
 
 ---
 
@@ -66,12 +66,12 @@ Implementation modules:
 
 | Module | Role |
 |--------|------|
-| [`acp-protocol.ts`](apps/desktop/src/runtime/acp/acp-protocol.ts) | SDK re-exports + initialize defaults |
-| [`stdio-stream.ts`](apps/desktop/src/runtime/acp/stdio-stream.ts) | Child stdio → NDJSON stream |
-| [`symphony-client.ts`](apps/desktop/src/runtime/acp/symphony-client.ts) | `ClientSideConnection` factory |
-| [`prompt-renderer.ts`](apps/desktop/src/runtime/acp/prompt-renderer.ts) | `WORKFLOW.md` prompt + issue fields |
-| [`permission-router.ts`](apps/desktop/src/runtime/acp/permission-router.ts) | Permission policy routing |
-| [`permission-store.ts`](apps/desktop/src/runtime/acp/permission-store.ts) | Pending permission queue |
+| [`acp-protocol.ts`](../apps/desktop/src/runtime/acp/acp-protocol.ts) | SDK re-exports + initialize defaults |
+| [`stdio-stream.ts`](../apps/desktop/src/runtime/acp/stdio-stream.ts) | Child stdio → NDJSON stream |
+| [`symphony-client.ts`](../apps/desktop/src/runtime/acp/symphony-client.ts) | `ClientSideConnection` factory |
+| [`prompt-renderer.ts`](../apps/desktop/src/runtime/acp/prompt-renderer.ts) | `WORKFLOW.md` prompt + issue fields |
+| [`permission-router.ts`](../apps/desktop/src/runtime/acp/permission-router.ts) | Permission policy routing |
+| [`permission-store.ts`](../apps/desktop/src/runtime/acp/permission-store.ts) | Pending permission queue |
 
 ---
 
@@ -142,7 +142,7 @@ IPC:
 
 ## 4. `WORKFLOW.md` configuration
 
-Start from the repo-root [`WORKFLOW.md`](WORKFLOW.md).
+Start from the repo-root [`WORKFLOW.md`](../WORKFLOW.md).
 
 **Production (Hermes ACP):**
 
@@ -265,7 +265,7 @@ Each dispatched issue gets an isolated directory:
 <workspace_root>/<sanitized_issue_identifier>/
 ```
 
-Implementation: [`packages/core/src/services/workspace-manager-service.ts`](packages/core/src/services/workspace-manager-service.ts).
+Implementation: [`packages/core/src/services/workspace-manager-service.ts`](../packages/core/src/services/workspace-manager-service.ts).
 
 | Phase | Action |
 |-------|--------|
@@ -311,7 +311,7 @@ Expected when the issue moves to a terminal state or reconciliation cancels dupl
 
 - Required: `project_id`, `acp.command`
 - Override: `SYMPHONY_WORKFLOW_PATH=/absolute/path/to/WORKFLOW.md`
-- Default resolution: [`apps/desktop/src/runtime/workflow-path.ts`](apps/desktop/src/runtime/workflow-path.ts)
+- Default resolution: [`apps/desktop/src/runtime/workflow-path.ts`](../apps/desktop/src/runtime/workflow-path.ts)
 
 ### Dispatch never runs
 
@@ -345,5 +345,4 @@ acp:
 
 ### Removed references
 
-- [`run-hermes.sh`](run-hermes.sh) — exit-code wrapper; replaced by `hermes acp` + ACP client
 - Exit-code troubleshooting (`exit_<code>:…` as primary completion signal) — see §8 session timeline errors instead

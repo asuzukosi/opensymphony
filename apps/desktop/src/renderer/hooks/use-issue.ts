@@ -1,5 +1,5 @@
 import type { IssueDetail } from "@/ipc";
-import { useIpcQuery } from "./use-ipc-query";
+import { DEFAULT_IPC_POLL_INTERVAL_MS, useIpcQuery } from "./use-ipc-query";
 
 export type UseIssueOptions = {
   issueId: string | null;
@@ -16,14 +16,13 @@ export type UseIssueResult = {
   refetch: () => Promise<void>;
 };
 
-const DEFAULT_POLL_INTERVAL_MS = 5000;
 const DEFAULT_ATTEMPT_LIMIT = 20;
 
 export function useIssue(options: UseIssueOptions): UseIssueResult {
   const {
     issueId,
     attemptLimit = DEFAULT_ATTEMPT_LIMIT,
-    pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+    pollIntervalMs = DEFAULT_IPC_POLL_INTERVAL_MS,
     enabled = true,
   } = options;
 

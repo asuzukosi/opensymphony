@@ -16,6 +16,7 @@ This repository contains a Bun + Turbo + TypeScript implementation of Symphony i
 - `packages/db`: SQLite schema/migrations + repository/store layer.
 - `packages/ui`: shared UI primitives and styles used by desktop renderer.
 - `tests/e2e`: Playwright harness for end-to-end acceptance checks.
+- `docs`: guides and integration docs (see [Documentation](#documentation)).
 
 ## Architecture Summary
 
@@ -35,20 +36,16 @@ WORKFLOW.md → runtime config → orchestrator tick loop (Electron main)
 4. **Structured JSON logs** on the main process record dispatch, failures, and workspace events.
 5. **Restart recovery** marks stale in-flight runs failed and re-schedules retries on startup.
 
-### SPEC adaptation
+### Architecture mapping
 
-[`SPEC.md`](SPEC.md) is the language-agnostic orchestration reference (poll loop, workspaces, hooks, retries). This repo implements the Electron desktop path:
-
-| SPEC concept | This repository |
-|--------------|-----------------|
+| Concept | This repository |
+|---------|-----------------|
 | Issue tracker | Local SQLite via `@symphony/db` |
 | Tracker reads / candidate selection | Issue repos + `@symphony/core` orchestrator services |
 | Tracker writes (transition, comment, create) | `TrackerService` + `mutateIssue` IPC |
 | Agent runtime session | ACP client — subprocess ACP server (`hermes acp` or demo server for local dev) |
 | Control plane / server | None — UI-first desktop app only |
 | Observability | Electron UI + JSON-line main-process logs |
-
-Historical SPEC sections describing Linear + Codex app-server are design context only, not the active stack.
 
 ### Renderer IPC hooks
 
@@ -78,14 +75,13 @@ See [`apps/desktop/README.md`](apps/desktop/README.md) for setup and desktop-spe
 
 Task data lives in local SQLite via `@symphony/db`. Orchestration in `@symphony/core` drives selection, dispatch, and retries; the desktop main process wires ACP sessions and workspace hooks per issue.
 
-ACP agents run as subprocess ACP servers on stdio. Local dev uses [`scripts/demo-acp-server.mjs`](scripts/demo-acp-server.mjs); production typically uses `hermes acp`. See [`connecting-acp-agents.md`](connecting-acp-agents.md) for the subprocess contract, Hermes setup, demo server, and troubleshooting.
+ACP agents run as subprocess ACP servers on stdio. Local dev uses [`scripts/demo-acp-server.mjs`](scripts/demo-acp-server.mjs); production typically uses `hermes acp`. See [`docs/connecting-acp-agents.md`](docs/connecting-acp-agents.md) for the subprocess contract, Hermes setup, demo server, and troubleshooting.
 
 ## Documentation
 
 | Doc | Contents |
 |-----|----------|
-| [`SPEC.md`](SPEC.md) | Orchestration concepts and normative design reference |
-| [`connecting-acp-agents.md`](connecting-acp-agents.md) | ACP client architecture, Hermes, demo server, troubleshooting |
+| [`docs/connecting-acp-agents.md`](docs/connecting-acp-agents.md) | ACP client architecture, Hermes, demo server, troubleshooting |
 | [`apps/desktop/README.md`](apps/desktop/README.md) | Desktop setup (`bun install`, `rebuild:native`, `bun run dev`) |
 | [`WORKFLOW.md`](WORKFLOW.md) | Default runtime configuration for local dev |
 
