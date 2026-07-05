@@ -285,3 +285,36 @@ pub struct IssueDetail {
     pub comments: Vec<IssueDetailComment>,
     pub attempts: Vec<IssueDetailRunAttempt>,
 }
+
+/// issue mutation payload for mutate_issue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "lowercase")]
+pub enum MutateIssueRequest {
+    #[serde(rename_all = "camelCase")]
+    Transition {
+        issue_id: String,
+        target_state_id: String,
+        actor: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Comment {
+        issue_id: String,
+        body: String,
+        author: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Create {
+        project_id: String,
+        title: String,
+        description: Option<String>,
+        priority: Option<i32>,
+        workflow_state_id: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Update {
+        issue_id: String,
+        title: Option<String>,
+        description: Option<String>,
+        priority: Option<i32>,
+    },
+}
