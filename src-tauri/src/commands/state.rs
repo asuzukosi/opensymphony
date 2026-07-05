@@ -1,4 +1,4 @@
-use crate::commands::fixtures;
+use crate::stubs::state as state_stub;
 use crate::types::RuntimeStateSnapshot;
 
 const DEFAULT_EVENT_LIMIT: u32 = 10;
@@ -11,7 +11,7 @@ fn clamp_event_limit(event_limit: Option<u32>) -> u32 {
 
 #[tauri::command]
 pub fn get_runtime_state(event_limit: Option<u32>) -> RuntimeStateSnapshot {
-    fixtures::idle_runtime_snapshot(clamp_event_limit(event_limit))
+    state_stub::idle_runtime_snapshot(clamp_event_limit(event_limit))
 }
 
 #[cfg(test)]

@@ -1,9 +1,9 @@
-use crate::commands::fixtures;
+use crate::stubs::board;
 use crate::types::ProjectBoard;
 
 #[tauri::command]
 pub fn get_project_board() -> ProjectBoard {
-    fixtures::sample_project_board()
+    board::sample_project_board()
 }
 
 #[cfg(test)]
