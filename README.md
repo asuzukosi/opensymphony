@@ -1,124 +1,14 @@
-# Symphony (TypeScript Monorepo)
+# opensymphony
 
-This repository contains a Bun + Turbo + TypeScript implementation of Symphony in a React + Electron format.
+Tauri desktop app for agent orchestration. Next.js frontend in `src/`, Rust backend in `src-tauri/`.
 
-## Current Scope
-
-- UI-first desktop orchestration runtime (Electron main + renderer).
-- No non-UI control plane/server in this implementation.
-- Local SQLite task tracking (`@symphony/db` + `@symphony/core` services).
-- ACP JSON-RPC client integration — spawns a configured ACP server on stdio per issue workspace.
-
-## Monorepo Layout
-
-- `apps/desktop`: Electron app shell, orchestration runtime loop, IPC, React UI routes.
-- `packages/core`: orchestration domain/services (config parsing, selection, retries, lifecycle, adapters, logging, restart recovery).
-- `packages/db`: SQLite schema/migrations + repository/store layer.
-- `packages/ui`: shared UI primitives and styles used by desktop renderer.
-- `tests/e2e`: Playwright harness for end-to-end acceptance checks.
-- `docs`: guides and integration docs (see [Documentation](#documentation)).
-
-## Architecture Summary
-
-```
-WORKFLOW.md → runtime config → orchestrator tick loop (Electron main)
-                    ↓
-              @symphony/db (SQLite) + @symphony/core (selection, retries, lifecycle)
-                    ↓
-              ACP client adapter + per-issue workspaces
-                    ↓
-              React renderer (Dashboard, Board, Agents, Issue, Settings)
-```
-
-1. [`WORKFLOW.md`](WORKFLOW.md) is parsed into typed runtime config (`project_id`, poll interval, concurrency, ACP mode, workspace hooks, prompt body).
-2. Each **orchestrator tick** selects candidates, dispatches run attempts, polls agent sessions, schedules retries, and reconciles against workflow state.
-3. **Workspace manager** creates `<workspace_root>/<issue-identifier>/`, runs hooks, and cleans up terminal issues.
-4. **Structured JSON logs** on the main process record dispatch, failures, and workspace events.
-5. **Restart recovery** marks stale in-flight runs failed and re-schedules retries on startup.
-
-### Architecture mapping
-
-| Concept | This repository |
-|---------|-----------------|
-| Issue tracker | Local SQLite via `@symphony/db` |
-| Tracker reads / candidate selection | Issue repos + `@symphony/core` orchestrator services |
-| Tracker writes (transition, comment, create) | `TrackerService` + `mutateIssue` IPC |
-| Agent runtime session | ACP client — subprocess ACP server (`hermes acp` or demo server for local dev) |
-| Control plane / server | None — UI-first desktop app only |
-| Observability | Electron UI + JSON-line main-process logs |
-
-### Renderer IPC hooks
-
-The desktop renderer never calls `window.symphonyDesktop` directly. All main-process I/O goes through a three-layer stack in `apps/desktop/src/renderer/`:
-
-```
-routes / components
-       ↓  domain hooks (useRuntimeState, useProjectBoard, useIssue, useSettings, …)
-       ↓  generic hooks (useIpcQuery, useIpcMutation)
-       ↓  ipc-client → preload → main handlers
-```
-
-**Six typed IPC methods** (`apps/desktop/src/ipc.ts`):
-
-| API | Purpose |
-|-----|---------|
-| `getRuntimeState` | Dashboard, agents — snapshot, queues, metrics |
-| `getProjectBoard` | Board — issues grouped by workflow state |
-| `getIssue` | Issue detail — metadata, comments, run history |
-| `mutateIssue` | Create / update / transition / comment |
-| `controlRuntime` | Start, stop, tick, poll interval override |
-| `getSettings` | Read-only workflow + ACP config |
-
-See [`apps/desktop/README.md`](apps/desktop/README.md) for setup and desktop-specific layout.
-
-## Task Tracking + Agents
-
-Task data lives in local SQLite via `@symphony/db`. Orchestration in `@symphony/core` drives selection, dispatch, and retries; the desktop main process wires ACP sessions and workspace hooks per issue.
-
-ACP agents run as subprocess ACP servers on stdio. Local dev uses [`scripts/demo-acp-server.mjs`](scripts/demo-acp-server.mjs); production typically uses `hermes acp`. See [`docs/connecting-acp-agents.md`](docs/connecting-acp-agents.md) for the subprocess contract, Hermes setup, demo server, and troubleshooting.
-
-## Documentation
-
-| Doc | Contents |
-|-----|----------|
-| [`docs/connecting-acp-agents.md`](docs/connecting-acp-agents.md) | ACP client architecture, Hermes, demo server, troubleshooting |
-| [`apps/desktop/README.md`](apps/desktop/README.md) | Desktop setup (`bun install`, `rebuild:native`, `bun run dev`) |
-| [`WORKFLOW.md`](WORKFLOW.md) | Default runtime configuration for local dev |
-
-## Running
-
-Configure orchestration via [`WORKFLOW.md`](WORKFLOW.md) at the repo root (`project_id`, poll interval, ACP mode, workspace hooks, agent prompt).
-
-Install:
+## development
 
 ```bash
 bun install
+bun run dev:web   # next.js on http://127.0.0.1:3000
+bun run dev       # tauri window
+bun run build     # production bundle
 ```
 
-Main commands:
-
-```bash
-bun run dev
-bun run test
-bun run check-types
-bun run build
-bun run test:e2e
-```
-
-## Validation Status
-
-The implemented slices include:
-
-- monorepo/tooling baseline
-- orchestrator runtime loop + UI controls
-- ACP client agent path (demo server for dev, real ACP CLI for production)
-- workflow reload/re-apply
-- workspace lifecycle + terminal cleanup
-- structured logging
-- SQLite-backed issue mutations (transition, comment)
-- restart recovery semantics
-- executable E2E orchestration scenarios
-
-## License
-
-Apache-2.0 (see `LICENSE`).
+The Electron-era codebase lives temporarily in `reference/electron-stack/` as a porting guide and is deleted after migration.

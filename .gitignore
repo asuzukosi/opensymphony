@@ -4,13 +4,12 @@ node_modules
 # Bun
 .bun/
 
-# Turborepo cache
-.turbo/
 
 # Build artifacts
 dist/
 build/
 out/
+.next/
 coverage/
 .electron/
 
@@ -38,4 +37,4 @@ pnpm-debug.log*
 .vscode/
 .idea/
 
-.symphony-workspaces/
+.symphony-workspaces/*.tsbuildinfo

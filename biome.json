@@ -13,6 +13,15 @@
     }
   },
   "files": {
-    "ignore": ["dist", "node_modules", "coverage", "playwright-report", "test-results"]
+    "ignore": [
+      "dist",
+      "node_modules",
+      "coverage",
+      "playwright-report",
+      "test-results",
+      ".next",
+      "out",
+      "src-tauri/target"
+    ]
   }
 }
