@@ -2,7 +2,7 @@ mod commands;
 mod stubs;
 mod types;
 
-use commands::{get_issue, get_project_board, get_runtime_state, mutate_issue};
+use commands::{get_issue, get_project_board, get_runtime_state, mutate_issue, control_runtime, get_settings, get_pending_permissions, resolve_permission};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,7 +21,11 @@ pub fn run() {
             get_runtime_state,
             get_project_board,
             get_issue,
-            mutate_issue
+            mutate_issue,
+            control_runtime,
+            get_settings, 
+            get_pending_permissions,
+            resolve_permission,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

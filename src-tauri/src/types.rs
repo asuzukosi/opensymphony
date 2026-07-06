@@ -318,3 +318,122 @@ pub enum MutateIssueRequest {
         priority: Option<i32>,
     },
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PermissionMode {
+    AutoApprove,
+    RequiresApproval,
+}
+
+// orchestrator mutation payload
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "camelCase")]
+pub enum ControlRuntimeRequest {
+    #[serde(rename_all = "camelCase")]
+    Start {},
+    Stop  {},
+    Tick {},
+    SetPollInterval {
+        poll_interval_ms: i32,
+    },
+    ClearPollIntervalOverride {},
+    SetPermissionMode {
+        permission_mode: PermissionMode,
+    },
+    ClearPermissionModeOverride {},
+    PauseRun {
+        run_attempt_id: String,
+    },
+    ResumeRun {
+        run_attempt_id: String,
+    },
+    CancelRun {
+        run_attempt_id: String
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PermissionModeSource {
+    Workflow,
+    Override,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub struct SettingsProjectMeta {
+    pub id: String,
+    pub name: String,
+    pub slug: String,
+    pub agents: Vec<String>
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentCommunication {
+    Acp, 
+    Terminal
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all="camelCase")]
+pub struct SettingsACPConfig {
+    pub command: String,
+    pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all="camelCase")]
+pub struct Agent {
+    pub id: String,
+    pub name: String,
+    pub communication: AgentCommunication,
+    pub acp: Option<SettingsACPConfig>
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsView {
+    pub status: RuntimeStatus,
+    pub workflow_path: Option<String>,
+    pub workflow_version: Option<String>,
+    pub prompt_template: String,
+    pub poll_interval_ms: i32,
+    pub poll_interval_source: PollIntervalSource,
+    pub permission_mode: PermissionMode,
+    pub permission_mode_source: PermissionModeSource,
+    pub projects: Vec<SettingsProjectMeta>,
+    pub agents: Vec<Agent>,
+    pub started_at: Option<String>,
+    pub next_tick_at: Option<String>,
+    pub tick_count: i32,
+    pub last_tick_at: Option<String>,
+    pub last_action: Option<String>,
+    pub last_error: Option<String>,
+
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingPermission {
+    pub id: String,
+    pub session_id: String,
+    pub issue_id: String,
+    pub summary: String,
+    pub payload: serde_json::Value,
+    pub created_at: String
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PermissionDecision {
+    Approve, 
+    Deny
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvePermissionRequest {
+    pub id: String,
+    pub decision: PermissionDecision,
+}
