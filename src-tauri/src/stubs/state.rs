@@ -1,10 +1,11 @@
+use crate::stubs::constants::STUB_POLL_INTERVAL_MS;
 use crate::types::{RuntimeStateSnapshot, RuntimeStatus};
 
 pub fn idle_runtime_snapshot(_event_limit: u32) -> RuntimeStateSnapshot {
     RuntimeStateSnapshot {
         status: RuntimeStatus::Idle,
         started_at: None,
-        poll_interval_ms: 3000,
+        poll_interval_ms: STUB_POLL_INTERVAL_MS,
         next_tick_at: None,
         tick_count: 0,
         last_tick_at: None,

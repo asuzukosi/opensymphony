@@ -1,7 +1,7 @@
 use crate::stubs::board;
 use crate::types::ProjectBoard;
 
-#[tauri::command]
+#[tauri::command(rename = "opensymphony:get-project-board")]
 pub fn get_project_board() -> ProjectBoard {
     board::sample_project_board()
 }

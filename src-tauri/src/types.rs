@@ -335,7 +335,7 @@ pub enum ControlRuntimeRequest {
     Stop  {},
     Tick {},
     SetPollInterval {
-        poll_interval_ms: i32,
+        poll_interval_ms: u32,
     },
     ClearPollIntervalOverride {},
     SetPermissionMode {
@@ -399,7 +399,7 @@ pub struct SettingsView {
     pub workflow_path: Option<String>,
     pub workflow_version: Option<String>,
     pub prompt_template: String,
-    pub poll_interval_ms: i32,
+    pub poll_interval_ms: u32,
     pub poll_interval_source: PollIntervalSource,
     pub permission_mode: PermissionMode,
     pub permission_mode_source: PermissionModeSource,
@@ -407,7 +407,7 @@ pub struct SettingsView {
     pub agents: Vec<Agent>,
     pub started_at: Option<String>,
     pub next_tick_at: Option<String>,
-    pub tick_count: i32,
+    pub tick_count: u32,
     pub last_tick_at: Option<String>,
     pub last_action: Option<String>,
     pub last_error: Option<String>,

@@ -9,7 +9,7 @@ fn clamp_event_limit(event_limit: Option<u32>) -> u32 {
     limit.min(MAX_EVENT_LIMIT)
 }
 
-#[tauri::command]
+#[tauri::command(rename = "opensymphony:get-runtime-state")]
 pub fn get_runtime_state(event_limit: Option<u32>) -> RuntimeStateSnapshot {
     state_stub::idle_runtime_snapshot(clamp_event_limit(event_limit))
 }

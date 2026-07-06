@@ -1,6 +1,5 @@
+use crate::stubs::constants::STUB_PROJECT_ID;
 use crate::types::IssueDetail;
-
-const STUB_PROJECT_ID: &str = "stub-project";
 
 pub fn sample_issue_detail(issue_id: &str) -> Option<IssueDetail> {
     match issue_id {

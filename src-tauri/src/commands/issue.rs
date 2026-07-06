@@ -1,14 +1,14 @@
 use crate::stubs::issue;
 use crate::types::{IssueDetail, MutateIssueRequest};
 
-#[tauri::command]
+#[tauri::command(rename = "opensymphony:get-issue")]
 pub fn get_issue(issue_id: String, attempt_limit: Option<u32>) -> Result<IssueDetail, String> {
     let _ = attempt_limit;
     issue::sample_issue_detail(&issue_id)
         .ok_or_else(|| format!("issue not found: {issue_id}"))
 }
 
-#[tauri::command]
+#[tauri::command(rename = "opensymphony:mutate-issue")]
 pub fn mutate_issue(request: MutateIssueRequest) -> Result<(), String> {
     let _ = request;
     Ok(())
@@ -17,11 +17,13 @@ pub fn mutate_issue(request: MutateIssueRequest) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::stubs::constants::STUB_PROJECT_ID;
 
     #[test]
     fn returns_stub_issue_with_empty_comments_and_attempts() {
         let detail = get_issue("stub-issue-1".into(), None).expect("issue should exist");
 
+        assert_eq!(detail.project_id, STUB_PROJECT_ID);
         assert_eq!(detail.identifier, "SYM-1");
         assert_eq!(detail.workflow_state_id, "backlog");
         assert!(detail.comments.is_empty());

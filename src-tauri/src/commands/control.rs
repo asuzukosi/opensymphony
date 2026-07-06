@@ -1,7 +1,7 @@
 use crate::stubs::state as state_stub;
 use crate::types::{ControlRuntimeRequest, RuntimeStateSnapshot};
 
-#[tauri::command]
+#[tauri::command(rename = "opensymphony:control-runtime")]
 pub fn control_runtime(request: ControlRuntimeRequest) -> RuntimeStateSnapshot {
     let _ = request;
     state_stub::idle_runtime_snapshot(10)
@@ -13,8 +13,8 @@ mod tests {
     use crate::types::RuntimeStatus;
 
     #[test]
-    fn returns_idle_snapshot_with_empty_collections() {
-        let snapshot = get_runtime_state(Some(0));
+    fn returns_idle_snapshot_for_start_request() {
+        let snapshot = control_runtime(ControlRuntimeRequest::Start {});
 
         assert_eq!(snapshot.status, RuntimeStatus::Idle);
         assert!(snapshot.running.is_empty());
