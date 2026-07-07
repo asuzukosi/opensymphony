@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "mock-acp-agent"]
+resolver = "2"
+
 [package]
 name = "app"
 version = "0.1.0"

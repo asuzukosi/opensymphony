@@ -1,0 +1,15 @@
+[package]
+name = "opensymphony-mock-acp-agent"
+version = "0.1.0"
+edition = "2021"
+description = "stdio acp mock agent for local development and tests"
+license = "MIT"
+
+[[bin]]
+name = "opensymphony-mock-acp-agent"
+path = "src/main.rs"
+
+[dependencies]
+agent-client-protocol = "0.11.1"
+anyhow = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "io-std", "io-util", "process"] }
