@@ -1,6 +1,10 @@
+mod project_manager;
+mod project_runtime;
 mod types;
 
-pub use types::OrchestratorError;
+pub use project_manager::ProjectManager;
+pub use project_runtime::ProjectRuntime;
+pub use types::{OrchestratorError, Result};
 
 #[cfg(test)]
 mod tests {

@@ -22,3 +22,5 @@ impl fmt::Display for OrchestratorError {
 }
 
 impl std::error::Error for OrchestratorError {}
+
+pub type Result<T> = std::result::Result<T, OrchestratorError>;
