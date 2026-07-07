@@ -43,7 +43,7 @@ pub enum RunAttemptStatus {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum ReviewStatus {
     Approved,
     PendingReview,
@@ -143,7 +143,7 @@ pub enum WorkflowStateCategory {
 
 /// fixed kanban column ids — board layout is app-defined, not derived from workflow states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum BoardColumnId {
     Backlog,
     InProgress,
@@ -320,7 +320,7 @@ pub enum MutateIssueRequest {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "camelCase")]
 pub enum PermissionMode {
     AutoApprove,
     RequiresApproval,
