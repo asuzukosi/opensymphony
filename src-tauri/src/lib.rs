@@ -5,10 +5,15 @@ mod orchestrator;
 mod runtime;
 mod stubs;
 mod types;
-use tauri::Manager;
-use acp::AcpState;
-use commands::{get_issue, get_project_board, get_runtime_state, mutate_issue, control_runtime, get_settings, get_pending_permissions, resolve_permission};
 
+use tauri::Manager;
+
+use acp::AcpState;
+use commands::{
+    control_runtime, get_issue, get_pending_permissions, get_project_board, get_runtime_state,
+    get_settings, mutate_issue, resolve_permission,
+};
+use db::Db;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,6 +26,11 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            let db_path = Db::db_path(app.handle())?;
+            let database = Db::open(&db_path)?;
+            app.manage(database);
+
             app.manage(AcpState::new(tauri::async_runtime::handle()));
             Ok(())
         })

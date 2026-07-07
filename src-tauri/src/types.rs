@@ -2,6 +2,9 @@
 //! runtime snapshot is intentionally slimmer than reference ipc.ts:
 //! workflow config lives on get_settings; list lengths replace duplicate count structs.
 
+use std::fmt;
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 /// orchestrator lifecycle: not ticking, actively ticking, or explicitly stopped.
@@ -153,6 +156,35 @@ pub enum BoardColumnId {
 
 impl BoardColumnId {
     pub const ALL: [Self; 4] = [Self::Backlog, Self::InProgress, Self::Review, Self::Done];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Backlog => "backlog",
+            Self::InProgress => "inProgress",
+            Self::Review => "review",
+            Self::Done => "done",
+        }
+    }
+}
+
+impl fmt::Display for BoardColumnId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for BoardColumnId {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "backlog" => Ok(Self::Backlog),
+            "inProgress" => Ok(Self::InProgress),
+            "review" => Ok(Self::Review),
+            "done" => Ok(Self::Done),
+            _ => Err(()),
+        }
+    }
 }
 
 /// issue card on the project board.
@@ -224,15 +256,69 @@ pub struct IssueDetailComment {
 
 /// acp session event kind for issue attempt timelines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "PascalCase")]
 pub enum SessionEventKind {
     Prompt,
     StreamChunk,
-    ToolCall,
-    PermissionRequest,
-    PermissionResolve,
     SessionUpdate,
+    ToolCall,
+    ToolResult,
+    PermissionRequest,
     Error,
+    Terminal,
+}
+
+impl SessionEventKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Prompt => "Prompt",
+            Self::StreamChunk => "StreamChunk",
+            Self::SessionUpdate => "SessionUpdate",
+            Self::ToolCall => "ToolCall",
+            Self::ToolResult => "ToolResult",
+            Self::PermissionRequest => "PermissionRequest",
+            Self::Error => "Error",
+            Self::Terminal => "Terminal",
+        }
+    }
+}
+
+impl fmt::Display for SessionEventKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for SessionEventKind {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "Prompt" => Ok(Self::Prompt),
+            "StreamChunk" => Ok(Self::StreamChunk),
+            "SessionUpdate" => Ok(Self::SessionUpdate),
+            "ToolCall" => Ok(Self::ToolCall),
+            "ToolResult" => Ok(Self::ToolResult),
+            "PermissionRequest" => Ok(Self::PermissionRequest),
+            "Error" => Ok(Self::Error),
+            "Terminal" => Ok(Self::Terminal),
+            _ => Err(()),
+        }
+    }
+}
+
+/// typed payload for common session event kinds; unknown shapes fall back to Other.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum SessionEventPayload {
+    Prompt { text: String },
+    StreamChunk { text: String },
+    SessionUpdate { status: String },
+    ToolCall { name: String },
+    ToolResult { output: String },
+    PermissionRequest { summary: String },
+    Error { message: String },
+    Other(serde_json::Value),
 }
 
 /// one event in an agent session timeline.
@@ -436,4 +522,81 @@ pub enum PermissionDecision {
 pub struct ResolvePermissionRequest {
     pub id: String,
     pub decision: PermissionDecision,
+}
+
+#[cfg(test)]
+mod board_column_id_tests {
+    use super::BoardColumnId;
+
+    #[test]
+    fn as_str_matches_database_values() {
+        assert_eq!(BoardColumnId::Backlog.as_str(), "backlog");
+        assert_eq!(BoardColumnId::InProgress.as_str(), "inProgress");
+        assert_eq!(BoardColumnId::Review.as_str(), "review");
+        assert_eq!(BoardColumnId::Done.as_str(), "done");
+    }
+
+    #[test]
+    fn from_str_round_trips_all_columns() {
+        for column in BoardColumnId::ALL {
+            let parsed = column.as_str().parse::<BoardColumnId>().expect("parse column");
+            assert_eq!(parsed, column);
+        }
+    }
+
+    #[test]
+    fn from_str_rejects_unknown_column() {
+        assert!("invalid".parse::<BoardColumnId>().is_err());
+    }
+
+    #[test]
+    fn serde_uses_camel_case_json() {
+        let json = serde_json::to_string(&BoardColumnId::InProgress).expect("serialize");
+        assert_eq!(json, "\"inProgress\"");
+
+        let parsed: BoardColumnId =
+            serde_json::from_str("\"review\"").expect("deserialize");
+        assert_eq!(parsed, BoardColumnId::Review);
+    }
+}
+
+#[cfg(test)]
+mod session_event_kind_tests {
+    use super::SessionEventKind;
+
+    #[test]
+    fn as_str_matches_seed_data() {
+        assert_eq!(SessionEventKind::Prompt.as_str(), "Prompt");
+        assert_eq!(SessionEventKind::StreamChunk.as_str(), "StreamChunk");
+        assert_eq!(SessionEventKind::SessionUpdate.as_str(), "SessionUpdate");
+    }
+
+    #[test]
+    fn from_str_round_trips_all_kinds() {
+        let kinds = [
+            SessionEventKind::Prompt,
+            SessionEventKind::StreamChunk,
+            SessionEventKind::SessionUpdate,
+            SessionEventKind::ToolCall,
+            SessionEventKind::ToolResult,
+            SessionEventKind::PermissionRequest,
+            SessionEventKind::Error,
+            SessionEventKind::Terminal,
+        ];
+
+        for kind in kinds {
+            let parsed = kind.as_str().parse::<SessionEventKind>().expect("parse kind");
+            assert_eq!(parsed, kind);
+        }
+    }
+
+    #[test]
+    fn serde_uses_pascal_case_json() {
+        let json = serde_json::to_string(&SessionEventKind::StreamChunk).expect("serialize");
+        assert_eq!(json, "\"StreamChunk\"");
+
+        let parsed: SessionEventKind =
+            serde_json::from_str("\"SessionUpdate\"").expect("deserialize");
+        assert_eq!(parsed, SessionEventKind::SessionUpdate);
+    }
 }

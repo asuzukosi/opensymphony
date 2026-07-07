@@ -1,14 +1,30 @@
 pub mod error;
 pub mod migrate;
+pub mod repos;
 
-use std::path::Path;
+#[cfg(test)]
+pub mod test_helpers;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 use rusqlite::Connection;
+use tauri::{AppHandle, Manager};
+
 pub use error::{DbError, DbResult};
+
+pub const DB_FILE_NAME: &str = "opensymphony.sqlite";
+
 pub struct Db(Mutex<Connection>);
 
 impl Db {
+    pub fn db_path(app: &AppHandle) -> DbResult<PathBuf> {
+        let dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|err| DbError::Internal(err.to_string()))?;
+        Ok(dir.join(DB_FILE_NAME))
+    }
+
     pub fn open(path: &Path) -> DbResult<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
