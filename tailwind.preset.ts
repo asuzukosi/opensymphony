@@ -6,8 +6,22 @@ const preset = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        sans: ["var(--font-family-sans)"],
+        mono: ["var(--font-family-mono)"],
+      },
+      fontSize: {
+        xs: ["var(--font-size-xs)", { lineHeight: "var(--line-height-normal)" }],
+        sm: ["var(--font-size-sm)", { lineHeight: "var(--line-height-normal)" }],
+        base: ["var(--font-size-base)", { lineHeight: "var(--line-height-normal)" }],
+        lg: ["var(--font-size-lg)", { lineHeight: "var(--line-height-tight)" }],
+        xl: ["var(--font-size-xl)", { lineHeight: "var(--line-height-tight)" }],
+        "2xl": ["var(--font-size-2xl)", { lineHeight: "var(--line-height-tight)" }],
+        "3xl": ["var(--font-size-3xl)", { lineHeight: "var(--line-height-tight)" }],
+      },
+      fontWeight: {
+        normal: "var(--font-weight-normal)",
+        medium: "var(--font-weight-medium)",
+        semibold: "var(--font-weight-semibold)",
       },
       colors: {
         border: "hsl(var(--border))",
@@ -15,6 +29,9 @@ const preset = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        page: {
+          DEFAULT: "hsl(var(--page-background))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -43,6 +60,18 @@ const preset = {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
         chart: {
           "1": "hsl(var(--chart-1))",
           "2": "hsl(var(--chart-2))",
@@ -62,9 +91,24 @@ const preset = {
         },
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        sm: "var(--radius-sm)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
+        xl: "var(--radius-xl)",
+      },
+      spacing: {
+        page: "var(--spacing-page-y)",
+        "page-x": "var(--spacing-page-x)",
+        card: "var(--spacing-card)",
+        section: "var(--spacing-section)",
+      },
+      width: {
+        sidebar: "var(--sidebar-width)",
+        "settings-nav": "var(--settings-nav-width)",
+        "board-column": "var(--board-column-width)",
+      },
+      gap: {
+        "board-column": "var(--board-column-gap)",
       },
     },
   },
