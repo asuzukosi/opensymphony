@@ -1,5 +1,6 @@
 mod acp;
 mod commands;
+mod db;
 mod orchestrator;
 mod runtime;
 mod stubs;
