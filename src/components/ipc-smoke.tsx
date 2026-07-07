@@ -3,12 +3,13 @@ import { useBoard } from "@/hooks/use-board";
 
 export function IpcSmoke() {
   const { board, error, isLoading, isIpcAvailable } = useBoard();
-  if (!isIpcAvailable) {
-    return <p className="text-sm text-muted-foreground">ipc unavailable (browser mode)</p>;
-  }
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">checking ipc…</p>;
+  }
+
+  if (!isIpcAvailable) {
+    return <p className="text-sm text-muted-foreground">ipc unavailable (browser mode)</p>;
   }
 
   if (error) {

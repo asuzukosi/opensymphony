@@ -14,13 +14,14 @@ export type UseBoardResult = {
 };
 
 export function useBoard(): UseBoardResult {
-  const ipcAvailable = isIpcAvailable();
+  const [mounted, setMounted] = useState(false);
   const [board, setBoard] = useState<ProjectBoard | undefined>(undefined);
   const [error, setError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState(ipcAvailable);
+  const [isLoading, setIsLoading] = useState(true);
+  const ipcAvailable = mounted && isIpcAvailable(); // only set to true after mounted
 
   const refetch = useCallback(async (): Promise<void> => {
-    if (!ipcAvailable) {
+    if (!isIpcAvailable()) {
       setError(new IpcUnavailableError());
       setIsLoading(false);
       return;
@@ -37,17 +38,23 @@ export function useBoard(): UseBoardResult {
     } finally {
       setIsLoading(false);
     }
-  }, [ipcAvailable]);
+  }, []);
 
-  // fectch board on mount only off refetch is changed
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) {
+      return;
+    }
     void refetch();
-  }, [refetch]);
+  }, [mounted, refetch]);
 
   return {
     board,
     error,
-    isLoading,
+    isLoading: !mounted || isLoading,
     isIpcAvailable: ipcAvailable,
     refetch,
   };
