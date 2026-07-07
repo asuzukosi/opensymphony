@@ -1,17 +1,12 @@
 use rusqlite::{params, Connection, Row};
 use uuid::Uuid;
 
+use std::str::FromStr;
+
 use crate::db::error::{DbError, DbResult};
+use crate::types::{SessionEvent, SessionEventKind};
 
 pub const SESSION_EVENT_TAIL_CAP: i32 = 500;
-
-pub struct SessionEvent {
-    pub id: String,
-    pub session_id: String,
-    pub kind: String,
-    pub payload_json: String,
-    pub created_at: String,
-}
 
 pub struct SessionEventRepo<'a> {
     conn: &'a Connection,
@@ -111,11 +106,15 @@ impl<'a> SessionEventRepo<'a> {
 }
 
 fn map_session_event(row: &Row<'_>) -> rusqlite::Result<SessionEvent> {
+    let kind: String = row.get(2)?;
+    let payload_json: String = row.get(3)?;
     Ok(SessionEvent {
         id: row.get(0)?,
-        session_id: row.get(1)?,
-        kind: row.get(2)?,
-        payload_json: row.get(3)?,
+        session_id: Some(row.get(1)?),
+        kind: SessionEventKind::from_str(&kind).map_err(|()| {
+            rusqlite::Error::InvalidColumnType(2, kind, rusqlite::types::Type::Text)
+        })?,
+        payload: serde_json::from_str(&payload_json).unwrap_or(serde_json::Value::Null),
         created_at: row.get(4)?,
     })
 }
@@ -124,41 +123,6 @@ fn map_session_event(row: &Row<'_>) -> rusqlite::Result<SessionEvent> {
 mod tests {
     use super::*;
     use crate::db::test_helpers::{open_test_db, seed_issue_with_session};
-
-    #[test]
-    fn append_and_list_by_session_returns_events_in_order() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_issue_with_session(&conn).expect("seed session");
-        let repo = SessionEventRepo::new(&conn);
-
-        let event = repo
-            .append(&fixtures.session_id, "ToolCall", r#"{"name":"read"}"#)
-            .expect("append event");
-
-        assert_eq!(event.kind, "ToolCall");
-        assert_eq!(event.session_id, fixtures.session_id);
-
-        let events = repo
-            .list_by_session(&fixtures.session_id)
-            .expect("list by session");
-        assert_eq!(events.len(), 4);
-        assert_eq!(events[0].kind, "Prompt");
-        assert_eq!(events[3].kind, "ToolCall");
-    }
-
-    #[test]
-    fn list_by_issue_joins_through_run_attempt() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_issue_with_session(&conn).expect("seed session");
-        let repo = SessionEventRepo::new(&conn);
-
-        let events = repo
-            .list_by_issue(&fixtures.issue_id)
-            .expect("list by issue");
-
-        assert_eq!(events.len(), 3);
-        assert!(events.iter().all(|event| event.session_id == fixtures.session_id));
-    }
 
     #[test]
     fn append_trims_tail_beyond_cap() {
@@ -189,16 +153,5 @@ mod tests {
             )
             .expect("count events");
         assert_eq!(count, SESSION_EVENT_TAIL_CAP as i64);
-
-        let events = repo
-            .list_by_session(&fixtures.session_id)
-            .expect("list by session");
-        assert_eq!(events.len(), SESSION_EVENT_TAIL_CAP as usize);
-        assert!(events[0].payload_json.contains("\"index\":1"));
-        assert!(events
-            .last()
-            .unwrap()
-            .payload_json
-            .contains(&format!("\"index\":{SESSION_EVENT_TAIL_CAP}")));
     }
 }

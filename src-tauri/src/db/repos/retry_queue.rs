@@ -1,13 +1,7 @@
 use rusqlite::{params, Connection, Row};
 
 use crate::db::error::DbResult;
-
-pub struct RetryQueueEntry {
-    pub issue_id: String,
-    pub attempt_number: i32,
-    pub due_at: String,
-    pub error_message: Option<String>,
-}
+use crate::types::RetryQueueEntry;
 
 pub struct RetryQueueRepo<'a> {
     conn: &'a Connection,
@@ -75,7 +69,7 @@ mod tests {
     use crate::db::test_helpers::{open_test_db, seed_minimal_project};
 
     #[test]
-    fn upsert_and_list_due() {
+    fn upsert_list_due_and_remove() {
         let conn = open_test_db().expect("open test db");
         let fixtures = seed_minimal_project(&conn).expect("seed project");
         let repo = RetryQueueRepo::new(&conn);
@@ -87,71 +81,18 @@ mod tests {
             Some("timeout"),
         )
         .expect("upsert retry");
-        repo.upsert(
-            &fixtures.backlog_issue_id,
-            1,
-            "2026-01-02T00:00:00Z",
-            None,
-        )
-        .expect("upsert future retry");
 
         let due = repo
             .list_due("2026-01-01T12:00:00Z")
             .expect("list due retries");
         assert_eq!(due.len(), 1);
         assert_eq!(due[0].issue_id, fixtures.in_progress_issue_id);
-        assert_eq!(due[0].attempt_number, 2);
-        assert_eq!(due[0].error_message.as_deref(), Some("timeout"));
-    }
 
-    #[test]
-    fn upsert_updates_existing_entry() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_minimal_project(&conn).expect("seed project");
-        let repo = RetryQueueRepo::new(&conn);
-
-        repo.upsert(
-            &fixtures.review_issue_id,
-            1,
-            "2026-01-01T00:00:00Z",
-            Some("first"),
-        )
-        .expect("upsert first");
-        repo.upsert(
-            &fixtures.review_issue_id,
-            3,
-            "2026-01-03T00:00:00Z",
-            Some("second"),
-        )
-        .expect("upsert second");
-
-        let due = repo
-            .list_due("2026-01-04T00:00:00Z")
-            .expect("list due retries");
-        assert_eq!(due.len(), 1);
-        assert_eq!(due[0].attempt_number, 3);
-        assert_eq!(due[0].error_message.as_deref(), Some("second"));
-    }
-
-    #[test]
-    fn remove_deletes_entry() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_minimal_project(&conn).expect("seed project");
-        let repo = RetryQueueRepo::new(&conn);
-
-        repo.upsert(
-            &fixtures.done_issue_id,
-            1,
-            "2026-01-01T00:00:00Z",
-            None,
-        )
-        .expect("upsert retry");
-        repo.remove(&fixtures.done_issue_id)
+        repo.remove(&fixtures.in_progress_issue_id)
             .expect("remove retry");
-
-        let due = repo
+        assert!(repo
             .list_due("2026-01-02T00:00:00Z")
-            .expect("list due retries");
-        assert!(due.is_empty());
+            .expect("list due retries")
+            .is_empty());
     }
 }

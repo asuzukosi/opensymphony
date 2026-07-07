@@ -10,8 +10,9 @@ use tauri::Manager;
 
 use acp::AcpState;
 use commands::{
-    control_runtime, get_issue, get_pending_permissions, get_project_board, get_runtime_state,
-    get_settings, mutate_issue, resolve_permission,
+    control_runtime, get_board_column, get_board_issue_card, get_issue, get_issue_header,
+    get_pending_permissions, get_project_board, get_runtime_state, get_settings, list_issue_comments,
+    list_issue_run_attempts, list_session_events, mutate_issue, resolve_permission,
 };
 use db::Db;
 
@@ -37,7 +38,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_runtime_state,
             get_project_board,
+            get_board_column,
+            get_board_issue_card,
             get_issue,
+            get_issue_header,
+            list_issue_comments,
+            list_issue_run_attempts,
+            list_session_events,
             mutate_issue,
             control_runtime,
             get_settings, 

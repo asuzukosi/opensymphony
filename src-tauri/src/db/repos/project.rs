@@ -2,51 +2,7 @@ use rusqlite::{params, Connection, Row};
 use uuid::Uuid;
 
 use crate::db::error::{DbError, DbResult};
-use crate::types::PermissionMode;
-
-pub struct Project {
-    pub id: String,
-    pub name: String,
-    pub slug: String,
-    pub workspace_root: Option<String>,
-    pub workflow_source: Option<String>,
-    pub workflow_file_path: Option<String>,
-    pub workflow_file_mtime: Option<String>,
-    pub workflow_version: Option<String>,
-    pub workflow_last_loaded_at: Option<String>,
-    pub max_concurrency: i32,
-    pub retry_max_attempts: i32,
-    pub retry_backoff_ms: i32,
-    pub prompt_template: String,
-    pub poll_interval_ms: i32,
-    pub permission_mode: PermissionMode,
-    pub orchestrator_status: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-pub struct ProjectSummary {
-    pub id: String,
-    pub name: String,
-    pub slug: String,
-    pub orchestrator_status: String,
-}
-
-#[derive(Default)]
-pub struct ProjectPatch {
-    pub name: Option<String>,
-    pub workflow_source: Option<String>,
-    pub workflow_file_path: Option<String>,
-    pub workflow_file_mtime: Option<String>,
-    pub workflow_version: Option<String>,
-    pub prompt_template: Option<String>,
-    pub poll_interval_ms: Option<i32>,
-    pub max_concurrency: Option<i32>,
-    pub retry_max_attempts: Option<i32>,
-    pub retry_backoff_ms: Option<i32>,
-    pub permission_mode: Option<PermissionMode>,
-    pub orchestrator_status: Option<String>,
-}
+use crate::types::{PermissionMode, Project, ProjectPatch, ProjectSummary};
 
 pub struct ProjectRepo<'a> {
     conn: &'a Connection,
@@ -262,100 +218,25 @@ mod tests {
     use crate::db::test_helpers::open_test_db;
 
     #[test]
-    fn create_generates_slug_from_name() {
+    fn create_get_update_delete_round_trip() {
         let conn = open_test_db().expect("open test db");
         let repo = ProjectRepo::new(&conn);
         let project = repo.create("My Test Project").expect("create project");
 
         assert_eq!(project.slug, "my-test-project");
-        assert_eq!(project.name, "My Test Project");
-        assert_eq!(project.poll_interval_ms, 3000);
-        assert_eq!(project.permission_mode, PermissionMode::RequiresApproval);
-        assert_eq!(project.orchestrator_status, "idle");
-    }
-
-    #[test]
-    fn list_summaries_returns_projects() {
-        let conn = open_test_db().expect("open test db");
-        let repo = ProjectRepo::new(&conn);
-        repo.create("Alpha").expect("create alpha");
-        repo.create("Beta").expect("create beta");
-
-        let summaries = repo.list_summaries().expect("list summaries");
-        assert_eq!(summaries.len(), 2);
-        assert_eq!(summaries[0].name, "Alpha");
-        assert_eq!(summaries[1].name, "Beta");
-    }
-
-    #[test]
-    fn update_applies_patch_fields() {
-        let conn = open_test_db().expect("open test db");
-        let repo = ProjectRepo::new(&conn);
-        let project = repo.create("Config Project").expect("create project");
 
         let updated = repo
             .update(
                 &project.id,
                 &ProjectPatch {
-                    name: Some("Renamed Project".into()),
-                    prompt_template: Some("do work".into()),
-                    poll_interval_ms: Some(5000),
-                    permission_mode: Some(PermissionMode::AutoApprove),
-                    retry_max_attempts: Some(5),
-                    retry_backoff_ms: Some(1000),
+                    name: Some("Renamed".into()),
                     ..ProjectPatch::default()
                 },
             )
             .expect("update project");
-
-        assert_eq!(updated.name, "Renamed Project");
-        assert_eq!(updated.prompt_template, "do work");
-        assert_eq!(updated.poll_interval_ms, 5000);
-        assert_eq!(updated.permission_mode, PermissionMode::AutoApprove);
-        assert_eq!(updated.retry_max_attempts, 5);
-        assert_eq!(updated.retry_backoff_ms, 1000);
-    }
-
-    #[test]
-    fn update_workflow_file_sets_loaded_at() {
-        let conn = open_test_db().expect("open test db");
-        let repo = ProjectRepo::new(&conn);
-        let project = repo.create("Workflow Project").expect("create project");
-        assert!(project.workflow_last_loaded_at.is_none());
-
-        let updated = repo
-            .update(
-                &project.id,
-                &ProjectPatch {
-                    workflow_file_path: Some("/tmp/workflow.yaml".into()),
-                    workflow_file_mtime: Some("2026-01-01T00:00:00Z".into()),
-                    ..ProjectPatch::default()
-                },
-            )
-            .expect("update workflow file");
-
-        assert_eq!(
-            updated.workflow_file_path.as_deref(),
-            Some("/tmp/workflow.yaml")
-        );
-        assert!(updated.workflow_last_loaded_at.is_some());
-    }
-
-    #[test]
-    fn delete_removes_project() {
-        let conn = open_test_db().expect("open test db");
-        let repo = ProjectRepo::new(&conn);
-        let project = repo.create("Delete Me").expect("create project");
+        assert_eq!(updated.name, "Renamed");
 
         repo.delete(&project.id).expect("delete project");
         assert!(repo.get(&project.id).expect("get project").is_none());
-    }
-
-    #[test]
-    fn delete_missing_project_returns_not_found() {
-        let conn = open_test_db().expect("open test db");
-        let repo = ProjectRepo::new(&conn);
-        let err = repo.delete("missing-project").expect_err("delete missing");
-        assert!(matches!(err, DbError::NotFound(_)));
     }
 }

@@ -2,14 +2,7 @@ use rusqlite::{params, Connection, Row};
 use uuid::Uuid;
 
 use crate::db::error::{DbError, DbResult};
-
-pub struct Comment {
-    pub id: String,
-    pub issue_id: String,
-    pub body: String,
-    pub author_id: Option<String>,
-    pub created_at: String,
-}
+use crate::types::IssueComment;
 
 pub struct CommentRepo<'a> {
     conn: &'a Connection,
@@ -25,7 +18,7 @@ impl<'a> CommentRepo<'a> {
         issue_id: &str,
         body: &str,
         author_id: Option<&str>,
-    ) -> DbResult<Comment> {
+    ) -> DbResult<IssueComment> {
         let id = Uuid::new_v4().to_string();
 
         self.conn.execute(
@@ -37,7 +30,7 @@ impl<'a> CommentRepo<'a> {
         self.get(&id)?.ok_or_else(|| DbError::Internal("comment missing after append".into()))
     }
 
-    pub fn list_by_issue(&self, issue_id: &str) -> DbResult<Vec<Comment>> {
+    pub fn list_by_issue(&self, issue_id: &str) -> DbResult<Vec<IssueComment>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, issue_id, body, author_id, created_at
              FROM issue_comments
@@ -53,7 +46,7 @@ impl<'a> CommentRepo<'a> {
         Ok(comments)
     }
 
-    fn get(&self, id: &str) -> DbResult<Option<Comment>> {
+    fn get(&self, id: &str) -> DbResult<Option<IssueComment>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, issue_id, body, author_id, created_at
              FROM issue_comments WHERE id = ?1",
@@ -67,8 +60,8 @@ impl<'a> CommentRepo<'a> {
     }
 }
 
-fn map_comment(row: &Row<'_>) -> rusqlite::Result<Comment> {
-    Ok(Comment {
+fn map_comment(row: &Row<'_>) -> rusqlite::Result<IssueComment> {
+    Ok(IssueComment {
         id: row.get(0)?,
         issue_id: row.get(1)?,
         body: row.get(2)?,

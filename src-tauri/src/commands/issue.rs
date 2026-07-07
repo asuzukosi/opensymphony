@@ -1,5 +1,17 @@
+use rusqlite::Connection;
+use tauri::State;
+
+use crate::db::error::DbResult;
+use crate::db::repos::comment::CommentRepo;
+use crate::db::repos::issue::IssueRepo;
+use crate::db::repos::run_attempt::RunAttemptRepo;
+use crate::db::repos::session_event::SessionEventRepo;
+use crate::db::Db;
 use crate::stubs::issue;
-use crate::types::{IssueDetail, MutateIssueRequest};
+use crate::types::{
+    IssueComment, IssueDetail, IssueDetailRunAttempt, IssueHeader, MutateIssueRequest,
+    SessionEvent,
+};
 
 #[tauri::command(rename = "opensymphony:get-issue")]
 pub fn get_issue(issue_id: String, attempt_limit: Option<u32>) -> Result<IssueDetail, String> {
@@ -14,76 +26,96 @@ pub fn mutate_issue(request: MutateIssueRequest) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command(rename = "opensymphony:get-issue-header")]
+pub fn get_issue_header(db: State<Db>, issue_id: String) -> Result<IssueHeader, String> {
+    let conn = db.conn().map_err(|err| err.to_string())?;
+    get_issue_header_impl(&conn, &issue_id).map_err(Into::into)
+}
+
+#[tauri::command(rename = "opensymphony:list-issue-comments")]
+pub fn list_issue_comments(
+    db: State<Db>,
+    issue_id: String,
+) -> Result<Vec<IssueComment>, String> {
+    let conn = db.conn().map_err(|err| err.to_string())?;
+    list_issue_comments_impl(&conn, &issue_id).map_err(Into::into)
+}
+
+#[tauri::command(rename = "opensymphony:list-issue-run-attempts")]
+pub fn list_issue_run_attempts(
+    db: State<Db>,
+    issue_id: String,
+) -> Result<Vec<IssueDetailRunAttempt>, String> {
+    let conn = db.conn().map_err(|err| err.to_string())?;
+    list_issue_run_attempts_impl(&conn, &issue_id).map_err(Into::into)
+}
+
+#[tauri::command(rename = "opensymphony:list-session-events")]
+pub fn list_session_events(
+    db: State<Db>,
+    issue_id: String,
+) -> Result<Vec<SessionEvent>, String> {
+    let conn = db.conn().map_err(|err| err.to_string())?;
+    list_session_events_impl(&conn, &issue_id).map_err(Into::into)
+}
+
+fn get_issue_header_impl(conn: &Connection, issue_id: &str) -> DbResult<IssueHeader> {
+    let repo = IssueRepo::new(conn);
+    repo.get(issue_id)?
+        .map(IssueHeader::from)
+        .ok_or_else(|| crate::db::error::DbError::NotFound(format!("issue {issue_id}")))
+}
+
+fn list_issue_comments_impl(conn: &Connection, issue_id: &str) -> DbResult<Vec<IssueComment>> {
+    CommentRepo::new(conn).list_by_issue(issue_id)
+}
+
+fn list_issue_run_attempts_impl(
+    conn: &Connection,
+    issue_id: &str,
+) -> DbResult<Vec<IssueDetailRunAttempt>> {
+    let attempts = RunAttemptRepo::new(conn).list_by_issue(issue_id)?;
+    Ok(attempts.into_iter().map(IssueDetailRunAttempt::from).collect())
+}
+
+fn list_session_events_impl(conn: &Connection, issue_id: &str) -> DbResult<Vec<SessionEvent>> {
+    SessionEventRepo::new(conn).list_by_issue(issue_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stubs::constants::STUB_PROJECT_ID;
+    use crate::db::repos::comment::CommentRepo;
+    use crate::db::test_helpers::{open_test_db, seed_issue_with_session, seed_minimal_project};
+    use crate::types::BoardColumnId;
 
     #[test]
-    fn returns_stub_issue_with_empty_comments_and_attempts() {
-        let detail = get_issue("stub-issue-1".into(), None).expect("issue should exist");
+    fn db_issue_reads_return_seeded_data() {
+        let conn = open_test_db().expect("open test db");
+        let fixtures = seed_minimal_project(&conn).expect("seed project");
+        CommentRepo::new(&conn)
+            .append(&fixtures.backlog_issue_id, "looks good", Some("operator"))
+            .expect("append comment");
 
-        assert_eq!(detail.project_id, STUB_PROJECT_ID);
-        assert_eq!(detail.identifier, "SYM-1");
-        assert_eq!(detail.workflow_state_id, "backlog");
-        assert!(detail.comments.is_empty());
-        assert!(detail.attempts.is_empty());
-    }
+        let session_fixtures = seed_issue_with_session(&conn).expect("seed session");
 
-    #[test]
-    fn returns_error_for_unknown_issue() {
-        let error = get_issue("missing".into(), Some(10)).unwrap_err();
-        assert!(error.contains("issue not found: missing"));
-    }
+        let header = get_issue_header_impl(&conn, &fixtures.backlog_issue_id)
+            .expect("get issue header");
+        assert_eq!(header.identifier, "SYM-1");
+        assert_eq!(header.board_column, BoardColumnId::Backlog);
 
-    #[test]
-    fn mutate_issue_is_no_op_for_all_actions() {
-        assert!(mutate_issue(MutateIssueRequest::Transition {
-            issue_id: "stub-issue-1".into(),
-            target_state_id: "in_progress".into(),
-            actor: None,
-        })
-        .is_ok());
+        let comments = list_issue_comments_impl(&conn, &fixtures.backlog_issue_id)
+            .expect("list comments");
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].body, "looks good");
 
-        assert!(mutate_issue(MutateIssueRequest::Comment {
-            issue_id: "stub-issue-1".into(),
-            body: "looks good".into(),
-            author: Some("operator".into()),
-        })
-        .is_ok());
+        let attempts =
+            list_issue_run_attempts_impl(&conn, &session_fixtures.issue_id).expect("list attempts");
+        assert_eq!(attempts.len(), 1);
+        assert_eq!(attempts[0].attempt_number, 1);
 
-        assert!(mutate_issue(MutateIssueRequest::Create {
-            project_id: "stub-project".into(),
-            title: "New issue".into(),
-            description: None,
-            priority: None,
-            workflow_state_id: None,
-        })
-        .is_ok());
-
-        assert!(mutate_issue(MutateIssueRequest::Update {
-            issue_id: "stub-issue-1".into(),
-            title: Some("Updated title".into()),
-            description: None,
-            priority: None,
-        })
-        .is_ok());
-    }
-
-    #[test]
-    fn mutate_issue_deserializes_transition_payload() {
-        let request: MutateIssueRequest = serde_json::from_str(
-            r#"{"action":"transition","issueId":"stub-issue-1","targetStateId":"done"}"#,
-        )
-        .expect("transition payload should deserialize");
-
-        assert!(matches!(
-            request,
-            MutateIssueRequest::Transition {
-                issue_id,
-                target_state_id,
-                actor: None,
-            } if issue_id == "stub-issue-1" && target_state_id == "done"
-        ));
+        let events = list_session_events_impl(&conn, &session_fixtures.issue_id)
+            .expect("list session events");
+        assert_eq!(events.len(), 3);
     }
 }

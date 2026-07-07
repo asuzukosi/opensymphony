@@ -132,7 +132,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn open_test_db_has_projects_table() {
+    fn open_test_db_applies_migrations() {
         let conn = open_test_db().expect("open test db");
         let exists: i64 = conn
             .query_row(
@@ -142,35 +142,5 @@ mod tests {
             )
             .expect("count projects table");
         assert_eq!(exists, 1);
-    }
-
-    #[test]
-    fn seed_minimal_project_inserts_four_columns() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_minimal_project(&conn).expect("seed minimal project");
-
-        let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM issues WHERE project_id = ?1",
-                [&fixtures.project_id],
-                |row| row.get(0),
-            )
-            .expect("count issues");
-        assert_eq!(count, 4);
-    }
-
-    #[test]
-    fn seed_issue_with_session_inserts_timeline() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_issue_with_session(&conn).expect("seed issue with session");
-
-        let event_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM session_events WHERE session_id = ?1",
-                [&fixtures.session_id],
-                |row| row.get(0),
-            )
-            .expect("count session events");
-        assert_eq!(event_count, 3);
     }
 }

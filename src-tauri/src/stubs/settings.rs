@@ -3,8 +3,8 @@ use crate::stubs::constants::{
     STUB_PROJECT_SLUG, STUB_PROMPT_TEMPLATE,
 };
 use crate::types::{
-    Agent, AgentCommunication, PermissionMode, PermissionModeSource, PollIntervalSource,
-    RuntimeStatus, SettingsACPConfig, SettingsProjectMeta, SettingsView,
+    Agent, PermissionMode, PermissionModeSource, PollIntervalSource, RuntimeStatus,
+    SettingsProjectMeta, SettingsView,
 };
 
 pub fn sample_settings_view() -> SettingsView {
@@ -26,11 +26,9 @@ pub fn sample_settings_view() -> SettingsView {
         agents: vec![Agent {
             id: STUB_AGENT_ID.into(),
             name: STUB_AGENT_NAME.into(),
-            communication: AgentCommunication::Acp,
-            acp: Some(SettingsACPConfig {
-                command: "echo".into(),
-                args: vec!["symphony-stub-agent".into()],
-            }),
+            acp_command: Some("echo".into()),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
         }],
         started_at: None,
         next_tick_at: None,

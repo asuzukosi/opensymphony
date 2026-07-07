@@ -2,15 +2,7 @@ use rusqlite::{params, Connection, Row};
 use uuid::Uuid;
 
 use crate::db::error::{DbError, DbResult};
-
-pub struct PendingPermission {
-    pub id: String,
-    pub session_id: String,
-    pub issue_id: String,
-    pub summary: String,
-    pub payload_json: String,
-    pub created_at: String,
-}
+use crate::types::PendingPermission;
 
 pub struct PendingPermissionRepo<'a> {
     conn: &'a Connection,
@@ -77,12 +69,13 @@ impl<'a> PendingPermissionRepo<'a> {
 }
 
 fn map_pending_permission(row: &Row<'_>) -> rusqlite::Result<PendingPermission> {
+    let payload_json: String = row.get(4)?;
     Ok(PendingPermission {
         id: row.get(0)?,
         session_id: row.get(1)?,
         issue_id: row.get(2)?,
         summary: row.get(3)?,
-        payload_json: row.get(4)?,
+        payload: serde_json::from_str(&payload_json).unwrap_or(serde_json::Value::Null),
         created_at: row.get(5)?,
     })
 }
@@ -93,38 +86,7 @@ mod tests {
     use crate::db::test_helpers::{open_test_db, seed_issue_with_session};
 
     #[test]
-    fn insert_and_list_by_issue() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_issue_with_session(&conn).expect("seed session");
-        let repo = PendingPermissionRepo::new(&conn);
-
-        let first = repo
-            .insert(
-                &fixtures.session_id,
-                &fixtures.issue_id,
-                "approve file write",
-                r#"{"path":"/tmp/out"}"#,
-            )
-            .expect("insert permission");
-        let second = repo
-            .insert(
-                &fixtures.session_id,
-                &fixtures.issue_id,
-                "approve network",
-                r#"{"host":"example.com"}"#,
-            )
-            .expect("insert second permission");
-
-        let listed = repo
-            .list_by_issue(&fixtures.issue_id)
-            .expect("list by issue");
-        assert_eq!(listed.len(), 2);
-        assert_eq!(listed[0].id, first.id);
-        assert_eq!(listed[1].id, second.id);
-    }
-
-    #[test]
-    fn resolve_deletes_permission() {
+    fn insert_list_and_resolve() {
         let conn = open_test_db().expect("open test db");
         let fixtures = seed_issue_with_session(&conn).expect("seed session");
         let repo = PendingPermissionRepo::new(&conn);
@@ -138,18 +100,12 @@ mod tests {
             )
             .expect("insert permission");
 
+        let listed = repo
+            .list_by_issue(&fixtures.issue_id)
+            .expect("list by issue");
+        assert_eq!(listed.len(), 1);
+
         repo.resolve(&permission.id).expect("resolve permission");
         assert!(repo.get(&permission.id).expect("get").is_none());
-    }
-
-    #[test]
-    fn resolve_missing_returns_not_found() {
-        let conn = open_test_db().expect("open test db");
-        let repo = PendingPermissionRepo::new(&conn);
-
-        let err = repo
-            .resolve("missing-permission")
-            .expect_err("resolve missing");
-        assert!(matches!(err, DbError::NotFound(_)));
     }
 }

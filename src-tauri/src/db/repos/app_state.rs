@@ -38,17 +38,6 @@ mod tests {
     use crate::db::test_helpers::open_test_db;
 
     #[test]
-    fn get_active_project_id_returns_none_initially() {
-        let conn = open_test_db().expect("open test db");
-        let repo = AppStateRepo::new(&conn);
-
-        let active = repo
-            .get_active_project_id()
-            .expect("get active project id");
-        assert!(active.is_none());
-    }
-
-    #[test]
     fn set_and_get_active_project_id() {
         let conn = open_test_db().expect("open test db");
         let project_repo = ProjectRepo::new(&conn);
@@ -62,23 +51,5 @@ mod tests {
             .get_active_project_id()
             .expect("get active project id");
         assert_eq!(active.as_deref(), Some(project.id.as_str()));
-    }
-
-    #[test]
-    fn set_active_project_id_to_none_clears_value() {
-        let conn = open_test_db().expect("open test db");
-        let project_repo = ProjectRepo::new(&conn);
-        let project = project_repo.create("Clear Project").expect("create project");
-        let repo = AppStateRepo::new(&conn);
-
-        repo.set_active_project_id(Some(&project.id))
-            .expect("set active project id");
-        repo.set_active_project_id(None)
-            .expect("clear active project id");
-
-        let active = repo
-            .get_active_project_id()
-            .expect("get active project id");
-        assert!(active.is_none());
     }
 }

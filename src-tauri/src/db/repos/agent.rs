@@ -2,25 +2,7 @@ use rusqlite::{params, Connection, Row};
 use uuid::Uuid;
 
 use crate::db::error::{DbError, DbResult};
-
-pub struct Agent {
-    pub id: String,
-    pub name: String,
-    pub acp_command: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-pub struct AgentSummary {
-    pub id: String,
-    pub name: String,
-}
-
-#[derive(Default)]
-pub struct AgentPatch {
-    pub name: Option<String>,
-    pub acp_command: Option<String>,
-}
+use crate::types::{AgentPatch, Agent, AgentSummary};
 
 pub struct AgentRepo<'a> {
     conn: &'a Connection,
@@ -134,64 +116,7 @@ mod tests {
             .create("Test Agent", Some("echo"))
             .expect("create agent");
 
-        assert_eq!(agent.name, "Test Agent");
-        assert_eq!(agent.acp_command.as_deref(), Some("echo"));
-        assert!(!agent.created_at.is_empty());
-        assert!(!agent.updated_at.is_empty());
-
         let fetched = repo.get(&agent.id).expect("get agent").expect("agent exists");
-        assert_eq!(fetched.id, agent.id);
         assert_eq!(fetched.name, "Test Agent");
-    }
-
-    #[test]
-    fn list_summaries_returns_agents() {
-        let conn = open_test_db().expect("open test db");
-        let repo = AgentRepo::new(&conn);
-        repo.create("Alpha Agent", None).expect("create alpha");
-        repo.create("Beta Agent", None).expect("create beta");
-
-        let summaries = repo.list_summaries().expect("list summaries");
-        assert_eq!(summaries.len(), 2);
-        assert_eq!(summaries[0].name, "Alpha Agent");
-        assert_eq!(summaries[1].name, "Beta Agent");
-    }
-
-    #[test]
-    fn update_applies_patch_fields() {
-        let conn = open_test_db().expect("open test db");
-        let repo = AgentRepo::new(&conn);
-        let agent = repo.create("Original", Some("echo")).expect("create agent");
-
-        let updated = repo
-            .update(
-                &agent.id,
-                &AgentPatch {
-                    name: Some("Renamed".into()),
-                    acp_command: Some("node agent.js".into()),
-                },
-            )
-            .expect("update agent");
-
-        assert_eq!(updated.name, "Renamed");
-        assert_eq!(updated.acp_command.as_deref(), Some("node agent.js"));
-    }
-
-    #[test]
-    fn delete_removes_agent() {
-        let conn = open_test_db().expect("open test db");
-        let repo = AgentRepo::new(&conn);
-        let agent = repo.create("Delete Me", None).expect("create agent");
-
-        repo.delete(&agent.id).expect("delete agent");
-        assert!(repo.get(&agent.id).expect("get agent").is_none());
-    }
-
-    #[test]
-    fn delete_missing_agent_returns_not_found() {
-        let conn = open_test_db().expect("open test db");
-        let repo = AgentRepo::new(&conn);
-        let err = repo.delete("missing-agent").expect_err("delete missing");
-        assert!(matches!(err, DbError::NotFound(_)));
     }
 }

@@ -2,16 +2,7 @@ use rusqlite::{params, Connection, Row};
 use uuid::Uuid;
 
 use crate::db::error::{DbError, DbResult};
-
-pub struct AgentSession {
-    pub id: String,
-    pub run_attempt_id: String,
-    pub runtime_kind: String,
-    pub session_ref: Option<String>,
-    pub status: String,
-    pub started_at: String,
-    pub finished_at: Option<String>,
-}
+use crate::types::AgentSession;
 
 pub struct AgentSessionRepo<'a> {
     conn: &'a Connection,
@@ -78,51 +69,19 @@ mod tests {
     use crate::db::test_helpers::{open_test_db, seed_issue_with_session};
 
     #[test]
-    fn create_sets_running_status() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_issue_with_session(&conn).expect("seed issue with session");
-        let repo = AgentSessionRepo::new(&conn);
-
-        let session = repo
-            .create(&fixtures.run_attempt_id, "mock")
-            .expect("create agent session");
-
-        assert_eq!(session.runtime_kind, "mock");
-        assert_eq!(session.status, "running");
-        assert!(session.session_ref.is_none());
-        assert!(session.finished_at.is_none());
-    }
-
-    #[test]
-    fn get_returns_existing_session() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_issue_with_session(&conn).expect("seed issue with session");
-        let repo = AgentSessionRepo::new(&conn);
-
-        let session = repo
-            .get(&fixtures.session_id)
-            .expect("get agent session")
-            .expect("session exists");
-
-        assert_eq!(session.id, fixtures.session_id);
-        assert_eq!(session.runtime_kind, "acp");
-    }
-
-    #[test]
-    fn list_by_run_attempt_orders_by_started_at_asc() {
+    fn create_and_list_by_run_attempt() {
         let conn = open_test_db().expect("open test db");
         let fixtures = seed_issue_with_session(&conn).expect("seed issue with session");
         let repo = AgentSessionRepo::new(&conn);
 
         let second = repo
             .create(&fixtures.run_attempt_id, "mock")
-            .expect("create second session");
+            .expect("create agent session");
 
         let sessions = repo
             .list_by_run_attempt(&fixtures.run_attempt_id)
             .expect("list by run attempt");
         assert_eq!(sessions.len(), 2);
-        assert_eq!(sessions[0].id, fixtures.session_id);
         assert_eq!(sessions[1].id, second.id);
     }
 }

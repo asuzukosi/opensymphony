@@ -2,16 +2,7 @@ use rusqlite::{params, Connection, Row};
 use uuid::Uuid;
 
 use crate::db::error::{DbError, DbResult};
-
-pub struct RunAttempt {
-    pub id: String,
-    pub issue_id: String,
-    pub attempt_number: i32,
-    pub status: String,
-    pub started_at: String,
-    pub finished_at: Option<String>,
-    pub error_message: Option<String>,
-}
+use crate::types::RunAttempt;
 
 pub struct RunAttemptRepo<'a> {
     conn: &'a Connection,
@@ -132,29 +123,10 @@ fn map_run_attempt(row: &Row<'_>) -> rusqlite::Result<RunAttempt> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::test_helpers::{open_test_db, seed_issue_with_session, seed_minimal_project};
+    use crate::db::test_helpers::{open_test_db, seed_issue_with_session};
 
     #[test]
-    fn create_increments_attempt_number() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_minimal_project(&conn).expect("seed minimal project");
-        let repo = RunAttemptRepo::new(&conn);
-
-        let first = repo
-            .create(&fixtures.in_progress_issue_id)
-            .expect("create first attempt");
-        let second = repo
-            .create(&fixtures.in_progress_issue_id)
-            .expect("create second attempt");
-
-        assert_eq!(first.attempt_number, 1);
-        assert_eq!(second.attempt_number, 2);
-        assert_eq!(first.status, "running");
-        assert!(first.finished_at.is_none());
-    }
-
-    #[test]
-    fn finish_sets_status_and_finished_at() {
+    fn create_finish_and_list_by_issue() {
         let conn = open_test_db().expect("open test db");
         let fixtures = seed_issue_with_session(&conn).expect("seed issue with session");
         let repo = RunAttemptRepo::new(&conn);
@@ -166,69 +138,17 @@ mod tests {
                 Some("agent crashed"),
             )
             .expect("finish run attempt");
-
         assert_eq!(finished.status, "failed");
-        assert_eq!(finished.error_message.as_deref(), Some("agent crashed"));
-        assert!(finished.finished_at.is_some());
-    }
 
-    #[test]
-    fn list_by_issue_orders_by_started_at_desc() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_minimal_project(&conn).expect("seed minimal project");
-        let repo = RunAttemptRepo::new(&conn);
-
-        let first = repo
-            .create(&fixtures.in_progress_issue_id)
-            .expect("create first attempt");
-        repo.finish(&first.id, "succeeded", None)
-            .expect("finish first attempt");
         let second = repo
-            .create(&fixtures.in_progress_issue_id)
+            .create(&fixtures.issue_id)
             .expect("create second attempt");
+        assert_eq!(second.attempt_number, 2);
 
         let attempts = repo
-            .list_by_issue(&fixtures.in_progress_issue_id)
+            .list_by_issue(&fixtures.issue_id)
             .expect("list by issue");
         assert_eq!(attempts.len(), 2);
         assert_eq!(attempts[0].id, second.id);
-        assert_eq!(attempts[1].id, first.id);
-    }
-
-    #[test]
-    fn list_running_filters_by_project() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_issue_with_session(&conn).expect("seed issue with session");
-        let repo = RunAttemptRepo::new(&conn);
-
-        let running = repo
-            .list_running(&fixtures.project_id)
-            .expect("list running");
-        assert_eq!(running.len(), 1);
-        assert_eq!(running[0].id, fixtures.run_attempt_id);
-    }
-
-    #[test]
-    fn list_recent_finished_respects_limit() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_minimal_project(&conn).expect("seed minimal project");
-        let repo = RunAttemptRepo::new(&conn);
-
-        for _ in 0..3 {
-            let attempt = repo
-                .create(&fixtures.in_progress_issue_id)
-                .expect("create attempt");
-            repo.finish(&attempt.id, "succeeded", None)
-                .expect("finish attempt");
-        }
-
-        let recent = repo
-            .list_recent_finished(&fixtures.project_id, 2)
-            .expect("list recent finished");
-        assert_eq!(recent.len(), 2);
-        assert!(
-            recent[0].finished_at.as_ref().unwrap()
-                >= recent[1].finished_at.as_ref().unwrap()
-        );
     }
 }

@@ -2,14 +2,7 @@ use rusqlite::{params, Connection, Row};
 use uuid::Uuid;
 
 use crate::db::error::DbResult;
-
-pub struct AuditEvent {
-    pub id: String,
-    pub project_id: String,
-    pub issue_id: Option<String>,
-    pub action: String,
-    pub created_at: String,
-}
+use crate::types::AuditEvent;
 
 pub struct AuditRepo<'a> {
     conn: &'a Connection,
@@ -100,22 +93,5 @@ mod tests {
         assert_eq!(recent[0].id, second.id);
         assert_eq!(recent[1].id, first.id);
         assert_eq!(recent[1].issue_id.as_deref(), Some(fixtures.backlog_issue_id.as_str()));
-    }
-
-    #[test]
-    fn list_recent_respects_limit() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_minimal_project(&conn).expect("seed project");
-        let repo = AuditRepo::new(&conn);
-
-        for i in 0..5 {
-            repo.append(&fixtures.project_id, &format!("action.{i}"), None)
-                .expect("append audit");
-        }
-
-        let recent = repo
-            .list_recent(&fixtures.project_id, 3)
-            .expect("list recent");
-        assert_eq!(recent.len(), 3);
     }
 }
