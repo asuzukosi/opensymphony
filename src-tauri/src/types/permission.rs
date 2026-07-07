@@ -24,10 +24,3 @@ pub enum PermissionDecision {
     Approve,
     Deny,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResolvePermissionRequest {
-    pub id: String,
-    pub decision: PermissionDecision,
-}

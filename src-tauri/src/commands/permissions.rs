@@ -1,34 +1,33 @@
-use crate::stubs::permissions as permissions_stubs;
-use crate::types::{PendingPermission, ResolvePermissionRequest};
+use tauri::State;
 
-#[tauri::command(rename = "opensymphony:get-pending-permissions")]
-pub fn get_pending_permissions() -> Vec<PendingPermission> {
-    permissions_stubs::sample_pending_permissions()
+use crate::db::repos::pending_permission::PendingPermissionRepo;
+use crate::db::Db;
+use crate::types::{PendingPermission, PermissionDecision};
+
+// reads
+
+#[tauri::command(rename = "opensymphony:list-issue-pending-permissions")]
+pub fn list_issue_pending_permissions(
+    db: State<Db>,
+    issue_id: String,
+) -> Result<Vec<PendingPermission>, String> {
+    let conn = db.conn().map_err(|err| err.to_string())?;
+    PendingPermissionRepo::new(&conn)
+        .list_by_issue(&issue_id)
+        .map_err(|err| err.to_string())
 }
 
-#[tauri::command(rename = "opensymphony:resolve-permission")]
-pub fn resolve_permission(request: ResolvePermissionRequest) -> Result<(), String> {
-    let _ = request;
-    Ok(())
-}
+// writes
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::PermissionDecision;
-
-    #[test]
-    fn returns_empty_pending_permissions() {
-        assert!(get_pending_permissions().is_empty());
-    }
-
-    #[test]
-    fn resolve_permission_is_no_op() {
-        let result = resolve_permission(ResolvePermissionRequest {
-            id: "perm-1".into(),
-            decision: PermissionDecision::Approve,
-        });
-
-        assert!(result.is_ok());
-    }
+#[tauri::command(rename = "opensymphony:resolve-session-permission")]
+pub fn resolve_session_permission(
+    db: State<Db>,
+    permission_id: String,
+    decision: PermissionDecision,
+) -> Result<(), String> {
+    let _ = decision;
+    let conn = db.conn().map_err(|err| err.to_string())?;
+    PendingPermissionRepo::new(&conn)
+        .resolve(&permission_id)
+        .map_err(|err| err.to_string())
 }

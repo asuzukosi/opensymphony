@@ -1,14 +1,150 @@
 /**
  * ipc payload types for tauri commands and the next.js frontend.
- * mirrors src-tauri/src/types.rs — keep in sync with rust serde json shapes.
+ * mirrors src-tauri/src/types/ — keep in sync with rust serde json shapes.
  * intentionally slimmer than reference/electron-stack ipc.ts where noted in the migration plan.
  */
 
-// --- runtime ---
+// --- shared ---
+
+export type PermissionMode = "autoApprove" | "requiresApproval";
+
+export type PermissionDecision = "approve" | "deny";
+
+// --- board reads ---
+
+export type BoardColumnId = "backlog" | "inProgress" | "review" | "done";
+
+export const BOARD_COLUMN_IDS: readonly BoardColumnId[] = [
+  "backlog",
+  "inProgress",
+  "review",
+  "done",
+] as const;
+
+export interface ProjectBoardIssue {
+  issueId: string;
+  identifier: string;
+  title: string;
+  priority: number | null;
+}
+
+export interface BoardColumn {
+  issues: ProjectBoardIssue[];
+}
+
+/** frontend composite assembled from getBoardColumn calls. */
+export interface ProjectBoard {
+  backlog: BoardColumn;
+  inProgress: BoardColumn;
+  review: BoardColumn;
+  done: BoardColumn;
+}
+
+// --- issue reads ---
+
+export interface IssueHeader {
+  issueId: string;
+  projectId: string;
+  identifier: string;
+  title: string;
+  description: string | null;
+  priority: number | null;
+  boardColumn: BoardColumnId;
+}
+
+export interface IssueComment {
+  id: string;
+  issueId: string;
+  body: string;
+  author: string | null;
+  createdAt: string;
+}
+
+export type SessionEventKind =
+  | "Prompt"
+  | "StreamChunk"
+  | "SessionUpdate"
+  | "ToolCall"
+  | "ToolResult"
+  | "PermissionRequest"
+  | "Error"
+  | "Terminal";
+
+export interface SessionEvent {
+  id: string;
+  sessionId?: string;
+  kind: SessionEventKind;
+  payload: unknown;
+  createdAt: string;
+}
+
+export interface IssueDetailSession {
+  sessionId: string;
+  sessionRef: string | null;
+  status: string;
+  startedAt: string;
+  finishedAt: string | null;
+  events: SessionEvent[];
+}
+
+export interface IssueDetailRunAttempt {
+  runAttemptId: string;
+  attemptNumber: number;
+  status: string;
+  startedAt: string;
+  finishedAt: string | null;
+  errorMessage: string | null;
+  sessions: IssueDetailSession[];
+}
+
+// --- issue writes ---
+
+export interface CreateIssueRequest {
+  projectId: string;
+  title: string;
+  description?: string | null;
+}
+
+export interface TransitionIssueColumnRequest {
+  issueId: string;
+  column: BoardColumnId;
+  actor?: string | null;
+}
+
+export interface AddIssueCommentRequest {
+  issueId: string;
+  body: string;
+  author?: string | null;
+}
+
+export type CreateIssueResponse = IssueHeader;
+export type UpdateIssueTitleResponse = IssueHeader;
+export type UpdateIssueDescriptionResponse = IssueHeader;
+export type UpdateIssuePriorityResponse = IssueHeader;
+export type TransitionIssueColumnResponse = IssueHeader;
+export type AddIssueCommentResponse = IssueComment;
+
+// --- permissions reads ---
+
+export interface PendingPermission {
+  id: string;
+  sessionId: string;
+  issueId: string;
+  summary: string;
+  payload: unknown;
+  createdAt: string;
+}
+
+// --- permissions writes ---
+
+export interface ResolveSessionPermissionRequest {
+  permissionId: string;
+  decision: PermissionDecision;
+}
+
+// --- runtime reads ---
 
 export type RuntimeStatus = "idle" | "running" | "stopped";
-
-export type PollIntervalSource = "workflow" | "override";
 
 export type RuntimeSessionPhase =
   | "spawning"
@@ -68,10 +204,10 @@ export interface RuntimeCandidateEntry {
   stateCategory: string;
 }
 
-export interface RuntimeStateSnapshot {
+export interface RuntimeSummary {
   status: RuntimeStatus;
-  startedAt: string | null;
   pollIntervalMs: number;
+  startedAt: string | null;
   nextTickAt: string | null;
   tickCount: number;
   lastTickAt: string | null;
@@ -79,204 +215,112 @@ export interface RuntimeStateSnapshot {
   lastAction: string | null;
   lastError: string | null;
   validationError: string | null;
-  running: RuntimeRunningEntry[];
-  retrying: RuntimeRetryEntry[];
-  recentFinished: RuntimeRecentFinishedEntry[];
-  candidates: RuntimeCandidateEntry[];
-  recentEvents: RuntimeAuditEvent[];
 }
 
-// --- board ---
+// --- runtime writes ---
 
-export type WorkflowStateCategory = "active" | "terminal" | "backlog" | "other";
-
-export type BoardColumnId = "backlog" | "inProgress" | "review" | "done";
-
-export const BOARD_COLUMN_IDS: readonly BoardColumnId[] = [
-  "backlog",
-  "inProgress",
-  "review",
-  "done",
-] as const;
-
-export interface ProjectBoardIssue {
-  issueId: string;
-  identifier: string;
-  title: string;
-  priority: number | null;
-}
-
-export interface BoardColumn {
-  issues: ProjectBoardIssue[];
-}
-
-export interface ProjectBoard {
-  backlog: BoardColumn;
-  inProgress: BoardColumn;
-  review: BoardColumn;
-  done: BoardColumn;
-}
-
-// --- issue detail ---
-
-export interface IssueDetailComment {
-  id: string;
-  body: string;
-  author: string | null;
-  createdAt: string;
-}
-
-export type SessionEventKind =
-  | "prompt"
-  | "stream_chunk"
-  | "tool_call"
-  | "permission_request"
-  | "permission_resolve"
-  | "session_update"
-  | "error";
-
-export interface SessionEvent {
-  id: string;
-  kind: SessionEventKind;
-  payload: unknown;
-  createdAt: string;
-}
-
-export interface IssueDetailSession {
-  sessionId: string;
-  sessionRef: string | null;
-  status: string;
-  startedAt: string;
-  finishedAt: string | null;
-  events: SessionEvent[];
-}
-
-export interface IssueDetailRunAttempt {
-  runAttemptId: string;
-  attemptNumber: number;
-  status: string;
-  startedAt: string;
-  finishedAt: string | null;
-  errorMessage: string | null;
-  sessions: IssueDetailSession[];
-}
-
-export interface IssueDetail {
-  issueId: string;
+export interface RunControlRequest {
   projectId: string;
-  identifier: string;
-  title: string;
-  description: string | null;
-  priority: number | null;
-  workflowStateId: string;
-  workflowStateName: string;
-  comments: IssueDetailComment[];
-  attempts: IssueDetailRunAttempt[];
+  runAttemptId: string;
 }
 
-export type MutateIssueRequest =
-  | {
-      action: "transition";
-      issueId: string;
-      targetStateId: string;
-      actor?: string;
-    }
-  | {
-      action: "comment";
-      issueId: string;
-      body: string;
-      author?: string;
-    }
-  | {
-      action: "create";
-      projectId: string;
-      title: string;
-      description?: string;
-      priority?: number;
-      workflowStateId?: string;
-    }
-  | {
-      action: "update";
-      issueId: string;
-      title?: string;
-      description?: string;
-      priority?: number;
-    };
+export type StartRuntimeResponse = RuntimeSummary;
+export type StopRuntimeResponse = RuntimeSummary;
+export type TickRuntimeResponse = RuntimeSummary;
+export type SetRuntimePollIntervalResponse = number;
+export type ClearRuntimePollIntervalOverrideResponse = number;
 
-// --- runtime control ---
+// --- project reads ---
 
-export type PermissionMode = "autoApprove" | "requiresApproval";
-
-export type PermissionModeSource = "workflow" | "override";
-
-export type ControlRuntimeRequest =
-  | { action: "start" }
-  | { action: "stop" }
-  | { action: "tick" }
-  | { action: "setPollInterval"; pollIntervalMs: number }
-  | { action: "clearPollIntervalOverride" }
-  | { action: "setPermissionMode"; permissionMode: PermissionMode }
-  | { action: "clearPermissionModeOverride" }
-  | { action: "pauseRun"; runAttemptId: string }
-  | { action: "resumeRun"; runAttemptId: string }
-  | { action: "cancelRun"; runAttemptId: string };
-
-// --- settings ---
-
-export interface SettingsProjectMeta {
+export interface ProjectSummary {
   id: string;
   name: string;
   slug: string;
-  agents: string[];
+  orchestratorStatus: string;
 }
 
-export type AgentCommunication = "acp" | "terminal";
+export interface RetryPolicy {
+  maxAttempts: number;
+  backoffMs: number;
+}
 
-export interface SettingsACPConfig {
-  command: string;
-  args: string[];
+export interface Project {
+  id: string;
+  name: string;
+  slug: string;
+  workspaceRoot: string | null;
+  workflowSource: string | null;
+  workflowFilePath: string | null;
+  workflowFileMtime: string | null;
+  workflowVersion: string | null;
+  workflowLastLoadedAt: string | null;
+  maxConcurrency: number;
+  retryMaxAttempts: number;
+  retryBackoffMs: number;
+  promptTemplate: string;
+  pollIntervalMs: number;
+  permissionMode: PermissionMode;
+  orchestratorStatus: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- project writes ---
+
+export interface SetProjectWorkflowFileRequest {
+  projectId: string;
+  sourcePath: string;
+}
+
+export interface SetProjectRetryPolicyRequest {
+  maxAttempts: number;
+  backoffMs: number;
+}
+
+export type CreateProjectResponse = ProjectSummary;
+export type SetProjectNameResponse = string;
+export type SetProjectWorkflowFileResponse = string | null;
+export type SetProjectPromptTemplateResponse = string;
+export type SetProjectPollIntervalResponse = number;
+export type SetProjectMaxConcurrencyResponse = number;
+export type SetProjectRetryPolicyResponse = RetryPolicy;
+export type SetProjectPermissionModeResponse = PermissionMode;
+
+// --- agent reads ---
+
+export interface AgentSummary {
+  id: string;
+  name: string;
 }
 
 export interface Agent {
   id: string;
   name: string;
-  communication: AgentCommunication;
-  acp: SettingsACPConfig | null;
-}
-
-export interface SettingsView {
-  status: RuntimeStatus;
-  workflowPath: string | null;
-  workflowVersion: string | null;
-  promptTemplate: string;
-  pollIntervalMs: number;
-  pollIntervalSource: PollIntervalSource;
-  permissionMode: PermissionMode;
-  permissionModeSource: PermissionModeSource;
-  projects: SettingsProjectMeta[];
-  agents: Agent[];
-  startedAt: string | null;
-  nextTickAt: string | null;
-  tickCount: number;
-  lastTickAt: string | null;
-  lastAction: string | null;
-  lastError: string | null;
-}
-
-// --- permissions ---
-
-export interface PendingPermission {
-  id: string;
-  sessionId: string;
-  issueId: string;
-  summary: string;
-  payload: unknown;
+  acpCommand: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
-export type PermissionDecision = "approve" | "deny";
+// --- agent writes ---
 
-export interface ResolvePermissionRequest {
-  id: string;
-  decision: PermissionDecision;
+export interface CreateAgentRequest {
+  name: string;
+  acpCommand?: string | null;
 }
+
+export interface AssignAgentToProjectRequest {
+  projectId: string;
+  agentId: string;
+}
+
+export type CreateAgentResponse = Agent;
+export type SetAgentNameResponse = string;
+export type SetAgentAcpCommandResponse = string | null;
+
+// --- app state reads ---
+
+export type GetActiveProjectIdResponse = string | null;
+
+// --- app state writes ---
+
+export type SetActiveProjectIdResponse = string | null;

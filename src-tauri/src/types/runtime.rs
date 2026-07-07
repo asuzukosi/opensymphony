@@ -9,15 +9,6 @@ pub enum RuntimeStatus {
     Stopped,
 }
 
-/// where poll interval or permission mode override came from (used by get_settings in t04f).
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PollIntervalSource {
-    Workflow,
-    Override,
-}
-
 /// high-level phase of an in-flight acp session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -106,13 +97,13 @@ pub struct RuntimeCandidateEntry {
     pub state_category: String,
 }
 
-/// orchestrator ops snapshot from get_runtime_state and control_runtime.
+/// db-derived runtime summary for a project.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RuntimeStateSnapshot {
+pub struct RuntimeSummary {
     pub status: RuntimeStatus,
-    pub started_at: Option<String>,
     pub poll_interval_ms: u32,
+    pub started_at: Option<String>,
     pub next_tick_at: Option<String>,
     pub tick_count: u32,
     pub last_tick_at: Option<String>,
@@ -120,9 +111,4 @@ pub struct RuntimeStateSnapshot {
     pub last_action: Option<String>,
     pub last_error: Option<String>,
     pub validation_error: Option<String>,
-    pub running: Vec<RuntimeRunningEntry>,
-    pub retrying: Vec<RuntimeRetryEntry>,
-    pub recent_finished: Vec<RuntimeRecentFinishedEntry>,
-    pub candidates: Vec<RuntimeCandidateEntry>,
-    pub recent_events: Vec<RuntimeAuditEvent>,
 }

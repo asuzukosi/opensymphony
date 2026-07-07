@@ -3,17 +3,6 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-/// workflow column grouping used by orchestrator selection and issue workflow.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum WorkflowStateCategory {
-    Active,
-    Terminal,
-    Backlog,
-    Other,
-}
-
-/// fixed kanban column ids — board layout is app-defined, not derived from workflow states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BoardColumnId {
@@ -77,38 +66,6 @@ impl Default for BoardColumn {
     fn default() -> Self {
         Self {
             issues: Vec::new(),
-        }
-    }
-}
-
-/// full board returned by get_project_board — always exposes the same four columns.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProjectBoard {
-    pub backlog: BoardColumn,
-    pub in_progress: BoardColumn,
-    pub review: BoardColumn,
-    pub done: BoardColumn,
-}
-
-impl Default for ProjectBoard {
-    fn default() -> Self {
-        Self {
-            backlog: BoardColumn::default(),
-            in_progress: BoardColumn::default(),
-            review: BoardColumn::default(),
-            done: BoardColumn::default(),
-        }
-    }
-}
-
-impl ProjectBoard {
-    pub fn column(&self, id: BoardColumnId) -> &BoardColumn {
-        match id {
-            BoardColumnId::Backlog => &self.backlog,
-            BoardColumnId::InProgress => &self.in_progress,
-            BoardColumnId::Review => &self.review,
-            BoardColumnId::Done => &self.done,
         }
     }
 }

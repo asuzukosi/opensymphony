@@ -11,6 +11,3 @@ pub struct IssueComment {
     pub author_id: Option<String>,
     pub created_at: String,
 }
-
-/// backwards-compatible alias for wave 0 issue detail types.
-pub type IssueDetailComment = IssueComment;

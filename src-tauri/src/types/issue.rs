@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 use super::board::BoardColumnId;
-use super::comment::IssueComment;
 use super::session::{AgentSession, RunAttempt, SessionEvent};
 
 /// full issue row from the database.
@@ -103,53 +102,4 @@ impl From<RunAttempt> for IssueDetailRunAttempt {
             sessions: Vec::new(),
         }
     }
-}
-
-/// full issue payload returned by get_issue.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct IssueDetail {
-    pub issue_id: String,
-    pub project_id: String,
-    pub identifier: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub priority: Option<i32>,
-    pub workflow_state_id: String,
-    pub workflow_state_name: String,
-    pub comments: Vec<IssueComment>,
-    pub attempts: Vec<IssueDetailRunAttempt>,
-}
-
-/// issue mutation payload for mutate_issue.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "action", rename_all = "lowercase")]
-pub enum MutateIssueRequest {
-    #[serde(rename_all = "camelCase")]
-    Transition {
-        issue_id: String,
-        target_state_id: String,
-        actor: Option<String>,
-    },
-    #[serde(rename_all = "camelCase")]
-    Comment {
-        issue_id: String,
-        body: String,
-        author: Option<String>,
-    },
-    #[serde(rename_all = "camelCase")]
-    Create {
-        project_id: String,
-        title: String,
-        description: Option<String>,
-        priority: Option<i32>,
-        workflow_state_id: Option<String>,
-    },
-    #[serde(rename_all = "camelCase")]
-    Update {
-        issue_id: String,
-        title: Option<String>,
-        description: Option<String>,
-        priority: Option<i32>,
-    },
 }

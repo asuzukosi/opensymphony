@@ -1,0 +1,15 @@
+---
+poll_interval_ms: 3000
+max_concurrency: 1
+retry_max_attempts: 3
+retry_backoff_ms: 30000
+permission_mode: requiresApproval
+acp:
+  command: echo
+  args: []
+  permission_mode: auto_approve
+---
+
+Run issue {{identifier}}: {{title}}
+
+{{description}}

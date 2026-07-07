@@ -3,7 +3,28 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { getIpcClient, IpcUnavailableError, isIpcAvailable } from "@/lib/ipc/client";
-import type { ProjectBoard } from "@/lib/ipc/types";
+import { BOARD_COLUMN_IDS, type ProjectBoard } from "@/lib/ipc/types";
+
+const EMPTY_BOARD: ProjectBoard = {
+  backlog: { issues: [] },
+  inProgress: { issues: [] },
+  review: { issues: [] },
+  done: { issues: [] },
+};
+
+async function fetchBoard(projectId: string): Promise<ProjectBoard> {
+  const client = getIpcClient();
+  const columns = await Promise.all(
+    BOARD_COLUMN_IDS.map((column) => client.getBoardColumn(projectId, column)),
+  );
+
+  return {
+    backlog: columns[0],
+    inProgress: columns[1],
+    review: columns[2],
+    done: columns[3],
+  };
+}
 
 export type UseBoardResult = {
   board: ProjectBoard | undefined;
@@ -18,7 +39,7 @@ export function useBoard(): UseBoardResult {
   const [board, setBoard] = useState<ProjectBoard | undefined>(undefined);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const ipcAvailable = mounted && isIpcAvailable(); // only set to true after mounted
+  const ipcAvailable = mounted && isIpcAvailable();
 
   const refetch = useCallback(async (): Promise<void> => {
     if (!isIpcAvailable()) {
@@ -31,7 +52,15 @@ export function useBoard(): UseBoardResult {
     setError(null);
 
     try {
-      const nextBoard = await getIpcClient().getProjectBoard();
+      const client = getIpcClient();
+      const projectId = await client.getActiveProjectId();
+
+      if (!projectId) {
+        setBoard(EMPTY_BOARD);
+        return;
+      }
+
+      const nextBoard = await fetchBoard(projectId);
       setBoard(nextBoard);
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError : new Error("failed to load board"));

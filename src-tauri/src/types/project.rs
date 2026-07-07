@@ -7,13 +7,6 @@ pub enum PermissionMode {
     RequiresApproval,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PermissionModeSource {
-    Workflow,
-    Override,
-}
-
 /// full project row from the database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
