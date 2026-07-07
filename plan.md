@@ -25,7 +25,8 @@ Wave 0 complete. Four parallel lanes (Database+IPC, UI, Orchestrator, ACP). Refe
 | Project isolation | Independent poll loop, workspace tree, flat workflow columns per project |
 | Pause | **In-process gate only** — no SIGSTOP |
 | ACP | **`agent-client-protocol`** + **`agent-client-protocol-tokio`** + **`agent-client-protocol-test`** |
-| Mock location | **`src-tauri/src/acp/mock_server.rs`** |
+| Mock location | **`src-tauri/mock-acp-agent/`** — standalone workspace crate (no Tauri dep); **not** inside `acp/` |
+| Pause gate | **`PauseGate` trait** in `runtime/`; **impl** in orchestrator (Lane 3); adapter consumes injected gate |
 | IPC hooks | Private `useIpcQuery` / `useIpcMutation` in `src/lib/ipc/hooks.ts` — domain hooks only |
 | UI library | shadcn/ui + blocks.so (or equivalent) — port concepts, not pixel-perfect reference |
 | Reference stack | `reference/electron-stack/` temporary — **each lane deletes its ported subtree on exit** (no separate cleanup track) |
@@ -506,21 +507,25 @@ flowchart TB
 
 ### t40 — Mock server (parallel with t41)
 
-| ID | Todo | Output |
-| -- | ---- | ------ |
-| **t40.1** | Add ACP crate deps | deps compile |
-| **t40.2** | `acp/mock_server.rs` — SDK test utilities / `Agent` trait | mock process |
-| **t40.3** | Scenarios — stream, `request_permission`, tool stub | tests |
-| **t40.4** | Cargo entry for mock server | `cargo run` works |
+**Progress:** deps + workspace shell done (Lane 4 tasks 1, 5). Next: Agent trait in `mock-acp-agent/src/lib.rs` (task 6).
+
+| ID | Todo | Output | Status |
+| -- | ---- | ------ | ------ |
+| **t40.1** | Add ACP crate deps (`agent-client-protocol` 0.11.1 pair) | deps compile | ✓ |
+| **t40.4** | Workspace binary `opensymphony-mock-acp-agent` in `mock-acp-agent/` | `cargo run -p opensymphony-mock-acp-agent` | ✓ (stub) |
+| **t40.2** | `mock-acp-agent/src/lib.rs` — SDK `Agent` trait over stdio | mock process | **next** |
+| **t40.3** | Happy path + env scenarios — stream, delay, fail, artifact | mock behavior | pending |
+| **t40.5** | Permission mock — `session/request_permission` with Run tests title | permission flow | pending (task 6 scope) |
 
 ### t41 — Client (parallel with t40)
 
-| ID | Todo | Output |
-| -- | ---- | ------ |
-| **t41.1** | `acp/client.rs` — `AcpAgent` spawn, session map | adapter |
-| **t41.2** | `start_session`, `send_prompt`, `cancel_session` | lifecycle |
-| **t41.3** | Stream → typed session events callback | bridge |
-| **t41.4** | Permission callback → router | hookup |
+| ID | Todo | Output | Status |
+| -- | ---- | ------ | ------ |
+| **t41.0** | `runtime/pause_gate.rs` — `PauseGate` trait + `NoOpPauseGate` stub | trait + test stub | trait ✓; stub pending (task 8) |
+| **t41.1** | `acp/types.rs`, `acp/state.rs` — session types + `AcpAdapter` trait | adapter contract | ✓ |
+| **t41.2** | Pure modules — prompt_renderer, agent_message, session_event, protocol | helpers | pending |
+| **t41.3** | `acp/client.rs` — spawn, session map, run loop | adapter | pending |
+| **t41.4** | Permission callback → router | hookup | pending |
 
 ### t42 — Permission router + integration
 
@@ -552,14 +557,21 @@ flowchart TB
 ## Folder layout
 
 ```text
-src-tauri/src/
-  commands/             # see Command module layout
-  db/repos/
-  orchestrator/         # Lane 3
-  acp/
-    client.rs           # t41
-    mock_server.rs      # t40
-    permission_router.rs # t42
+src-tauri/
+  Cargo.toml            # workspace: app + mock-acp-agent
+  mock-acp-agent/       # Lane 4 t40 — standalone stdio mock (no tauri)
+    src/main.rs
+    src/lib.rs
+  src/
+    commands/           # see Command module layout
+    db/repos/
+    runtime/            # PauseGate trait (Lane 4)
+    orchestrator/       # Lane 3 — SessionPauseGate impl
+    acp/                # Lane 4 — client only (private mod in lib.rs)
+      state.rs
+      types.rs
+      client.rs         # t41
+      permission_router.rs # t42
 
 src/lib/ipc/
   hooks.ts              # t21.1
