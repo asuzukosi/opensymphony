@@ -1,4 +1,5 @@
 mod commands;
+mod orchestrator;
 mod stubs;
 mod types;
 
