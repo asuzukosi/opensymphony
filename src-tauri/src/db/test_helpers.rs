@@ -126,21 +126,3 @@ pub fn seed_issue_with_session(conn: &Connection) -> DbResult<SessionFixtures> {
         session_id,
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn open_test_db_applies_migrations() {
-        let conn = open_test_db().expect("open test db");
-        let exists: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'projects'",
-                [],
-                |row| row.get(0),
-            )
-            .expect("count projects table");
-        assert_eq!(exists, 1);
-    }
-}

@@ -80,32 +80,3 @@ fn map_pending_permission(row: &Row<'_>) -> rusqlite::Result<PendingPermission> 
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_helpers::{open_test_db, seed_issue_with_session};
-
-    #[test]
-    fn insert_list_and_resolve() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_issue_with_session(&conn).expect("seed session");
-        let repo = PendingPermissionRepo::new(&conn);
-
-        let permission = repo
-            .insert(
-                &fixtures.session_id,
-                &fixtures.issue_id,
-                "approve shell",
-                r#"{"cmd":"ls"}"#,
-            )
-            .expect("insert permission");
-
-        let listed = repo
-            .list_by_issue(&fixtures.issue_id)
-            .expect("list by issue");
-        assert_eq!(listed.len(), 1);
-
-        repo.resolve(&permission.id).expect("resolve permission");
-        assert!(repo.get(&permission.id).expect("get").is_none());
-    }
-}

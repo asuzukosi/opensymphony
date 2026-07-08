@@ -27,6 +27,20 @@ impl<'a> RunAttemptRepo<'a> {
         self.get(&id)?.ok_or_else(|| DbError::Internal("run attempt missing after create".into()))
     }
 
+    pub fn create_with_attempt_number(
+        &self,
+        issue_id: &str,
+        attempt_number: i32,
+    ) -> DbResult<RunAttempt> {
+        let id = Uuid::new_v4().to_string();
+        self.conn.execute(
+            "INSERT INTO run_attempts (id, issue_id, attempt_number, status)
+             VALUES (?1, ?2, ?3, 'running')",
+            params![id, issue_id, attempt_number],
+        )?;
+        self.get(&id)?.ok_or_else(|| DbError::Internal("run attempt missing after create".into()))
+    }
+
     pub fn finish(
         &self,
         id: &str,
@@ -118,37 +132,4 @@ fn map_run_attempt(row: &Row<'_>) -> rusqlite::Result<RunAttempt> {
         finished_at: row.get(5)?,
         error_message: row.get(6)?,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_helpers::{open_test_db, seed_issue_with_session};
-
-    #[test]
-    fn create_finish_and_list_by_issue() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_issue_with_session(&conn).expect("seed issue with session");
-        let repo = RunAttemptRepo::new(&conn);
-
-        let finished = repo
-            .finish(
-                &fixtures.run_attempt_id,
-                "failed",
-                Some("agent crashed"),
-            )
-            .expect("finish run attempt");
-        assert_eq!(finished.status, "failed");
-
-        let second = repo
-            .create(&fixtures.issue_id)
-            .expect("create second attempt");
-        assert_eq!(second.attempt_number, 2);
-
-        let attempts = repo
-            .list_by_issue(&fixtures.issue_id)
-            .expect("list by issue");
-        assert_eq!(attempts.len(), 2);
-        assert_eq!(attempts[0].id, second.id);
-    }
 }

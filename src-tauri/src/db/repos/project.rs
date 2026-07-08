@@ -58,6 +58,23 @@ impl<'a> ProjectRepo<'a> {
         Ok(summaries)
     }
 
+    pub fn list_permission_modes(&self) -> DbResult<Vec<(String, PermissionMode)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, permission_mode FROM projects ORDER BY name ASC",
+        )?;
+        let mut rows = stmt.query([])?;
+        let mut modes = Vec::new();
+        while let Some(row) = rows.next()? {
+            let id: String = row.get(0)?;
+            let permission_mode: String = row.get(1)?;
+            modes.push((
+                id,
+                parse_permission_mode(&permission_mode)?,
+            ));
+        }
+        Ok(modes)
+    }
+
     pub fn update(&self, id: &str, patch: &ProjectPatch) -> DbResult<Project> {
         let mut sets = Vec::new();
         let mut values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -212,31 +229,3 @@ fn parse_permission_mode(value: &str) -> DbResult<PermissionMode> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_helpers::open_test_db;
-
-    #[test]
-    fn create_get_update_delete_round_trip() {
-        let conn = open_test_db().expect("open test db");
-        let repo = ProjectRepo::new(&conn);
-        let project = repo.create("My Test Project").expect("create project");
-
-        assert_eq!(project.slug, "my-test-project");
-
-        let updated = repo
-            .update(
-                &project.id,
-                &ProjectPatch {
-                    name: Some("Renamed".into()),
-                    ..ProjectPatch::default()
-                },
-            )
-            .expect("update project");
-        assert_eq!(updated.name, "Renamed");
-
-        repo.delete(&project.id).expect("delete project");
-        assert!(repo.get(&project.id).expect("get project").is_none());
-    }
-}

@@ -4,10 +4,12 @@ use std::path::PathBuf;
 
 use tauri::{AppHandle, Manager, State};
 
+use crate::acp::AcpState;
 use crate::db::error::DbError;
 use crate::db::repos::project::ProjectRepo;
 use crate::db::Db;
 use crate::types::{PermissionMode, Project, ProjectPatch, ProjectSummary, RetryPolicy};
+use crate::db::workflow::{apply_workflow_file, project_workflow_path};
 
 const REFERENCE_WORKFLOW: &str = include_str!("../../resources/reference-workflow.yaml");
 
@@ -90,12 +92,24 @@ pub fn get_project_orchestrator_status(db: State<Arc<Db>>, project_id: String) -
 // writes
 
 #[tauri::command(rename = "opensymphony:create-project")]
-pub fn create_project(app: AppHandle, db: State<Arc<Db>>, name: String) -> Result<ProjectSummary, String> {
+pub fn create_project(
+    app: AppHandle,
+    db: State<Arc<Db>>,
+    acp: State<AcpState>,
+    name: String,
+) -> Result<ProjectSummary, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     let project = ProjectRepo::new(&conn)
         .create(&name)
         .map_err(|err| err.to_string())?;
-    install_workflow_content(&app, &conn, &project.id, REFERENCE_WORKFLOW, "bundled")?;
+    install_workflow_content(
+        &app,
+        &conn,
+        &acp,
+        &project.id,
+        REFERENCE_WORKFLOW,
+        "bundled",
+    )?;
     project_summary(&conn, &project.id)
 }
 
@@ -134,21 +148,23 @@ pub fn set_project_name(
 #[tauri::command(rename = "opensymphony:set-project-workflow-file")]
 pub fn set_project_workflow_file(
     app: AppHandle,
-    db: State<Arc<Db>>,
+    db: State<Arc<crate::db::Db>>,
+    acp: State<AcpState>,
     project_id: String,
     source_path: String,
 ) -> Result<Option<String>, String> {
-    install_workflow_from_path(&app, db, &project_id, &source_path, "file")
+    install_workflow_from_path(&app, db, &acp, &project_id, &source_path, "file")
 }
 
 #[tauri::command(rename = "opensymphony:import-project-workflow-file")]
 pub fn import_project_workflow_file(
     app: AppHandle,
-    db: State<Arc<Db>>,
+    db: State<Arc<crate::db::Db>>,
+    acp: State<AcpState>,
     project_id: String,
     source_path: String,
 ) -> Result<Option<String>, String> {
-    install_workflow_from_path(&app, db, &project_id, &source_path, "import")
+    install_workflow_from_path(&app, db, &acp, &project_id, &source_path, "import")
 }
 
 #[tauri::command(rename = "opensymphony:set-project-prompt-template")]
@@ -235,6 +251,7 @@ pub fn set_project_retry_policy(
 #[tauri::command(rename = "opensymphony:set-project-permission-mode")]
 pub fn set_project_permission_mode(
     db: State<Arc<Db>>,
+    acp: State<AcpState>,
     project_id: String,
     permission_mode: PermissionMode,
 ) -> Result<PermissionMode, String> {
@@ -248,6 +265,8 @@ pub fn set_project_permission_mode(
             },
         )
         .map_err(|err| err.to_string())?;
+    acp.permission_gate
+        .sync_project_mode(&project_id, project.permission_mode);
     Ok(project.permission_mode)
 }
 
@@ -280,129 +299,41 @@ fn project_dir(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
         .path()
         .app_data_dir()
         .map_err(|err| err.to_string())?;
-    Ok(app_data.join("projects").join(project_id))
-}
-
-fn project_workflow_path(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
-    Ok(project_dir(app, project_id)?.join("workflow.yaml"))
+    Ok(crate::db::workflow::project_dir(&app_data, project_id))
 }
 
 fn install_workflow_from_path(
     app: &AppHandle,
     db: State<Arc<Db>>,
+    acp: &AcpState,
     project_id: &str,
     source_path: &str,
     workflow_source: &str,
 ) -> Result<Option<String>, String> {
     let content = fs::read_to_string(source_path).map_err(|err| err.to_string())?;
     let conn = db.conn().map_err(|err| err.to_string())?;
-    install_workflow_content(app, &conn, project_id, &content, workflow_source)
+    install_workflow_content(app, &conn, acp, project_id, &content, workflow_source)
 }
 
 fn install_workflow_content(
     app: &AppHandle,
     conn: &rusqlite::Connection,
+    acp: &AcpState,
     project_id: &str,
     content: &str,
     workflow_source: &str,
 ) -> Result<Option<String>, String> {
-    let dest = project_workflow_path(app, project_id)?;
+    let app_data = app.path().app_data_dir().map_err(|err| err.to_string())?;
+    let dest = project_workflow_path(&app_data, project_id);
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
     fs::write(&dest, content).map_err(|err| err.to_string())?;
 
-    let mtime = fs::metadata(&dest)
-        .ok()
-        .and_then(|meta| meta.modified().ok())
-        .and_then(|time| {
-            let datetime: chrono::DateTime<chrono::Utc> = time.into();
-            Some(datetime.to_rfc3339())
-        });
-
-    let fields = parse_workflow_content(content);
-    let dest_str = dest.to_string_lossy().into_owned();
-
-    ProjectRepo::new(conn)
-        .update(
-            project_id,
-            &ProjectPatch {
-                workflow_source: Some(workflow_source.into()),
-                workflow_file_path: Some(dest_str.clone()),
-                workflow_file_mtime: mtime,
-                prompt_template: Some(fields.prompt_template),
-                poll_interval_ms: fields.poll_interval_ms,
-                max_concurrency: fields.max_concurrency,
-                retry_max_attempts: fields.retry_max_attempts,
-                retry_backoff_ms: fields.retry_backoff_ms,
-                permission_mode: fields.permission_mode,
-                ..ProjectPatch::default()
-            },
-        )
+    let project = apply_workflow_file(conn, project_id, &dest, Some(workflow_source))
         .map_err(|err| err.to_string())?;
+    acp.permission_gate
+        .sync_project_mode(&project.id, project.permission_mode);
 
-    Ok(Some(dest_str))
-}
-
-struct ParsedWorkflow {
-    prompt_template: String,
-    poll_interval_ms: Option<i32>,
-    max_concurrency: Option<i32>,
-    retry_max_attempts: Option<i32>,
-    retry_backoff_ms: Option<i32>,
-    permission_mode: Option<PermissionMode>,
-}
-
-fn parse_workflow_content(content: &str) -> ParsedWorkflow {
-    let (front_matter, body) = split_workflow(content);
-    let mut fields = ParsedWorkflow {
-        prompt_template: body.to_string(),
-        poll_interval_ms: None,
-        max_concurrency: None,
-        retry_max_attempts: None,
-        retry_backoff_ms: None,
-        permission_mode: None,
-    };
-
-    for line in front_matter.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        let Some((key, value)) = trimmed.split_once(':') else {
-            continue;
-        };
-        let key = key.trim();
-        let value = value.trim().trim_matches('"').trim_matches('\'');
-        match key {
-            "poll_interval_ms" => fields.poll_interval_ms = value.parse().ok(),
-            "max_concurrency" => fields.max_concurrency = value.parse().ok(),
-            "retry_max_attempts" => fields.retry_max_attempts = value.parse().ok(),
-            "retry_backoff_ms" => fields.retry_backoff_ms = value.parse().ok(),
-            "permission_mode" => fields.permission_mode = parse_permission_mode(value),
-            _ => {}
-        }
-    }
-
-    fields
-}
-
-fn split_workflow(content: &str) -> (&str, &str) {
-    let trimmed = content.trim_start();
-    let Some(rest) = trimmed.strip_prefix("---") else {
-        return ("", trimmed);
-    };
-    let rest = rest.trim_start_matches('\n');
-    let Some((front_matter, body)) = rest.split_once("\n---") else {
-        return ("", trimmed);
-    };
-    (front_matter, body.trim_start_matches('\n').trim())
-}
-
-fn parse_permission_mode(value: &str) -> Option<PermissionMode> {
-    match value {
-        "autoApprove" | "auto_approve" => Some(PermissionMode::AutoApprove),
-        "requiresApproval" | "requires_approval" => Some(PermissionMode::RequiresApproval),
-        _ => None,
-    }
+    Ok(Some(dest.to_string_lossy().into_owned()))
 }

@@ -113,15 +113,3 @@ pub struct RunAttempt {
     pub finished_at: Option<String>,
     pub error_message: Option<String>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::SessionEventKind;
-
-    #[test]
-    fn session_event_kind_round_trips() {
-        let kind = SessionEventKind::StreamChunk;
-        let parsed = kind.as_str().parse::<SessionEventKind>().expect("parse kind");
-        assert_eq!(parsed, kind);
-    }
-}

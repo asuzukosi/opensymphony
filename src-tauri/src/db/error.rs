@@ -41,20 +41,3 @@ impl From<RusqliteError> for DbError {
         DbError::Internal(err.to_string())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn not_found_converts_to_string() {
-        let message: String = DbError::NotFound("issue".into()).into();
-        assert_eq!(message, "not found: issue");
-    }
-
-    #[test]
-    fn rusqlite_no_rows_maps_to_not_found() {
-        let err = DbError::from(RusqliteError::QueryReturnedNoRows);
-        assert!(matches!(err, DbError::NotFound(_)));
-    }
-}

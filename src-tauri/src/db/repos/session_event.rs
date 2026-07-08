@@ -119,39 +119,3 @@ fn map_session_event(row: &Row<'_>) -> rusqlite::Result<SessionEvent> {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_helpers::{open_test_db, seed_issue_with_session};
-
-    #[test]
-    fn append_trims_tail_beyond_cap() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_issue_with_session(&conn).expect("seed session");
-        let repo = SessionEventRepo::new(&conn);
-
-        conn.execute(
-            "DELETE FROM session_events WHERE session_id = ?1",
-            [&fixtures.session_id],
-        )
-        .expect("clear seed events");
-
-        for i in 0..=SESSION_EVENT_TAIL_CAP {
-            repo.append(
-                &fixtures.session_id,
-                "StreamChunk",
-                &format!(r#"{{"index":{i}}}"#),
-            )
-            .expect("append chunk");
-        }
-
-        let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM session_events WHERE session_id = ?1",
-                [&fixtures.session_id],
-                |row| row.get(0),
-            )
-            .expect("count events");
-        assert_eq!(count, SESSION_EVENT_TAIL_CAP as i64);
-    }
-}

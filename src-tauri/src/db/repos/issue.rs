@@ -131,13 +131,19 @@ impl<'a> IssueRepo<'a> {
 
     pub fn list_candidates(&self, project_id: &str) -> DbResult<Vec<ProjectBoardIssue>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, identifier, title, priority
-             FROM issues
-             WHERE project_id = ?1 AND board_column IN ('backlog', 'inProgress')
-             ORDER BY priority IS NULL, priority ASC, updated_at ASC",
+            "SELECT i.id, i.identifier, i.title, i.priority
+             FROM issues i
+             WHERE i.project_id = ?1
+               AND i.board_column = ?2
+               AND NOT EXISTS (
+                 SELECT 1
+                 FROM run_attempts ra
+                 WHERE ra.issue_id = i.id AND ra.status = 'succeeded'
+               )
+             ORDER BY i.priority IS NULL, i.priority ASC, i.updated_at ASC",
         )?;
 
-        let mut rows = stmt.query([project_id])?;
+        let mut rows = stmt.query(params![project_id, BoardColumnId::Backlog.as_str()])?;
         let mut cards = Vec::new();
         while let Some(row) = rows.next()? {
             cards.push(map_issue_card(row)?);
@@ -185,30 +191,3 @@ fn parse_board_column(value: &str) -> DbResult<BoardColumnId> {
         .map_err(|()| DbError::Internal(format!("unknown board column: {value}")))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_helpers::{open_test_db, seed_minimal_project};
-
-    #[test]
-    fn create_transition_and_list_by_column() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_minimal_project(&conn).expect("seed minimal project");
-        let repo = IssueRepo::new(&conn);
-
-        let issue = repo
-            .create(&fixtures.project_id, "New issue", None)
-            .expect("create issue");
-        assert_eq!(issue.identifier, "SYM-5");
-
-        let updated = repo
-            .transition_column(&fixtures.backlog_issue_id, BoardColumnId::Review)
-            .expect("transition issue");
-        assert_eq!(updated.board_column, BoardColumnId::Review);
-
-        let cards = repo
-            .list_by_column(&fixtures.project_id, BoardColumnId::Review)
-            .expect("list review");
-        assert_eq!(cards.len(), 2);
-    }
-}

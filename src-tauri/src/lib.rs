@@ -2,12 +2,12 @@ mod acp;
 mod commands;
 mod db;
 mod orchestrator;
-mod runtime;
 mod types;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
-
 use acp::AcpState;
+use orchestrator::Manager as OrchestratorManager;
+use orchestrator::workspace::WorkspaceManager;
 use commands::{
     // board reads
     get_board_column, get_board_issue_card,
@@ -45,7 +45,7 @@ use commands::{
     // app state writes
     set_active_project_id,
 };
-use db::Db;
+use db::{Db, DbError};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -59,13 +59,33 @@ pub fn run() {
                 )?;
             }
 
-            let db_path = Db::db_path(app.handle())?;
+            let app_data_dir = Db::app_data_dir(app.handle())?;
+            let db_path = app_data_dir.join(db::DB_FILE_NAME);
             let database = Arc::new(Db::open(&db_path)?);
             app.manage(Arc::clone(&database));
-            app.manage(AcpState::new(
+            let (acp_state, adapter) = AcpState::new(
                 tauri::async_runtime::handle(),
-                database,
-            ));
+                Arc::clone(&database),
+            );
+            let permission_gate = Arc::clone(&acp_state.permission_gate);
+            app.manage(acp_state);
+            let manager = Arc::new(Mutex::new(OrchestratorManager::new(
+                Arc::clone(&database),
+                tauri::async_runtime::handle(),
+                adapter,
+                Arc::clone(&permission_gate),
+                WorkspaceManager::from_app_data(&app_data_dir),
+            )));
+            OrchestratorManager::attach_handle(&manager);
+            {
+                let conn = database.conn()?;
+                permission_gate.hydrate_project_modes(&conn)?;
+                manager
+                    .lock()
+                    .map_err(|_| DbError::Internal("orchestrator lock poisoned".into()))?
+                    .hydrate_from_db(&conn)?;
+            }
+            app.manage(manager);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

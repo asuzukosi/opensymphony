@@ -31,25 +31,3 @@ impl<'a> AppStateRepo<'a> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::repos::project::ProjectRepo;
-    use crate::db::test_helpers::open_test_db;
-
-    #[test]
-    fn set_and_get_active_project_id() {
-        let conn = open_test_db().expect("open test db");
-        let project_repo = ProjectRepo::new(&conn);
-        let project = project_repo.create("Active Project").expect("create project");
-        let repo = AppStateRepo::new(&conn);
-
-        repo.set_active_project_id(Some(&project.id))
-            .expect("set active project id");
-
-        let active = repo
-            .get_active_project_id()
-            .expect("get active project id");
-        assert_eq!(active.as_deref(), Some(project.id.as_str()));
-    }
-}

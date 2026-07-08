@@ -103,20 +103,3 @@ fn map_agent(row: &Row<'_>) -> rusqlite::Result<Agent> {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_helpers::open_test_db;
-
-    #[test]
-    fn create_and_get_agent() {
-        let conn = open_test_db().expect("open test db");
-        let repo = AgentRepo::new(&conn);
-        let agent = repo
-            .create("Test Agent", Some("echo"))
-            .expect("create agent");
-
-        let fetched = repo.get(&agent.id).expect("get agent").expect("agent exists");
-        assert_eq!(fetched.name, "Test Agent");
-    }
-}

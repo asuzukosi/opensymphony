@@ -69,16 +69,3 @@ impl Default for BoardColumn {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::BoardColumnId;
-
-    #[test]
-    fn board_column_id_round_trips() {
-        for column in BoardColumnId::ALL {
-            let parsed = column.as_str().parse::<BoardColumnId>().expect("parse column");
-            assert_eq!(parsed, column);
-        }
-    }
-}

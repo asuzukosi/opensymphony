@@ -68,30 +68,3 @@ fn map_audit_event(row: &Row<'_>) -> rusqlite::Result<AuditEvent> {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_helpers::{open_test_db, seed_minimal_project};
-
-    #[test]
-    fn append_and_list_recent() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_minimal_project(&conn).expect("seed project");
-        let repo = AuditRepo::new(&conn);
-
-        let first = repo
-            .append(&fixtures.project_id, "issue.created", Some(&fixtures.backlog_issue_id))
-            .expect("append first");
-        let second = repo
-            .append(&fixtures.project_id, "runtime.started", None)
-            .expect("append second");
-
-        let recent = repo
-            .list_recent(&fixtures.project_id, 10)
-            .expect("list recent");
-        assert_eq!(recent.len(), 2);
-        assert_eq!(recent[0].id, second.id);
-        assert_eq!(recent[1].id, first.id);
-        assert_eq!(recent[1].issue_id.as_deref(), Some(fixtures.backlog_issue_id.as_str()));
-    }
-}

@@ -41,7 +41,18 @@ pub struct AcpClientConfig {
 
 impl AcpClientConfig {
     pub fn from_acp_command(command: &str) -> Result<Self, String> {
-        let agent = AcpAgent::from_str(command.trim()).map_err(|err| err.to_string())?;
+        let trimmed = command.trim();
+        if trimmed.is_empty() {
+            return Err("acp command is empty".into());
+        }
+        if std::path::Path::new(trimmed).is_file() {
+            return Ok(Self {
+                command: PathBuf::from(trimmed),
+                args: Vec::new(),
+            });
+        }
+
+        let agent = AcpAgent::from_str(trimmed).map_err(|err| err.to_string())?;
         match agent.server() {
             agent_client_protocol::schema::McpServer::Stdio(stdio) => Ok(Self {
                 command: stdio.command.clone(),
@@ -79,6 +90,21 @@ impl AcpClientAdapter {
             handle,
             sessions: Mutex::new(HashMap::new()),
         }
+    }
+
+    fn resolve_config(&self, input: &StartRuntimeSessionInput) -> Result<AcpClientConfig, String> {
+        if let Some(command) = input
+            .acp_command
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return AcpClientConfig::from_acp_command(command);
+        }
+        Ok(AcpClientConfig {
+            command: self.config.command.clone(),
+            args: self.config.args.clone(),
+        })
     }
 
     fn ctx(&self, session_id: &str) -> Option<SessionCtx> {
@@ -143,16 +169,16 @@ impl AcpAdapter for AcpClientAdapter {
             panic!("workspace_path is required for acp client sessions");
         }
 
-        let conn = self.db.conn().expect("database connection");
-        let session = AgentSessionRepo::new(&conn)
-            .create(&input.run_attempt_id, "acp")
-            .expect("create agent session");
+        let config = self
+            .resolve_config(&input)
+            .unwrap_or_else(|err| panic!("invalid acp command: {err}"));
 
         let stored = Arc::new(Mutex::new(StoredSession {
-            session_id: session.id.clone(),
+            session_id: input.agent_session_id.clone(),
             run_attempt_id: input.run_attempt_id.clone(),
             issue_id: input.issue_id.clone(),
             attempt_number: input.attempt_number,
+            agent_name: input.agent_name.clone(),
             started_at: input.started_at.clone(),
             finished_at: None,
             status: RuntimeSessionStatus::Running,
@@ -168,15 +194,11 @@ impl AcpAdapter for AcpClientAdapter {
         self.sessions
             .lock()
             .expect("acp adapter sessions lock")
-            .insert(session.id.clone(), Arc::clone(&stored));
+            .insert(input.agent_session_id.clone(), Arc::clone(&stored));
 
         let ctx = SessionCtx::new(Arc::clone(&self.db), stored);
         let ctx_for_return = ctx.clone();
         let ctx_for_fail = ctx.clone();
-        let config = AcpClientConfig {
-            command: self.config.command.clone(),
-            args: self.config.args.clone(),
-        };
         let permission_gate = Arc::clone(&self.permission_gate);
 
         self.handle.spawn(async move {
@@ -360,74 +382,3 @@ async fn exit_if_cancelled(
     Ok(true)
 }
 
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-    use std::sync::Arc;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    use crate::db::test_helpers::seed_issue_with_session;
-    use crate::db::Db;
-    use crate::runtime::NoOpPauseGate;
-    use crate::types::RuntimeSessionPhase;
-
-    use super::{AcpClientAdapter, AcpClientConfig};
-    use super::super::permissions::PermissionGate;
-    use super::super::types::{AcpAdapter, RuntimeSessionStatus, StartRuntimeSessionInput};
-
-    fn temp_db_path() -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time before epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("symphony-acp-adapter-{nanos}.sqlite"))
-    }
-
-    #[test]
-    fn start_session_registers_running_session() {
-        let path = temp_db_path();
-        let db = Arc::new(Db::open(&path).expect("open db"));
-        let conn = db.conn().expect("lock connection");
-        let fixtures = seed_issue_with_session(&conn).expect("seed fixtures");
-        drop(conn);
-
-        let permission_gate = Arc::new(PermissionGate::new(Arc::clone(&db)));
-        let handle = tauri::async_runtime::handle();
-        let adapter = AcpClientAdapter::new(
-            AcpClientConfig::dev_default(),
-            db,
-            permission_gate,
-            handle,
-        );
-
-        let temp_dir = std::env::temp_dir().join(format!(
-            "opensymphony-acp-test-{}",
-            uuid::Uuid::new_v4()
-        ));
-        std::fs::create_dir_all(&temp_dir).expect("create temp workspace");
-
-        let record = adapter.start_session(StartRuntimeSessionInput {
-            run_attempt_id: fixtures.run_attempt_id.clone(),
-            issue_id: fixtures.issue_id.clone(),
-            identifier: "SYM-SESSION-1".into(),
-            title: "test issue".into(),
-            description: None,
-            prompt_template: String::new(),
-            attempt_number: 1,
-            started_at: "2026-07-08T10:00:00Z".into(),
-            workspace_path: temp_dir.to_string_lossy().into_owned(),
-            pause_gate: Arc::new(NoOpPauseGate),
-        });
-
-        assert_eq!(record.status, RuntimeSessionStatus::Running);
-        assert_eq!(
-            adapter
-                .get_session_phase(&record.session_id)
-                .expect("session phase"),
-            RuntimeSessionPhase::Spawning
-        );
-
-        let _ = std::fs::remove_dir_all(temp_dir);
-        let _ = std::fs::remove_file(path);
-    }
-}

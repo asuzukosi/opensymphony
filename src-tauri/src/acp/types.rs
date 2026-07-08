@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::runtime::PauseGate;
+use super::PauseGate;
 use crate::types::RuntimeSessionPhase;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +26,7 @@ impl RuntimeSessionStatus {
 
 #[derive(Clone)]
 pub struct StartRuntimeSessionInput {
+    pub agent_session_id: String,
     pub run_attempt_id: String,
     pub issue_id: String,
     pub identifier: String,
@@ -35,6 +36,8 @@ pub struct StartRuntimeSessionInput {
     pub attempt_number: u32,
     pub started_at: String,
     pub workspace_path: String,
+    pub acp_command: Option<String>,
+    pub agent_name: Option<String>,
     pub pause_gate: Arc<dyn PauseGate>,
 }
 
@@ -49,6 +52,7 @@ pub struct RuntimeSessionRecord {
     pub started_at: String,
     pub finished_at: Option<String>,
     pub error_message: Option<String>,
+    pub agent_name: Option<String>,
     pub paused: bool,
 }
 

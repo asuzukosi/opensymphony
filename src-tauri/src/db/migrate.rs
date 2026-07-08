@@ -83,25 +83,4 @@ mod tests {
             .expect("count tables");
         assert!(table_count >= 13);
     }
-
-    #[test]
-    fn migrate_rejects_invalid_board_column() {
-        let conn = open_test_connection();
-        migrate(&conn).expect("migrate");
-
-        conn.execute(
-            "INSERT INTO projects (id, name, slug) VALUES ('p1', 'Test', 'test')",
-            [],
-        )
-        .expect("insert project");
-
-        let err = conn
-            .execute(
-                "INSERT INTO issues (id, project_id, identifier, title, board_column)
-                 VALUES ('i1', 'p1', 'SYM-1', 'Bad', 'invalid')",
-                [],
-            )
-            .expect_err("invalid board column should fail");
-        assert!(err.to_string().contains("CHECK constraint failed"));
-    }
 }

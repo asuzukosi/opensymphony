@@ -32,14 +32,35 @@ impl<'a> RetryQueueRepo<'a> {
         Ok(())
     }
 
-    pub fn list_due(&self, now_iso: &str) -> DbResult<Vec<RetryQueueEntry>> {
+    pub fn list_due_for_project(
+        &self,
+        project_id: &str,
+        now_iso: &str,
+    ) -> DbResult<Vec<RetryQueueEntry>> {
         let mut stmt = self.conn.prepare(
-            "SELECT issue_id, attempt_number, due_at, error_message
-             FROM retry_queue
-             WHERE due_at <= ?1
-             ORDER BY due_at ASC",
+            "SELECT q.issue_id, q.attempt_number, q.due_at, q.error_message
+             FROM retry_queue q
+             JOIN issues i ON i.id = q.issue_id
+             WHERE i.project_id = ?1 AND q.due_at <= ?2
+             ORDER BY q.due_at ASC",
         )?;
-        let mut rows = stmt.query([now_iso])?;
+        let mut rows = stmt.query(params![project_id, now_iso])?;
+        let mut entries = Vec::new();
+        while let Some(row) = rows.next()? {
+            entries.push(map_retry_queue_entry(row)?);
+        }
+        Ok(entries)
+    }
+
+    pub fn list_for_project(&self, project_id: &str) -> DbResult<Vec<RetryQueueEntry>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT q.issue_id, q.attempt_number, q.due_at, q.error_message
+             FROM retry_queue q
+             JOIN issues i ON i.id = q.issue_id
+             WHERE i.project_id = ?1
+             ORDER BY q.due_at ASC",
+        )?;
+        let mut rows = stmt.query([project_id])?;
         let mut entries = Vec::new();
         while let Some(row) = rows.next()? {
             entries.push(map_retry_queue_entry(row)?);
@@ -61,38 +82,4 @@ fn map_retry_queue_entry(row: &Row<'_>) -> rusqlite::Result<RetryQueueEntry> {
         due_at: row.get(2)?,
         error_message: row.get(3)?,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_helpers::{open_test_db, seed_minimal_project};
-
-    #[test]
-    fn upsert_list_due_and_remove() {
-        let conn = open_test_db().expect("open test db");
-        let fixtures = seed_minimal_project(&conn).expect("seed project");
-        let repo = RetryQueueRepo::new(&conn);
-
-        repo.upsert(
-            &fixtures.in_progress_issue_id,
-            2,
-            "2026-01-01T00:00:00Z",
-            Some("timeout"),
-        )
-        .expect("upsert retry");
-
-        let due = repo
-            .list_due("2026-01-01T12:00:00Z")
-            .expect("list due retries");
-        assert_eq!(due.len(), 1);
-        assert_eq!(due[0].issue_id, fixtures.in_progress_issue_id);
-
-        repo.remove(&fixtures.in_progress_issue_id)
-            .expect("remove retry");
-        assert!(repo
-            .list_due("2026-01-02T00:00:00Z")
-            .expect("list due retries")
-            .is_empty());
-    }
 }

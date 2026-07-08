@@ -7,9 +7,9 @@ use serde_json::{json, Value};
 use tokio::process::Child;
 
 use crate::db::repos::agent_session::AgentSessionRepo;
-use crate::db::repos::session_event::SessionEventRepo;
+use super::session_events;
 use crate::db::Db;
-use crate::runtime::PauseGate;
+use super::PauseGate;
 use crate::types::{RuntimeSessionPhase, SessionEventKind};
 
 use super::recorder::Recorder;
@@ -20,6 +20,7 @@ pub(crate) struct StoredSession {
     pub run_attempt_id: String,
     pub issue_id: String,
     pub attempt_number: u32,
+    pub agent_name: Option<String>,
     pub started_at: String,
     pub finished_at: Option<String>,
     pub status: RuntimeSessionStatus,
@@ -66,7 +67,7 @@ impl SessionCtx {
 
     pub fn append_event(&self, kind: SessionEventKind, payload: Value) {
         let session_id = self.with_mut(|session| session.session_id.clone());
-        append_event(&self.db, &session_id, kind, payload);
+        let _ = session_events::append(&self.db, &session_id, kind, payload);
     }
 
     pub fn handle_session_update(&self, notification: SessionNotification) {
@@ -78,7 +79,7 @@ impl SessionCtx {
             let db = Arc::clone(&self.db);
             let session_id = session.session_id.clone();
             session.recorder.handle_update(&notification, &mut |kind, payload| {
-                append_event(&db, &session_id, kind, payload);
+                let _ = session_events::append(&db, &session_id, kind, payload);
             });
         });
     }
@@ -128,18 +129,27 @@ impl SessionCtx {
 
             let db = Arc::clone(&self.db);
             let session_id = session.session_id.clone();
+            let terminal_status = status;
+            let terminal_error = error_message.clone();
             session.recorder.flush(&mut |kind, payload| {
-                append_event(&db, &session_id, kind, payload);
+                let _ = session_events::append(&db, &session_id, kind, payload);
             });
 
             if let Some(message) = &error_message {
-                append_event(
+                let _ = session_events::append(
                     &db,
                     &session_id,
                     SessionEventKind::Error,
                     json!({ "message": message }),
                 );
             }
+
+            let _ = session_events::append_terminal(
+                &db,
+                &session_id,
+                terminal_status,
+                terminal_error.as_deref(),
+            );
 
             let finished_at = finished_at.unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
             session.status = status;
@@ -235,13 +245,6 @@ impl SessionCtx {
     }
 }
 
-fn append_event(db: &Arc<Db>, session_id: &str, kind: SessionEventKind, payload: Value) {
-    let Ok(conn) = db.conn() else {
-        return;
-    };
-    let _ = SessionEventRepo::new(&conn).append(session_id, kind.as_str(), &payload.to_string());
-}
-
 fn to_runtime_record(session: &StoredSession) -> RuntimeSessionRecord {
     RuntimeSessionRecord {
         session_id: session.session_id.clone(),
@@ -253,6 +256,7 @@ fn to_runtime_record(session: &StoredSession) -> RuntimeSessionRecord {
         started_at: session.started_at.clone(),
         finished_at: session.finished_at.clone(),
         error_message: session.error_message.clone(),
+        agent_name: session.agent_name.clone(),
         paused: session.pause_gate.is_paused(),
     }
 }

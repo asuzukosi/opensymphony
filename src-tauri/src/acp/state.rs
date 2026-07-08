@@ -7,25 +7,22 @@ use super::adapter::{AcpClientAdapter, AcpClientConfig};
 use super::permissions::PermissionGate;
 
 pub struct AcpState {
-    pub runtime_handle: RuntimeHandle,
-    pub db: Arc<Db>,
-    pub adapter: Arc<AcpClientAdapter>,
     pub permission_gate: Arc<PermissionGate>,
 }
 
 impl AcpState {
-    pub fn new(runtime_handle: RuntimeHandle, db: Arc<Db>) -> Self {
+    pub fn new(
+        runtime_handle: RuntimeHandle,
+        db: Arc<Db>,
+    ) -> (Self, Arc<dyn super::types::AcpAdapter>) {
         let permission_gate = Arc::new(PermissionGate::new(Arc::clone(&db)));
-        Self {
-            runtime_handle: runtime_handle.clone(),
-            db: Arc::clone(&db),
-            adapter: Arc::new(AcpClientAdapter::new(
-                AcpClientConfig::dev_default(),
-                db,
-                Arc::clone(&permission_gate),
-                runtime_handle,
-            )),
-            permission_gate,
-        }
+        let adapter: Arc<dyn super::types::AcpAdapter> = Arc::new(AcpClientAdapter::new(
+            AcpClientConfig::dev_default(),
+            Arc::clone(&db),
+            Arc::clone(&permission_gate),
+            runtime_handle,
+        ));
+        let state = Self { permission_gate };
+        (state, adapter)
     }
 }
