@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use tauri::State;
 
 use crate::db::error::DbError;
@@ -9,7 +10,7 @@ use crate::types::{Agent, AgentPatch, AgentSummary};
 // reads
 
 #[tauri::command(rename = "opensymphony:list-agent-summaries")]
-pub fn list_agent_summaries(db: State<Db>) -> Result<Vec<AgentSummary>, String> {
+pub fn list_agent_summaries(db: State<Arc<Db>>) -> Result<Vec<AgentSummary>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     AgentRepo::new(&conn)
         .list_summaries()
@@ -17,7 +18,7 @@ pub fn list_agent_summaries(db: State<Db>) -> Result<Vec<AgentSummary>, String> 
 }
 
 #[tauri::command(rename = "opensymphony:get-agent")]
-pub fn get_agent(db: State<Db>, agent_id: String) -> Result<Agent, String> {
+pub fn get_agent(db: State<Arc<Db>>, agent_id: String) -> Result<Agent, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     AgentRepo::new(&conn)
         .get(&agent_id)
@@ -27,7 +28,7 @@ pub fn get_agent(db: State<Db>, agent_id: String) -> Result<Agent, String> {
 
 #[tauri::command(rename = "opensymphony:list-project-agent-ids")]
 pub fn list_project_agent_ids(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
 ) -> Result<Vec<String>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
@@ -40,7 +41,7 @@ pub fn list_project_agent_ids(
 
 #[tauri::command(rename = "opensymphony:create-agent")]
 pub fn create_agent(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     name: String,
     acp_command: Option<String>,
 ) -> Result<Agent, String> {
@@ -51,7 +52,7 @@ pub fn create_agent(
 }
 
 #[tauri::command(rename = "opensymphony:delete-agent")]
-pub fn delete_agent(db: State<Db>, agent_id: String) -> Result<(), String> {
+pub fn delete_agent(db: State<Arc<Db>>, agent_id: String) -> Result<(), String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     AgentRepo::new(&conn)
         .delete(&agent_id)
@@ -59,7 +60,7 @@ pub fn delete_agent(db: State<Db>, agent_id: String) -> Result<(), String> {
 }
 
 #[tauri::command(rename = "opensymphony:set-agent-name")]
-pub fn set_agent_name(db: State<Db>, agent_id: String, name: String) -> Result<String, String> {
+pub fn set_agent_name(db: State<Arc<Db>>, agent_id: String, name: String) -> Result<String, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     let agent = AgentRepo::new(&conn)
         .update(
@@ -75,7 +76,7 @@ pub fn set_agent_name(db: State<Db>, agent_id: String, name: String) -> Result<S
 
 #[tauri::command(rename = "opensymphony:set-agent-acp-command")]
 pub fn set_agent_acp_command(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     agent_id: String,
     acp_command: Option<String>,
 ) -> Result<Option<String>, String> {
@@ -94,7 +95,7 @@ pub fn set_agent_acp_command(
 
 #[tauri::command(rename = "opensymphony:assign-agent-to-project")]
 pub fn assign_agent_to_project(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     agent_id: String,
 ) -> Result<(), String> {
@@ -106,7 +107,7 @@ pub fn assign_agent_to_project(
 
 #[tauri::command(rename = "opensymphony:unassign-agent-from-project")]
 pub fn unassign_agent_from_project(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     agent_id: String,
 ) -> Result<(), String> {

@@ -8,6 +8,14 @@ export type PermissionModeSource = "workflow" | "override";
 
 export type PermissionDecision = "approve" | "deny";
 
+export type RuntimeSessionPhase =
+  | "spawning"
+  | "initializing"
+  | "prompting"
+  | "streaming"
+  | "paused"
+  | "terminal";
+
 export interface PendingPermission {
   id: string;
   sessionId: string;
@@ -28,10 +36,6 @@ export interface RuntimeAuditEvent {
   payloadJson: string | null;
   createdAt: string;
 }
-
-import type { RuntimeSessionPhase } from "@/runtime/acp/types";
-
-export type { RuntimeSessionPhase } from "@/runtime/acp/types";
 
 export interface RuntimeRunningEntry {
   runAttemptId: string;

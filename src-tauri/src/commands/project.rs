@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::fs;
 use std::path::PathBuf;
 
@@ -13,7 +14,7 @@ const REFERENCE_WORKFLOW: &str = include_str!("../../resources/reference-workflo
 // reads
 
 #[tauri::command(rename = "opensymphony:list-project-summaries")]
-pub fn list_project_summaries(db: State<Db>) -> Result<Vec<ProjectSummary>, String> {
+pub fn list_project_summaries(db: State<Arc<Db>>) -> Result<Vec<ProjectSummary>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     ProjectRepo::new(&conn)
         .list_summaries()
@@ -21,13 +22,13 @@ pub fn list_project_summaries(db: State<Db>) -> Result<Vec<ProjectSummary>, Stri
 }
 
 #[tauri::command(rename = "opensymphony:get-project-name")]
-pub fn get_project_name(db: State<Db>, project_id: String) -> Result<String, String> {
+pub fn get_project_name(db: State<Arc<Db>>, project_id: String) -> Result<String, String> {
     Ok(require_project(db, &project_id)?.name)
 }
 
 #[tauri::command(rename = "opensymphony:get-project-workflow-source")]
 pub fn get_project_workflow_source(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
 ) -> Result<Option<String>, String> {
     Ok(require_project(db, &project_id)?.workflow_source)
@@ -35,7 +36,7 @@ pub fn get_project_workflow_source(
 
 #[tauri::command(rename = "opensymphony:get-project-workflow-file-path")]
 pub fn get_project_workflow_file_path(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
 ) -> Result<Option<String>, String> {
     Ok(require_project(db, &project_id)?.workflow_file_path)
@@ -43,29 +44,29 @@ pub fn get_project_workflow_file_path(
 
 #[tauri::command(rename = "opensymphony:get-project-workflow-version")]
 pub fn get_project_workflow_version(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
 ) -> Result<Option<String>, String> {
     Ok(require_project(db, &project_id)?.workflow_version)
 }
 
 #[tauri::command(rename = "opensymphony:get-project-prompt-template")]
-pub fn get_project_prompt_template(db: State<Db>, project_id: String) -> Result<String, String> {
+pub fn get_project_prompt_template(db: State<Arc<Db>>, project_id: String) -> Result<String, String> {
     Ok(require_project(db, &project_id)?.prompt_template)
 }
 
 #[tauri::command(rename = "opensymphony:get-project-poll-interval")]
-pub fn get_project_poll_interval(db: State<Db>, project_id: String) -> Result<u32, String> {
+pub fn get_project_poll_interval(db: State<Arc<Db>>, project_id: String) -> Result<u32, String> {
     Ok(require_project(db, &project_id)?.poll_interval_ms as u32)
 }
 
 #[tauri::command(rename = "opensymphony:get-project-max-concurrency")]
-pub fn get_project_max_concurrency(db: State<Db>, project_id: String) -> Result<i32, String> {
+pub fn get_project_max_concurrency(db: State<Arc<Db>>, project_id: String) -> Result<i32, String> {
     Ok(require_project(db, &project_id)?.max_concurrency)
 }
 
 #[tauri::command(rename = "opensymphony:get-project-retry-policy")]
-pub fn get_project_retry_policy(db: State<Db>, project_id: String) -> Result<RetryPolicy, String> {
+pub fn get_project_retry_policy(db: State<Arc<Db>>, project_id: String) -> Result<RetryPolicy, String> {
     let project = require_project(db, &project_id)?;
     Ok(RetryPolicy {
         max_attempts: project.retry_max_attempts,
@@ -75,21 +76,21 @@ pub fn get_project_retry_policy(db: State<Db>, project_id: String) -> Result<Ret
 
 #[tauri::command(rename = "opensymphony:get-project-permission-mode")]
 pub fn get_project_permission_mode(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
 ) -> Result<PermissionMode, String> {
     Ok(require_project(db, &project_id)?.permission_mode)
 }
 
 #[tauri::command(rename = "opensymphony:get-project-orchestrator-status")]
-pub fn get_project_orchestrator_status(db: State<Db>, project_id: String) -> Result<String, String> {
+pub fn get_project_orchestrator_status(db: State<Arc<Db>>, project_id: String) -> Result<String, String> {
     Ok(require_project(db, &project_id)?.orchestrator_status)
 }
 
 // writes
 
 #[tauri::command(rename = "opensymphony:create-project")]
-pub fn create_project(app: AppHandle, db: State<Db>, name: String) -> Result<ProjectSummary, String> {
+pub fn create_project(app: AppHandle, db: State<Arc<Db>>, name: String) -> Result<ProjectSummary, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     let project = ProjectRepo::new(&conn)
         .create(&name)
@@ -99,7 +100,7 @@ pub fn create_project(app: AppHandle, db: State<Db>, name: String) -> Result<Pro
 }
 
 #[tauri::command(rename = "opensymphony:delete-project")]
-pub fn delete_project(app: AppHandle, db: State<Db>, project_id: String) -> Result<(), String> {
+pub fn delete_project(app: AppHandle, db: State<Arc<Db>>, project_id: String) -> Result<(), String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     ProjectRepo::new(&conn)
         .delete(&project_id)
@@ -113,7 +114,7 @@ pub fn delete_project(app: AppHandle, db: State<Db>, project_id: String) -> Resu
 
 #[tauri::command(rename = "opensymphony:set-project-name")]
 pub fn set_project_name(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     name: String,
 ) -> Result<String, String> {
@@ -133,7 +134,7 @@ pub fn set_project_name(
 #[tauri::command(rename = "opensymphony:set-project-workflow-file")]
 pub fn set_project_workflow_file(
     app: AppHandle,
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     source_path: String,
 ) -> Result<Option<String>, String> {
@@ -143,7 +144,7 @@ pub fn set_project_workflow_file(
 #[tauri::command(rename = "opensymphony:import-project-workflow-file")]
 pub fn import_project_workflow_file(
     app: AppHandle,
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     source_path: String,
 ) -> Result<Option<String>, String> {
@@ -152,7 +153,7 @@ pub fn import_project_workflow_file(
 
 #[tauri::command(rename = "opensymphony:set-project-prompt-template")]
 pub fn set_project_prompt_template(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     prompt_template: String,
 ) -> Result<String, String> {
@@ -171,7 +172,7 @@ pub fn set_project_prompt_template(
 
 #[tauri::command(rename = "opensymphony:set-project-poll-interval")]
 pub fn set_project_poll_interval(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     poll_interval_ms: i32,
 ) -> Result<u32, String> {
@@ -190,7 +191,7 @@ pub fn set_project_poll_interval(
 
 #[tauri::command(rename = "opensymphony:set-project-max-concurrency")]
 pub fn set_project_max_concurrency(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     max_concurrency: i32,
 ) -> Result<i32, String> {
@@ -209,7 +210,7 @@ pub fn set_project_max_concurrency(
 
 #[tauri::command(rename = "opensymphony:set-project-retry-policy")]
 pub fn set_project_retry_policy(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     max_attempts: i32,
     backoff_ms: i32,
@@ -233,7 +234,7 @@ pub fn set_project_retry_policy(
 
 #[tauri::command(rename = "opensymphony:set-project-permission-mode")]
 pub fn set_project_permission_mode(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     permission_mode: PermissionMode,
 ) -> Result<PermissionMode, String> {
@@ -250,7 +251,7 @@ pub fn set_project_permission_mode(
     Ok(project.permission_mode)
 }
 
-fn require_project(db: State<Db>, project_id: &str) -> Result<Project, String> {
+fn require_project(db: State<Arc<Db>>, project_id: &str) -> Result<Project, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     ProjectRepo::new(&conn)
         .get(project_id)
@@ -288,7 +289,7 @@ fn project_workflow_path(app: &AppHandle, project_id: &str) -> Result<PathBuf, S
 
 fn install_workflow_from_path(
     app: &AppHandle,
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: &str,
     source_path: &str,
     workflow_source: &str,

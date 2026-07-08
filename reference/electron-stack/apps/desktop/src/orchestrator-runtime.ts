@@ -39,20 +39,20 @@ import type {
   RuntimeStatus,
   SettingsView,
 } from "@/ipc";
-import type { ACPAdapter } from "@/runtime/acp/types";
+import type { ACPAdapter } from "@/runtime/acp-migrated-stub";
 import {
   createACPClientAdapter,
   type ACPClientAdapterDependencies,
-} from "@/runtime/acp/acp-client-adapter";
+} from "@/runtime/acp-migrated-stub";
 import {
   createPermissionRouter,
   type PermissionRouter,
-} from "@/runtime/acp/permission-router";
+} from "@/runtime/acp-migrated-stub";
 import {
   createPermissionStore,
   type PendingPermission as StorePendingPermission,
   type PermissionStore,
-} from "@/runtime/acp/permission-store";
+} from "@/runtime/acp-migrated-stub";
 import { resolveWorkflowPath } from "@/runtime/workflow-path";
 import { buildProjectSeedInput, ensureProjectSeededOnce } from "@/runtime/project-seed";
 import { buildRuntimeSnapshot } from "@/runtime/runtime-snapshot";

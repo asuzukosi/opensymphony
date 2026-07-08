@@ -49,6 +49,32 @@ impl<'a> AgentSessionRepo<'a> {
         }
         Ok(sessions)
     }
+
+    pub fn set_session_ref(&self, id: &str, session_ref: &str) -> DbResult<AgentSession> {
+        let changed = self.conn.execute(
+            "UPDATE agent_sessions SET session_ref = ?1 WHERE id = ?2",
+            params![session_ref, id],
+        )?;
+        if changed == 0 {
+            return Err(DbError::NotFound(format!("agent session {id}")));
+        }
+        self.get(id)?
+            .ok_or_else(|| DbError::NotFound(format!("agent session {id}")))
+    }
+
+    pub fn finish(&self, id: &str, status: &str, finished_at: &str) -> DbResult<AgentSession> {
+        let changed = self.conn.execute(
+            "UPDATE agent_sessions
+             SET status = ?1, finished_at = ?2
+             WHERE id = ?3 AND status = 'running'",
+            params![status, finished_at, id],
+        )?;
+        if changed == 0 {
+            return Err(DbError::NotFound(format!("agent session {id}")));
+        }
+        self.get(id)?
+            .ok_or_else(|| DbError::NotFound(format!("agent session {id}")))
+    }
 }
 
 fn map_agent_session(row: &Row<'_>) -> rusqlite::Result<AgentSession> {
@@ -69,19 +95,33 @@ mod tests {
     use crate::db::test_helpers::{open_test_db, seed_issue_with_session};
 
     #[test]
-    fn create_and_list_by_run_attempt() {
+    fn lifecycle_updates_session_ref_and_finish() {
         let conn = open_test_db().expect("open test db");
         let fixtures = seed_issue_with_session(&conn).expect("seed issue with session");
         let repo = AgentSessionRepo::new(&conn);
 
-        let second = repo
-            .create(&fixtures.run_attempt_id, "mock")
+        let session = repo
+            .create(&fixtures.run_attempt_id, "acp")
             .expect("create agent session");
+
+        let bound = repo
+            .set_session_ref(&session.id, "acp-session-ref-1")
+            .expect("set session ref");
+        assert_eq!(bound.session_ref.as_deref(), Some("acp-session-ref-1"));
+
+        let finished = repo
+            .finish(&session.id, "succeeded", "2026-07-08T10:00:00Z")
+            .expect("finish session");
+        assert_eq!(finished.status, "succeeded");
+        assert_eq!(finished.finished_at.as_deref(), Some("2026-07-08T10:00:00Z"));
+
+        assert!(repo
+            .finish(&session.id, "failed", "2026-07-08T10:01:00Z")
+            .is_err());
 
         let sessions = repo
             .list_by_run_attempt(&fixtures.run_attempt_id)
             .expect("list by run attempt");
         assert_eq!(sessions.len(), 2);
-        assert_eq!(sessions[1].id, second.id);
     }
 }

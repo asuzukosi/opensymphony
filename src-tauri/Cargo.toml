@@ -34,3 +34,4 @@ thiserror = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
+tokio-util = { version = "0.7", features = ["compat"] }

@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use tauri::State;
 
 use crate::db::repos::app_state::AppStateRepo;
@@ -6,7 +7,7 @@ use crate::db::Db;
 // reads
 
 #[tauri::command(rename = "opensymphony:get-active-project-id")]
-pub fn get_active_project_id(db: State<Db>) -> Result<Option<String>, String> {
+pub fn get_active_project_id(db: State<Arc<Db>>) -> Result<Option<String>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     AppStateRepo::new(&conn)
         .get_active_project_id()
@@ -17,7 +18,7 @@ pub fn get_active_project_id(db: State<Db>) -> Result<Option<String>, String> {
 
 #[tauri::command(rename = "opensymphony:set-active-project-id")]
 pub fn set_active_project_id(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: Option<String>,
 ) -> Result<Option<String>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;

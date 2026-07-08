@@ -195,7 +195,7 @@ DB stores JSON in `session_events.payload_json`; repos deserialize to typed vari
 flowchart LR
   Agent[ACP agent]
   Client[acp/client.rs]
-  Router[permission_router]
+  Router[PermissionGate]
   Queue[pending_permissions]
   IssueUI[Issue page]
   Policy[projects.permission_mode]
@@ -513,30 +513,50 @@ flowchart TB
 | -- | ---- | ------ | ------ |
 | **t40.1** | Add ACP crate deps (`agent-client-protocol` 0.11.1 pair) | deps compile | ✓ |
 | **t40.4** | Workspace binary `opensymphony-mock-acp-agent` in `mock-acp-agent/` | `cargo run -p opensymphony-mock-acp-agent` | ✓ (stub) |
-| **t40.2** | `mock-acp-agent/src/lib.rs` — SDK `Agent` trait over stdio | mock process | **next** |
-| **t40.3** | Happy path + env scenarios — stream, delay, fail, artifact | mock behavior | pending |
+| **t40.2** | `mock-acp-agent/src/lib.rs` — SDK `Agent` trait over stdio | mock process | ✓ |
+| **t40.3** | Happy path — 3 updates, demo message, `end_turn` | mock behavior | ✓ (task 7) |
 | **t40.5** | Permission mock — `session/request_permission` with Run tests title | permission flow | pending (task 6 scope) |
 
 ### t41 — Client (parallel with t40)
 
+**Session recorder (t41.2):** One module `acp/recorder.rs` with a **`Recorder`** struct per running session. Merges reference `session-event-recorder.ts` + `agent-message-tracker.ts` (task 10’s `agent_message.rs` is deleted after merge). The adapter owns `Recorder` in stored session state; all accumulation and flush logic lives on the struct.
+
+| `Recorder` field | Input | Flush / persist |
+| ---------------- | ----- | ---------------- |
+| `thought_text` | `agent_thought_chunk` | `StreamChunk` (consolidated thought) on message chunk, tool boundary, or `Recorder::flush` |
+| `message_text` | `agent_message_chunk` | `StreamChunk` (consolidated message) + update `last_complete_agent_message` on same boundaries |
+| `active_tools` | `tool_call` + non-terminal `tool_call_update` | In-memory merge by `tool_call_id`; persist initial `ToolCall` on start, consolidated `SessionUpdate` on terminal (`completed` / `failed`) |
+| `last_complete_agent_message` | set on message flush | read via `Recorder::last_agent_message()` for orchestrator issue comment |
+| Turn complete | `prompt` returns `end_turn` | `Recorder::flush` then session status → succeeded |
+
+**`Recorder` methods:** `new`, `handle_update`, `flush`, `last_agent_message`, `current_activity`, `should_persist` (mirror reference exports).
+
 | ID | Todo | Output | Status |
 | -- | ---- | ------ | ------ |
-| **t41.0** | `runtime/pause_gate.rs` — `PauseGate` trait + `NoOpPauseGate` stub | trait + test stub | trait ✓; stub pending (task 8) |
+| **t41.0** | `runtime/pause_gate.rs` — `PauseGate` trait + `NoOpPauseGate` stub | trait + test stub | ✓ |
 | **t41.1** | `acp/types.rs`, `acp/state.rs` — session types + `AcpAdapter` trait | adapter contract | ✓ |
-| **t41.2** | Pure modules — prompt_renderer, agent_message, session_event, protocol | helpers | pending |
-| **t41.3** | `acp/client.rs` — spawn, session map, run loop | adapter | pending |
-| **t41.4** | Permission callback → router | hookup | pending |
+| **t41.2a** | `acp/renderers.rs` — prompt template substitution | helpers | ✓ |
+| **t41.2b** | `acp/recorder.rs` — **`Recorder`** struct: thought/message buffers, tool accumulation, last agent message, DB flush via callback | helpers | ✓ |
+| **t41.2c** | `acp/protocol.rs` — OpenSymphony initialize defaults | helpers | ✓ |
+| **t41.2d** | `acp/permissions.rs` — `PermissionGate` (route, resolve, DB enqueue) | helpers | ✓ |
+| **t41.2e** | `AgentSessionRepo` — `set_session_ref`, `finish` for adapter lifecycle | repos | ✓ |
+| **t41.2f** | `acp/client.rs` — Symphony client `connect` + handlers | helpers | ✓ |
+| **t41.3** | `acp/adapter.rs` — `AcpClientAdapter` spawn, session map, run loop launch | adapter | ✓ |
+| **t41.3b** | `acp/adapter.rs` — `run_session` loop: pause checkpoints, phases, recorder events, stop reasons, DB finish | adapter | ✓ |
+| **t41.4** | Permission callback → gate (pause wrap + PermissionRequest events) | hookup | ✓ |
+| **t41.5** | `AcpAdapter` observability — phase (Paused when gate paused), current activity, last agent message, is_session_paused | adapter | ✓ |
+| **t41.6** | `poll_sessions` + `cancel_session` — child exit reconciliation, gate resume, session/cancel RPC, sigterm fallback | adapter | ✓ |
 
 ### t42 — Permission router + integration
 
-| ID | Todo | Output |
-| -- | ---- | ------ |
-| **t42.1** | `acp/permission_router.rs` — policy + enqueue/auto-approve | router |
-| **t42.2** | Enqueue `pending_permissions` with session + issue ids | repo |
-| **t42.3** | `resolve_session_permission` unblocks client | t14e live |
-| **t42.4** | Integration test — mock → dispatch → resolve → complete | green |
-| **t42.5** | Delete `reference/electron-stack/apps/desktop/src/runtime/acp/` + mock ACP scripts | reference slice gone |
-| **t42.6** | Add/update `docs/connecting-acp-agents.md` (Tauri, official crates, mock server) | docs current |
+| ID | Todo | Output | Status |
+| -- | ---- | ------ | ------ |
+| **t42.1** | Wire router into adapter; `PermissionRequest` events | handler + events | pending (tasks 20, 18–19) |
+| **t42.2** | Router writes `pending_permissions` via `PendingPermissionRepo::insert` | write path | ✓ (task 14–15) |
+| **t42.3** | Wire `resolve_session_permission` — `PermissionGate::resolve` then DB delete | agent unblocks | ✓ |
+| **t42.4** | Integration test — mock → adapter → resolve → complete | skipped | — |
+| **t42.5** | Delete `reference/electron-stack/apps/desktop/src/runtime/acp/` + mock ACP scripts | reference slice gone | ✓ |
+| **t42.6** | Add/update `docs/connecting-acp-agents.md` | docs current | ✓ |
 
 **Lane 4 exit:** ACP dispatches; permissions on issue page; reference ACP TS deleted.
 
@@ -568,10 +588,14 @@ src-tauri/
     runtime/            # PauseGate trait (Lane 4)
     orchestrator/       # Lane 3 — SessionPauseGate impl
     acp/                # Lane 4 — client only (private mod in lib.rs)
+      renderers.rs      # t41.2a
+      recorder.rs       # t41.2b — Recorder struct (stream + tools + last agent message)
+      protocol.rs       # t41.2c
+      permissions.rs    # PermissionGate
       state.rs
       types.rs
-      client.rs         # t41
-      permission_router.rs # t42
+      adapter.rs        # t41.3
+      client.rs         # t41.2f connect wrapper
 
 src/lib/ipc/
   hooks.ts              # t21.1

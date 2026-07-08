@@ -169,6 +169,7 @@ dependencies = [
  "tauri-plugin-log",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "uuid",
 ]
 
@@ -2398,6 +2399,8 @@ dependencies = [
  "agent-client-protocol",
  "anyhow",
  "tokio",
+ "tokio-util",
+ "uuid",
 ]
 
 [[package]]

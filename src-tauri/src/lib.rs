@@ -4,7 +4,7 @@ mod db;
 mod orchestrator;
 mod runtime;
 mod types;
-
+use std::sync::Arc;
 use tauri::Manager;
 
 use acp::AcpState;
@@ -60,10 +60,12 @@ pub fn run() {
             }
 
             let db_path = Db::db_path(app.handle())?;
-            let database = Db::open(&db_path)?;
-            app.manage(database);
-
-            app.manage(AcpState::new(tauri::async_runtime::handle()));
+            let database = Arc::new(Db::open(&db_path)?);
+            app.manage(Arc::clone(&database));
+            app.manage(AcpState::new(
+                tauri::async_runtime::handle(),
+                database,
+            ));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

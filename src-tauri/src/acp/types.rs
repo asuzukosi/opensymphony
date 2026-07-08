@@ -13,6 +13,17 @@ pub enum RuntimeSessionStatus {
     Cancelled,
 }
 
+impl RuntimeSessionStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Running => "running",
+            Self::Succeeded => "succeeded",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct StartRuntimeSessionInput {
     pub run_attempt_id: String,
@@ -56,7 +67,7 @@ pub trait AcpAdapter: Send + Sync {
 
     fn get_session_phase(&self, session_id: &str) -> Option<RuntimeSessionPhase>;
 
-    fn get_last_event_summary(&self, session_id: &str) -> Option<String>;
+    fn get_current_activity(&self, session_id: &str) -> Option<String>;
 
     fn get_last_agent_message(&self, session_id: &str) -> Option<String>;
 

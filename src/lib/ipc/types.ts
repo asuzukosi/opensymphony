@@ -173,7 +173,7 @@ export interface RuntimeRunningEntry {
   sessionId: string | null;
   sessionStatus: string | null;
   phase: RuntimeSessionPhase | null;
-  lastEventSummary: string | null;
+  currentActivity: string | null;
   paused: boolean;
 }
 

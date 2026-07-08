@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use tauri::State;
 
 use crate::db::error::DbError;
@@ -13,7 +14,7 @@ use crate::types::{
 // reads
 
 #[tauri::command(rename = "opensymphony:get-issue-header")]
-pub fn get_issue_header(db: State<Db>, issue_id: String) -> Result<IssueHeader, String> {
+pub fn get_issue_header(db: State<Arc<Db>>, issue_id: String) -> Result<IssueHeader, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     IssueRepo::new(&conn)
         .get(&issue_id)?
@@ -23,7 +24,7 @@ pub fn get_issue_header(db: State<Db>, issue_id: String) -> Result<IssueHeader, 
 
 #[tauri::command(rename = "opensymphony:list-issue-comments")]
 pub fn list_issue_comments(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     issue_id: String,
 ) -> Result<Vec<IssueComment>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
@@ -34,7 +35,7 @@ pub fn list_issue_comments(
 
 #[tauri::command(rename = "opensymphony:list-issue-run-attempts")]
 pub fn list_issue_run_attempts(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     issue_id: String,
 ) -> Result<Vec<IssueDetailRunAttempt>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
@@ -49,7 +50,7 @@ pub fn list_issue_run_attempts(
 
 #[tauri::command(rename = "opensymphony:list-session-events")]
 pub fn list_session_events(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     issue_id: String,
 ) -> Result<Vec<SessionEvent>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
@@ -62,7 +63,7 @@ pub fn list_session_events(
 
 #[tauri::command(rename = "opensymphony:create-issue")]
 pub fn create_issue(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     title: String,
     description: Option<String>,
@@ -76,7 +77,7 @@ pub fn create_issue(
 
 #[tauri::command(rename = "opensymphony:update-issue-title")]
 pub fn update_issue_title(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     issue_id: String,
     title: String,
 ) -> Result<IssueHeader, String> {
@@ -95,7 +96,7 @@ pub fn update_issue_title(
 
 #[tauri::command(rename = "opensymphony:update-issue-description")]
 pub fn update_issue_description(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     issue_id: String,
     description: Option<String>,
 ) -> Result<IssueHeader, String> {
@@ -114,7 +115,7 @@ pub fn update_issue_description(
 
 #[tauri::command(rename = "opensymphony:update-issue-priority")]
 pub fn update_issue_priority(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     issue_id: String,
     priority: Option<i32>,
 ) -> Result<IssueHeader, String> {
@@ -133,7 +134,7 @@ pub fn update_issue_priority(
 
 #[tauri::command(rename = "opensymphony:transition-issue-column")]
 pub fn transition_issue_column(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     issue_id: String,
     column: BoardColumnId,
     actor: Option<String>,
@@ -148,7 +149,7 @@ pub fn transition_issue_column(
 
 #[tauri::command(rename = "opensymphony:add-issue-comment")]
 pub fn add_issue_comment(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     issue_id: String,
     body: String,
     author: Option<String>,

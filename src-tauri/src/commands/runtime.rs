@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::fs;
 
 use rusqlite::Connection;
@@ -21,14 +22,14 @@ const DEFAULT_POLL_INTERVAL_MS: i32 = 3000;
 // reads
 
 #[tauri::command(rename = "opensymphony:get-runtime-summary")]
-pub fn get_runtime_summary(db: State<Db>, project_id: String) -> Result<RuntimeSummary, String> {
+pub fn get_runtime_summary(db: State<Arc<Db>>, project_id: String) -> Result<RuntimeSummary, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     runtime_summary(&conn, &project_id)
 }
 
 #[tauri::command(rename = "opensymphony:get-runtime-running")]
 pub fn get_runtime_running(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
 ) -> Result<Vec<RuntimeRunningEntry>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
@@ -54,7 +55,7 @@ pub fn get_runtime_running(
             session_id: None,
             session_status: None,
             phase: None,
-            last_event_summary: None,
+            current_activity: None,
             paused: false,
         });
     }
@@ -63,7 +64,7 @@ pub fn get_runtime_running(
 
 #[tauri::command(rename = "opensymphony:get-runtime-retrying")]
 pub fn get_runtime_retrying(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
 ) -> Result<Vec<RuntimeRetryEntry>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
@@ -72,7 +73,7 @@ pub fn get_runtime_retrying(
 
 #[tauri::command(rename = "opensymphony:get-runtime-candidates")]
 pub fn get_runtime_candidates(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
 ) -> Result<Vec<RuntimeCandidateEntry>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
@@ -94,7 +95,7 @@ pub fn get_runtime_candidates(
 
 #[tauri::command(rename = "opensymphony:get-runtime-recent-finished")]
 pub fn get_runtime_recent_finished(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
 ) -> Result<Vec<RuntimeRecentFinishedEntry>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
@@ -127,7 +128,7 @@ pub fn get_runtime_recent_finished(
 
 #[tauri::command(rename = "opensymphony:get-runtime-recent-events")]
 pub fn get_runtime_recent_events(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
 ) -> Result<Vec<RuntimeAuditEvent>, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
@@ -148,24 +149,24 @@ pub fn get_runtime_recent_events(
 // writes
 
 #[tauri::command(rename = "opensymphony:start-runtime")]
-pub fn start_runtime(db: State<Db>, project_id: String) -> Result<RuntimeSummary, String> {
+pub fn start_runtime(db: State<Arc<Db>>, project_id: String) -> Result<RuntimeSummary, String> {
     set_orchestrator_status(db, &project_id, "running")
 }
 
 #[tauri::command(rename = "opensymphony:stop-runtime")]
-pub fn stop_runtime(db: State<Db>, project_id: String) -> Result<RuntimeSummary, String> {
+pub fn stop_runtime(db: State<Arc<Db>>, project_id: String) -> Result<RuntimeSummary, String> {
     set_orchestrator_status(db, &project_id, "stopped")
 }
 
 #[tauri::command(rename = "opensymphony:tick-runtime")]
-pub fn tick_runtime(db: State<Db>, project_id: String) -> Result<RuntimeSummary, String> {
+pub fn tick_runtime(db: State<Arc<Db>>, project_id: String) -> Result<RuntimeSummary, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     runtime_summary(&conn, &project_id)
 }
 
 #[tauri::command(rename = "opensymphony:set-runtime-poll-interval")]
 pub fn set_runtime_poll_interval(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     poll_interval_ms: i32,
 ) -> Result<u32, String> {
@@ -184,7 +185,7 @@ pub fn set_runtime_poll_interval(
 
 #[tauri::command(rename = "opensymphony:clear-runtime-poll-interval-override")]
 pub fn clear_runtime_poll_interval_override(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
 ) -> Result<u32, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
@@ -214,7 +215,7 @@ pub fn clear_runtime_poll_interval_override(
 
 #[tauri::command(rename = "opensymphony:pause-run")]
 pub fn pause_run(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     run_attempt_id: String,
 ) -> Result<(), String> {
@@ -224,7 +225,7 @@ pub fn pause_run(
 
 #[tauri::command(rename = "opensymphony:resume-run")]
 pub fn resume_run(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     run_attempt_id: String,
 ) -> Result<(), String> {
@@ -234,7 +235,7 @@ pub fn resume_run(
 
 #[tauri::command(rename = "opensymphony:cancel-run")]
 pub fn cancel_run(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     run_attempt_id: String,
 ) -> Result<(), String> {
@@ -273,7 +274,7 @@ fn runtime_summary(conn: &Connection, project_id: &str) -> Result<RuntimeSummary
 }
 
 fn set_orchestrator_status(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: &str,
     status: &str,
 ) -> Result<RuntimeSummary, String> {

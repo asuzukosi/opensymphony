@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use tauri::State;
 
 use crate::db::error::DbError;
@@ -7,7 +8,7 @@ use crate::types::{BoardColumn, BoardColumnId, ProjectBoardIssue};
 
 #[tauri::command(rename = "opensymphony:get-board-column")]
 pub fn get_board_column(
-    db: State<Db>,
+    db: State<Arc<Db>>,
     project_id: String,
     column: BoardColumnId,
 ) -> Result<BoardColumn, String> {
@@ -19,7 +20,7 @@ pub fn get_board_column(
 }
 
 #[tauri::command(rename = "opensymphony:get-board-issue-card")]
-pub fn get_board_issue_card(db: State<Db>, issue_id: String) -> Result<ProjectBoardIssue, String> {
+pub fn get_board_issue_card(db: State<Arc<Db>>, issue_id: String) -> Result<ProjectBoardIssue, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     IssueRepo::new(&conn)
         .get_card(&issue_id)

@@ -57,7 +57,7 @@ pub struct RuntimeRunningEntry {
     pub session_id: Option<String>,
     pub session_status: Option<String>,
     pub phase: Option<RuntimeSessionPhase>,
-    pub last_event_summary: Option<String>,
+    pub current_activity: Option<String>,
     pub paused: bool,
 }
 

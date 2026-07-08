@@ -1,3 +1,4 @@
+mod pause_gate;
 mod project_manager;
 mod project_runtime;
 mod types;
