@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "opensymphony",
-  description: "Symphony agent orchestration",
+  title: "Open Symphony",
+  description: "Open Symphony agent orchestration",
 };
 
 export default function RootLayout({
