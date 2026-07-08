@@ -4,6 +4,7 @@ mod permissions;
 mod runtime;
 mod project;
 mod agent;
+mod analytics;
 mod app_state;
 
 // board reads
@@ -60,6 +61,11 @@ pub use agent::{get_agent, list_agent_summaries, list_project_agent_ids};
 pub use agent::{
     assign_agent_to_project, create_agent, delete_agent, set_agent_acp_command, set_agent_name,
     unassign_agent_from_project,
+};
+
+// analytics reads
+pub use analytics::{
+    get_project_agent_activity_over_time, get_project_permission_activity_over_time,
 };
 
 // app state reads

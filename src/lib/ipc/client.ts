@@ -1,8 +1,10 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { IPC_CHANNELS } from "@/lib/ipc/channels";
 import type {
+  ActivityTimeRange,
   AddIssueCommentResponse,
   Agent,
+  AgentActivityOverTimeResponse,
   AgentSummary,
   BoardColumn,
   BoardColumnId,
@@ -14,6 +16,7 @@ import type {
   IssueDetailRunAttempt,
   IssueHeader,
   PendingPermission,
+  PermissionActivityOverTimeResponse,
   PermissionDecision,
   PermissionMode,
   ProjectBoardIssue,
@@ -178,6 +181,15 @@ export interface OpenSymphonyDesktopApi {
   ): Promise<SetAgentAcpCommandResponse>;
   assignAgentToProject(projectId: string, agentId: string): Promise<void>;
   unassignAgentFromProject(projectId: string, agentId: string): Promise<void>;
+  // analytics reads
+  getProjectAgentActivityOverTime(
+    projectId: string,
+    timeRange: ActivityTimeRange,
+  ): Promise<AgentActivityOverTimeResponse>;
+  getProjectPermissionActivityOverTime(
+    projectId: string,
+    timeRange: ActivityTimeRange,
+  ): Promise<PermissionActivityOverTimeResponse>;
   // app state reads
   getActiveProjectId(): Promise<string | null>;
   // app state writes
@@ -363,6 +375,17 @@ function createIpcClient(): OpenSymphonyDesktopApi {
       invoke<void>(IPC_CHANNELS.assignAgentToProject, { projectId, agentId }),
     unassignAgentFromProject: (projectId, agentId) =>
       invoke<void>(IPC_CHANNELS.unassignAgentFromProject, { projectId, agentId }),
+    // analytics reads
+    getProjectAgentActivityOverTime: (projectId, timeRange) =>
+      invoke<AgentActivityOverTimeResponse>(IPC_CHANNELS.getProjectAgentActivityOverTime, {
+        projectId,
+        timeRange,
+      }),
+    getProjectPermissionActivityOverTime: (projectId, timeRange) =>
+      invoke<PermissionActivityOverTimeResponse>(
+        IPC_CHANNELS.getProjectPermissionActivityOverTime,
+        { projectId, timeRange },
+      ),
     // app state reads
     getActiveProjectId: () => invoke<string | null>(IPC_CHANNELS.getActiveProjectId),
     // app state writes

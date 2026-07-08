@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback } from "react";
-
 import { useActiveProject } from "@/contexts/active-project-context";
 import {
   DEFAULT_IPC_POLL_INTERVAL_MS,
@@ -16,6 +15,7 @@ import type {
   RuntimeRunningEntry,
   RuntimeSummary,
 } from "@/lib/ipc/types";
+import { requireProjectId } from "@/lib/require-project-id";
 
 type RuntimeData = {
   summary: RuntimeSummary;
@@ -60,13 +60,6 @@ export type UseRuntimeResult = {
   controlError: Error | null;
   resetControl: () => void;
 };
-
-function requireProjectId(projectId: string | null | undefined): string {
-  if (projectId == null) {
-    throw new Error("no active project");
-  }
-  return projectId;
-}
 
 export function useRuntime(options?: UseRuntimeOptions): UseRuntimeResult {
   const { pollIntervalMs = DEFAULT_IPC_POLL_INTERVAL_MS, enabled: enabledOption = true } =

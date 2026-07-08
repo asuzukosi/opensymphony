@@ -68,6 +68,10 @@ export const IPC_CHANNELS = {
   setAgentAcpCommand: "opensymphony:set-agent-acp-command",
   assignAgentToProject: "opensymphony:assign-agent-to-project",
   unassignAgentFromProject: "opensymphony:unassign-agent-from-project",
+  // analytics reads
+  getProjectAgentActivityOverTime: "opensymphony:get-project-agent-activity-over-time",
+  getProjectPermissionActivityOverTime:
+    "opensymphony:get-project-permission-activity-over-time",
   // app state reads
   getActiveProjectId: "opensymphony:get-active-project-id",
   // app state writes

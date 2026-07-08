@@ -40,6 +40,8 @@ use commands::{
     // agent writes
     create_agent, delete_agent, set_agent_name, set_agent_acp_command,
     assign_agent_to_project, unassign_agent_from_project,
+    // analytics reads
+    get_project_agent_activity_over_time, get_project_permission_activity_over_time,
     // app state reads
     get_active_project_id,
     // app state writes
@@ -158,6 +160,9 @@ pub fn run() {
             set_agent_acp_command,
             assign_agent_to_project,
             unassign_agent_from_project,
+            // analytics reads
+            get_project_agent_activity_over_time,
+            get_project_permission_activity_over_time,
             // app state reads
             get_active_project_id,
             // app state writes

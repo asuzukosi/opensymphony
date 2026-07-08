@@ -1,4 +1,4 @@
-mod audit;
+pub(crate) mod audit;
 mod manager;
 mod pause;
 mod poll;

@@ -1,90 +1,152 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
-import { getIpcClient, IpcUnavailableError, isIpcAvailable } from "@/lib/ipc/client";
-import { BOARD_COLUMN_IDS, type ProjectBoard } from "@/lib/ipc/types";
+import { useActiveProject } from "@/contexts/active-project-context";
+import {
+  DEFAULT_IPC_POLL_INTERVAL_MS,
+  useIpcMutation,
+  useIpcQuery,
+} from "@/lib/ipc/hooks";
+import { requireProjectId } from "@/lib/require-project-id";
+import type {
+  BoardColumn,
+  BoardColumnId,
+  CreateIssueResponse,
+  ProjectBoardIssue,
+} from "@/lib/ipc/types";
 
-const EMPTY_BOARD: ProjectBoard = {
-  backlog: { issues: [] },
-  inProgress: { issues: [] },
-  review: { issues: [] },
-  done: { issues: [] },
+export const BOARD_COLUMN_IDS: BoardColumnId[] = ["backlog", "inProgress", "review", "done"];
+
+export type CreateIssueInput = {
+  projectId?: string;
+  title: string;
+  description?: string | null;
+  priority?: number | null;
 };
 
-async function fetchBoard(projectId: string): Promise<ProjectBoard> {
-  const client = getIpcClient();
-  const columns = await Promise.all(
-    BOARD_COLUMN_IDS.map((column) => client.getBoardColumn(projectId, column)),
-  );
+type BoardData = Record<BoardColumnId, BoardColumn>;
 
-  return {
-    backlog: columns[0],
-    inProgress: columns[1],
-    review: columns[2],
-    done: columns[3],
-  };
-}
+type TransitionIssueInput = {
+  issueId: string;
+  column: BoardColumnId;
+  actor?: string | null;
+};
+
+type CreateIssueMutationInput = CreateIssueInput & {
+  resolvedProjectId: string;
+};
 
 export type UseBoardResult = {
-  board: ProjectBoard | undefined;
+  issuesByColumn: Record<BoardColumnId, ProjectBoardIssue[] | undefined>;
+  columns: BoardData | undefined;
   error: Error | null;
   isLoading: boolean;
-  isIpcAvailable: boolean;
+  isRefreshing: boolean;
   refetch: () => Promise<void>;
+  refetchColumn: (column: BoardColumnId) => Promise<void>;
+  transitionIssue: (
+    issueId: string,
+    column: BoardColumnId,
+    actor?: string | null,
+  ) => Promise<void>;
+  isTransitioning: boolean;
+  transitionError: Error | null;
+  resetTransition: () => void;
+  createIssue: (input: CreateIssueInput) => Promise<CreateIssueResponse>;
+  isCreating: boolean;
+  createError: Error | null;
+  resetCreate: () => void;
 };
 
 export function useBoard(): UseBoardResult {
-  const [mounted, setMounted] = useState(false);
-  const [board, setBoard] = useState<ProjectBoard | undefined>(undefined);
-  const [error, setError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const ipcAvailable = mounted && isIpcAvailable();
+  const { projectId } = useActiveProject();
+  const enabled = projectId != null;
 
-  const refetch = useCallback(async (): Promise<void> => {
-    if (!isIpcAvailable()) {
-      setError(new IpcUnavailableError());
-      setIsLoading(false);
-      return;
+  const { data, error, isLoading, isRefreshing, refetch } = useIpcQuery<BoardData>(
+    `board:${projectId ?? "none"}`,
+    async (client) => {
+      const id = projectId as string;
+      const [backlog, inProgress, review, done] = await Promise.all(
+        BOARD_COLUMN_IDS.map((column) => client.getBoardColumn(id, column)),
+      );
+      return { backlog, inProgress, review, done };
+    },
+    { pollIntervalMs: DEFAULT_IPC_POLL_INTERVAL_MS, enabled },
+  );
+
+  const {
+    mutateAsync: transitionIssueColumn,
+    isPending: isTransitioning,
+    error: transitionError,
+    reset: resetTransition,
+  } = useIpcMutation(async (client, input: TransitionIssueInput) => {
+    await client.transitionIssueColumn(input.issueId, input.column, input.actor ?? null);
+  });
+
+  const transitionIssue = useCallback(
+    async (issueId: string, column: BoardColumnId, actor?: string | null): Promise<void> => {
+      await transitionIssueColumn({ issueId, column, actor });
+      await refetch();
+    },
+    [refetch, transitionIssueColumn],
+  );
+
+  const {
+    mutateAsync: createIssueMutation,
+    isPending: isCreating,
+    error: createError,
+    reset: resetCreate,
+  } = useIpcMutation(async (client, input: CreateIssueMutationInput) => {
+    const issue = await client.createIssue(
+      input.resolvedProjectId,
+      input.title,
+      input.description ?? null,
+    );
+
+    if (input.priority !== undefined) {
+      return client.updateIssuePriority(issue.issueId, input.priority);
     }
 
-    setIsLoading(true);
-    setError(null);
+    return issue;
+  });
 
-    try {
-      const client = getIpcClient();
-      const projectId = await client.getActiveProjectId();
+  const createIssue = useCallback(
+    async (input: CreateIssueInput): Promise<CreateIssueResponse> => {
+      const resolvedProjectId = requireProjectId(input.projectId ?? projectId);
+      const issue = await createIssueMutation({ ...input, resolvedProjectId });
+      await refetch();
+      return issue;
+    },
+    [createIssueMutation, projectId, refetch],
+  );
 
-      if (!projectId) {
-        setBoard(EMPTY_BOARD);
-        return;
-      }
+  const refetchColumn = useCallback(async (_column: BoardColumnId): Promise<void> => {
+    await refetch();
+  }, [refetch]);
 
-      const nextBoard = await fetchBoard(projectId);
-      setBoard(nextBoard);
-    } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError : new Error("failed to load board"));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) {
-      return;
-    }
-    void refetch();
-  }, [mounted, refetch]);
+  const issuesByColumn: Record<BoardColumnId, ProjectBoardIssue[] | undefined> = {
+    backlog: data?.backlog.issues,
+    inProgress: data?.inProgress.issues,
+    review: data?.review.issues,
+    done: data?.done.issues,
+  };
 
   return {
-    board,
+    issuesByColumn,
+    columns: data,
     error,
-    isLoading: !mounted || isLoading,
-    isIpcAvailable: ipcAvailable,
+    isLoading,
+    isRefreshing,
     refetch,
+    refetchColumn,
+    transitionIssue,
+    isTransitioning,
+    transitionError,
+    resetTransition,
+    createIssue,
+    isCreating,
+    createError,
+    resetCreate,
   };
 }

@@ -2,8 +2,10 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::acp::AcpState;
+use crate::db::repos::issue::IssueRepo;
 use crate::db::repos::pending_permission::PendingPermissionRepo;
 use crate::db::Db;
+use crate::orchestrator::audit;
 use crate::types::{PendingPermission, PermissionDecision};
 
 #[tauri::command(rename = "opensymphony:list-issue-pending-permissions")]
@@ -24,13 +26,28 @@ pub fn resolve_session_permission(
     permission_id: String,
     decision: PermissionDecision,
 ) -> Result<(), String> {
-    // unblock the waiting agent handler first, then remove the persisted row.
+    let conn = db.conn().map_err(|err| err.to_string())?;
+    let permission = PendingPermissionRepo::new(&conn)
+        .get(&permission_id)
+        .map_err(|err| err.to_string())?
+        .ok_or_else(|| format!("pending permission {permission_id} not found"))?;
+    let issue = IssueRepo::new(&conn)
+        .get(&permission.issue_id)
+        .map_err(|err| err.to_string())?
+        .ok_or_else(|| format!("issue {} not found", permission.issue_id))?;
+
     if !acp.permission_gate.resolve(&permission_id, decision) {
         return Err(format!("pending permission {permission_id} not found"));
     }
 
-    let conn = db.conn().map_err(|err| err.to_string())?;
     PendingPermissionRepo::new(&conn)
         .resolve(&permission_id)
-        .map_err(|err| err.to_string())
+        .map_err(|err| err.to_string())?;
+    audit::log(
+        &conn,
+        &issue.project_id,
+        audit::action::PERMISSION_RESOLVED,
+        Some(&permission.issue_id),
+    )
+    .map_err(|err| err.to_string())
 }

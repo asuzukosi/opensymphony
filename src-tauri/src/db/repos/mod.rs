@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod agent_session;
+pub mod analytics;
 pub mod app_state;
 pub mod audit;
 pub mod comment;

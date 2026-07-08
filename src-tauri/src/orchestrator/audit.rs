@@ -16,6 +16,7 @@ pub mod action {
     pub const ATTEMPT_SUCCEEDED: &str = "attempt_succeeded";
     pub const ATTEMPT_FAILED: &str = "attempt_failed";
     pub const ATTEMPT_CANCELLED: &str = "attempt_cancelled";
+    pub const PERMISSION_RESOLVED: &str = "permission_resolved";
 }
 
 pub(crate) fn log(

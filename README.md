@@ -9,9 +9,53 @@ bun install
 bun run dev:web   # next.js on http://127.0.0.1:3000
 bun run dev       # tauri window
 bun run build     # production bundle
+bun run check-types
+bun run lint
 ```
 
-The Electron-era codebase lives temporarily in `reference/electron-stack/` as a porting guide and is deleted after migration.
+## frontend
+
+Next.js App Router UI in `src/`. Pages use domain hooks over Tauri IPC — do not call `getIpcClient()` directly from route or feature components.
+
+### routes
+
+| Route | Purpose |
+| ----- | ------- |
+| `/` | Dashboard — runtime stats, activity charts, audit feed |
+| `/board` | Kanban — four fixed columns, drag-and-drop, issue sheet |
+| `/issue/[id]` | Issue detail — comments, run history, session timeline, permission panel |
+| `/agents` | Agent registry CRUD + project assignment |
+| `/settings` | Project settings — general, workflow, runtime, permissions |
+
+Shell layout: `src/app/(shell)/layout.tsx` wraps all routes with sidebar nav, project switcher, and `ActiveProjectProvider`.
+
+### domain hooks
+
+| Hook | Responsibility |
+| ---- | -------------- |
+| `useProject()` | Project list, active project, `setActiveProject` |
+| `useRuntime()` | Runtime summary slices + start/stop/tick/poll controls |
+| `useAgentActivity(timeRange)` | Dashboard activity chart buckets |
+| `useBoardColumn(column)` | Column issues, `transitionIssue`, `createIssue` |
+| `useIssue(id)` | Issue reads/writes, comments, session events |
+| `useIssuePermissions(issueId)` | Pending permissions + resolve (issue page only) |
+| `useProjectSettings()` | Narrow project field reads/writes |
+| `useAgents()` | Agent CRUD + project assign/unassign |
+
+Private IPC primitives: `useIpcQuery`, `useIpcMutation` in `src/lib/ipc/hooks.ts` (not exported from the barrel).
+
+### layout
+
+```
+src/
+  app/(shell)/          # routed pages
+  components/           # feature + layout + ui (shadcn)
+  contexts/             # active project provider
+  hooks/                # domain hooks
+  lib/ipc/              # channels, types, client, hooks
+```
+
+Design tokens live in `src/app/globals.css`. Permissions UI is scoped to `/issue/[id]` only — no global permission queue in the shell.
 
 ## database
 

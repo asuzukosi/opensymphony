@@ -1,7 +1,6 @@
 /**
  * ipc payload types for tauri commands and the next.js frontend.
  * mirrors src-tauri/src/types/ — keep in sync with rust serde json shapes.
- * intentionally slimmer than reference/electron-stack ipc.ts where noted in the migration plan.
  */
 
 // --- shared ---
@@ -229,6 +228,39 @@ export type StopRuntimeResponse = RuntimeSummary;
 export type TickRuntimeResponse = RuntimeSummary;
 export type SetRuntimePollIntervalResponse = number;
 export type ClearRuntimePollIntervalOverrideResponse = number;
+
+// --- analytics reads ---
+
+export interface ActivityTimeRange {
+  startAt: string;
+  endAt: string;
+  bucketMs: number;
+}
+
+export type AgentActivityEventKind = Exclude<SessionEventKind, "StreamChunk">;
+
+export type AgentActivityByKind = Partial<Record<AgentActivityEventKind, number>>;
+
+export interface AgentActivityOverTimeBucket {
+  bucketStart: string;
+  totalEvents: number;
+  byKind?: AgentActivityByKind;
+}
+
+export interface AgentActivityOverTimeResponse {
+  buckets: AgentActivityOverTimeBucket[];
+}
+
+export interface PermissionActivityOverTimeBucket {
+  bucketStart: string;
+  activePending: number;
+  requestsOpened: number;
+  requestsResolved: number;
+}
+
+export interface PermissionActivityOverTimeResponse {
+  buckets: PermissionActivityOverTimeBucket[];
+}
 
 // --- project reads ---
 
