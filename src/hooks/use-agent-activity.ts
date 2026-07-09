@@ -26,7 +26,7 @@ export type UseAgentActivityOptions = {
 export type UseAgentActivityResult = {
   agentActivity: AgentActivityOverTimeBucket[] | undefined;
   permissionActivity: PermissionActivityOverTimeBucket[] | undefined;
-  timeRange: ActivityTimeRange;
+  timeRange: ActivityTimeRange | null;
   fetchedAt: string | undefined;
   error: Error | null;
   isLoading: boolean;
@@ -39,17 +39,23 @@ function activityQueryKey(projectId: string, timeRange: ActivityTimeRange): stri
 }
 
 export function useAgentActivity(
-  timeRange: ActivityTimeRange,
+  timeRange: ActivityTimeRange | null,
   options?: UseAgentActivityOptions,
 ): UseAgentActivityResult {
   const { pollIntervalMs = DEFAULT_IPC_POLL_INTERVAL_MS, enabled: enabledOption = true } =
     options ?? {};
   const { projectId } = useActiveProject();
-  const enabled = enabledOption && projectId != null;
+  const enabled = enabledOption && projectId != null && timeRange != null;
 
   const { data, error, isLoading, isRefreshing, refetch } = useIpcQuery<AgentActivityData>(
-    activityQueryKey(projectId ?? "none", timeRange),
+    timeRange
+      ? activityQueryKey(projectId ?? "none", timeRange)
+      : "agent-activity:pending-time-range",
     async (client) => {
+      if (!timeRange) {
+        throw new Error("activity time range not ready");
+      }
+
       const id = projectId as string;
       const [agentResponse, permissionResponse] = await Promise.all([
         client.getProjectAgentActivityOverTime(id, timeRange),
@@ -72,7 +78,7 @@ export function useAgentActivity(
     timeRange: data?.timeRange ?? timeRange,
     fetchedAt: data?.fetchedAt,
     error,
-    isLoading,
+    isLoading: timeRange == null || isLoading,
     isRefreshing,
     refetch,
   };

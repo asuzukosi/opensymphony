@@ -48,14 +48,14 @@ function TimeRangePicker({
   onChange,
   className,
 }: {
-  value: ActivityTimeRange;
+  value: ActivityTimeRange | null;
   onChange: (timeRange: ActivityTimeRange) => void;
   className?: string;
 }) {
   const [preset, setPreset] = useState<ActivityTimeRangePresetId>("24h");
   const [bucketId, setBucketId] = useState<ActivityTimeRangeBucketId>("auto");
-  const [customStartInput, setCustomStartInput] = useState(() => toDatetimeLocalInputValue(defaultCustomRange().startAt));
-  const [customEndInput, setCustomEndInput] = useState(() => toDatetimeLocalInputValue(defaultCustomRange().endAt));
+  const [customStartInput, setCustomStartInput] = useState("");
+  const [customEndInput, setCustomEndInput] = useState("");
 
   const emitChange = useCallback(
     (
@@ -82,6 +82,10 @@ function TimeRangePicker({
     [onChange],
   );
 
+  if (!value) {
+    return <Skeleton className="h-8 w-full max-w-xl rounded-md" aria-hidden />;
+  }
+
   return (
     <div className={cn("flex flex-wrap items-end gap-3", className)} aria-label="Activity time range">
       <div className="space-y-1">
@@ -92,6 +96,18 @@ function TimeRangePicker({
           value={preset}
           onValueChange={(next: ActivityTimeRangePresetId) => {
             setPreset(next);
+            if (next === "custom") {
+              const fallback = defaultCustomRange();
+              setCustomStartInput(toDatetimeLocalInputValue(fallback.startAt));
+              setCustomEndInput(toDatetimeLocalInputValue(fallback.endAt));
+              emitChange(
+                next,
+                bucketId,
+                toDatetimeLocalInputValue(fallback.startAt),
+                toDatetimeLocalInputValue(fallback.endAt),
+              );
+              return;
+            }
             emitChange(next, bucketId, customStartInput, customEndInput);
           }}
         >
@@ -203,7 +219,7 @@ function BucketPanel({
 }
 
 type ActivityPanelProps = {
-  timeRange: ActivityTimeRange;
+  timeRange: ActivityTimeRange | null;
   onTimeRangeChange: (timeRange: ActivityTimeRange) => void;
   agentBuckets?: AgentActivityOverTimeBucket[];
   permissionBuckets?: PermissionActivityOverTimeBucket[];
@@ -217,12 +233,24 @@ export function ActivityPanel({
   permissionBuckets,
   isLoading = false,
 }: ActivityPanelProps) {
-  const pending = isPendingLoad(isLoading, agentBuckets);
+  const pending = isPendingLoad(isLoading, agentBuckets) || timeRange == null;
   const agentData = agentBuckets?.filter((bucket) => bucket.totalEvents > 0) ?? [];
   const permissionData =
     permissionBuckets?.filter(
       (bucket) => bucket.activePending > 0 || bucket.requestsOpened > 0 || bucket.requestsResolved > 0,
     ) ?? [];
+
+  if (!timeRange) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-full max-w-xl rounded-md" />
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Skeleton className="h-[240px] w-full rounded-lg" />
+          <Skeleton className="h-[240px] w-full rounded-lg" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

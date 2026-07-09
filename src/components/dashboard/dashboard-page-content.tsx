@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ActivityPanel } from "@/components/dashboard/activity-panel";
 import { AuditPanel } from "@/components/dashboard/audit-panel";
@@ -15,12 +15,21 @@ import { useActiveProject } from "@/contexts/active-project-context";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { useRuntime } from "@/hooks/use-runtime";
 import { createDefaultActivityTimeRange } from "@/lib/activity-time-range";
+import type { ActivityTimeRange } from "@/lib/ipc/types";
 
 export function DashboardPageContent() {
   const { projectId } = useActiveProject();
   const runtime = useRuntime();
-  const [timeRange, setTimeRange] = useState(createDefaultActivityTimeRange);
+  const [timeRange, setTimeRange] = useState<ActivityTimeRange | null>(null);
   const activity = useAgentActivity(timeRange);
+
+  useEffect(() => {
+    setTimeRange(createDefaultActivityTimeRange());
+  }, []);
+
+  const handleTimeRangeChange = (next: ActivityTimeRange): void => {
+    setTimeRange(next);
+  };
 
   const errors = [
     runtime.error ? { title: "Runtime data unavailable", message: runtime.error.message } : null,
@@ -62,7 +71,7 @@ export function DashboardPageContent() {
       <section aria-label="Activity charts">
         <ActivityPanel
           timeRange={timeRange}
-          onTimeRangeChange={setTimeRange}
+          onTimeRangeChange={handleTimeRangeChange}
           agentBuckets={activity.agentActivity}
           permissionBuckets={activity.permissionActivity}
           isLoading={activity.isLoading}
