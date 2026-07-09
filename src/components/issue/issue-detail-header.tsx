@@ -1,6 +1,5 @@
 "use client";
 
-import { ArrowLeft, FileText } from "lucide-react";
 import Link from "next/link";
 
 import { formatIssuePriority } from "@/components/board/issue-card";
@@ -8,6 +7,7 @@ import { BOARD_COLUMN_LABELS } from "@/components/board/board-states";
 import { IssueColumnSelect } from "@/components/issue/issue-column-select";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
+import { ArrowLeftIcon, DocumentTextIcon } from "@/components/ui/hero-icons";
 import type { IssueDetail } from "@/hooks/use-issue";
 import type { BoardColumnId } from "@/lib/ipc/types";
 
@@ -34,13 +34,13 @@ export function IssueDetailHeader({
         href="/board"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="size-4" />
+        <ArrowLeftIcon className="size-4" />
         Back to board
       </Link>
 
       <PageHeader
         eyebrow={issue.identifier}
-        icon={FileText}
+        icon={DocumentTextIcon}
         title={issue.title}
         description={
           issue.description

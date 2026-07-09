@@ -8,6 +8,7 @@ const preset = {
       fontFamily: {
         sans: ["var(--font-family-sans)"],
         mono: ["var(--font-family-mono)"],
+        brand: ["var(--font-family-brand)"],
       },
       fontSize: {
         xs: ["var(--font-size-xs)", { lineHeight: "var(--line-height-normal)" }],
@@ -95,6 +96,13 @@ const preset = {
         md: "var(--radius-md)",
         lg: "var(--radius-lg)",
         xl: "var(--radius-xl)",
+      },
+      boxShadow: {
+        DEFAULT: "var(--shadow)",
+        sm: "var(--shadow-sm)",
+        card: "var(--shadow-card)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
       },
       spacing: {
         page: "var(--spacing-page-y)",

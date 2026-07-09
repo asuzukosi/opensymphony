@@ -1,7 +1,6 @@
 "use client";
 
-import { CheckCircle2 } from "lucide-react";
-
+import { CheckCircleIcon } from "@/components/dashboard/dashboard-icons";
 import { BorderedTable, tableHeadClass, tableHeaderRowClass } from "@/components/dashboard/shared";
 import { EmptyState } from "@/components/layout/empty-state";
 import { IssueLink } from "@/components/layout/issue-link";
@@ -99,7 +98,7 @@ export function FinishedPanel({
         </BorderedTable>
       ) : (
         <EmptyState
-          icon={CheckCircle2}
+          icon={CheckCircleIcon}
           title="No recently finished runs"
           description="Completed run attempts will appear here after agents finish work."
         />

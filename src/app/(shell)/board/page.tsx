@@ -10,7 +10,6 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Kanban } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { BoardColumns, type BoardColumnMeta } from "@/components/board/board-columns";
@@ -18,10 +17,13 @@ import { CreateIssueDialog } from "@/components/board/create-issue-dialog";
 import { BOARD_COLUMN_LABELS } from "@/components/board/board-states";
 import { IssueCard } from "@/components/board/issue-card";
 import { IssueDetailSheet } from "@/components/board/issue-detail-sheet";
+import { BoardIcon } from "@/components/layout/nav-icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageShell } from "@/components/layout/page-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { PlusIcon } from "@/components/ui/hero-icons";
 import { useActiveProject } from "@/contexts/active-project-context";
 import { useBoard, type CreateIssueInput } from "@/hooks/use-board";
 import {
@@ -65,6 +67,12 @@ function buildSyncedBoard(
     review: { issues: issuesByColumn.review ?? [] },
     done: { issues: issuesByColumn.done ?? [] },
   };
+}
+
+function countBoardIssues(board: ProjectBoard): { total: number; done: number } {
+  const columns = [board.backlog, board.inProgress, board.review, board.done];
+  const total = columns.reduce((sum, column) => sum + column.issues.length, 0);
+  return { total, done: board.done.issues.length };
 }
 
 function BoardDnDContent() {
@@ -168,9 +176,26 @@ function BoardDnDContent() {
   };
 
   const isMutating = board.isTransitioning || board.isCreating;
+  const { total, done } = useMemo(() => countBoardIssues(displayBoard), [displayBoard]);
+
+  const openCreateDialog = (): void => {
+    board.resetCreate();
+    setFailedCreate(false);
+    setCreateDialogOpen(true);
+  };
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Total: {total} {total === 1 ? "task" : "tasks"} · Done: {done}
+        </p>
+        <Button type="button" size="sm" className="gap-2" disabled={isMutating} onClick={openCreateDialog}>
+          <PlusIcon className="size-4" />
+          Add task
+        </Button>
+      </div>
+
       {failedTransition && board.transitionError ? (
         <Alert variant="destructive" className="shrink-0">
           <AlertTitle>Task update failed</AlertTitle>
@@ -187,36 +212,36 @@ function BoardDnDContent() {
         </Alert>
       ) : null}
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragEnd={(event) => void handleDragEnd(event)}
-      >
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <BoardColumns
-            columnMeta={columnMeta}
-            getColumnIssues={getColumnIssues}
-            dragEnabled
-            disabled={isMutating}
-            onAddTask={() => {
-              board.resetCreate();
-              setFailedCreate(false);
-              setCreateDialogOpen(true);
-            }}
-            onIssueOpen={(issue) => {
-              setSheetIssueId(issue.issueId);
-            }}
-            className="min-h-0 flex-1"
-          />
-        </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={(event) => void handleDragEnd(event)}
+        >
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <BoardColumns
+              columnMeta={columnMeta}
+              getColumnIssues={getColumnIssues}
+              dragEnabled
+              disabled={isMutating}
+              onAddTask={() => {
+                openCreateDialog();
+              }}
+              onIssueOpen={(issue) => {
+                setSheetIssueId(issue.issueId);
+              }}
+              className="min-h-0 flex-1"
+            />
+          </div>
 
-        <DragOverlay>
-          {activeIssue ? (
-            <IssueCard issue={activeIssue} isOverlay disabled={isMutating} />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+          <DragOverlay>
+            {activeIssue ? (
+              <IssueCard issue={activeIssue} isOverlay disabled={isMutating} />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      </div>
 
       {projectId != null ? (
         <CreateIssueDialog
@@ -238,7 +263,7 @@ function BoardDnDContent() {
           }
         }}
       />
-    </>
+    </div>
   );
 }
 
@@ -262,10 +287,10 @@ export default function BoardPage() {
   const statusLabel = orchestratorStatus ?? activeProject?.orchestratorStatus;
 
   return (
-    <PageShell width="full" className="min-h-0 flex-1 overflow-hidden">
+    <PageShell width="full" className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <PageHeader
         eyebrow="Workflow"
-        icon={Kanban}
+        icon={BoardIcon}
         title={projectName}
         description={
           projectId == null
@@ -283,10 +308,14 @@ export default function BoardPage() {
             </Badge>
           ) : null
         }
-        className="shrink-0"
+        className="mb-2 shrink-0"
       />
 
-      {projectId != null ? <BoardDnDContent /> : null}
+      {projectId != null ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <BoardDnDContent />
+        </div>
+      ) : null}
     </PageShell>
   );
 }

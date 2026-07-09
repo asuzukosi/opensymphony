@@ -8,9 +8,15 @@ import type { ProjectSummary } from "@/lib/ipc/types";
 type ActiveProjectContextValue = {
   projectId: string | null | undefined;
   setProjectId: (projectId: string) => Promise<void>;
+  createProject: (name: string) => Promise<void>;
+  renameProject: (projectId: string, name: string) => Promise<void>;
+  deleteProject: (projectId: string) => Promise<void>;
   isLoading: boolean;
   projects: ProjectSummary[] | undefined;
   isSettingActive: boolean;
+  isMutatingProject: boolean;
+  projectMutationError: Error | null;
+  resetProjectMutation: () => void;
 };
 
 const ActiveProjectContext = createContext<ActiveProjectContextValue | null>(null);
@@ -20,18 +26,47 @@ type ActiveProjectProviderProps = {
 };
 
 export function ActiveProjectProvider({ children }: ActiveProjectProviderProps) {
-  const { projects, activeProjectId, setActiveProject, isLoading, isSettingActive } =
-    useProject();
+  const {
+    projects,
+    activeProjectId,
+    setActiveProject,
+    createProject,
+    renameProject,
+    deleteProject,
+    isLoading,
+    isSettingActive,
+    isMutatingProject,
+    projectMutationError,
+    resetProjectMutation,
+  } = useProject();
 
   const value = useMemo(
     (): ActiveProjectContextValue => ({
       projectId: activeProjectId,
       setProjectId: setActiveProject,
+      createProject,
+      renameProject,
+      deleteProject,
       isLoading,
       projects,
       isSettingActive,
+      isMutatingProject,
+      projectMutationError,
+      resetProjectMutation,
     }),
-    [activeProjectId, isLoading, isSettingActive, projects, setActiveProject],
+    [
+      activeProjectId,
+      createProject,
+      deleteProject,
+      isLoading,
+      isMutatingProject,
+      isSettingActive,
+      projectMutationError,
+      projects,
+      renameProject,
+      resetProjectMutation,
+      setActiveProject,
+    ],
   );
 
   return (

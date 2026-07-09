@@ -1,12 +1,9 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { Plus } from "lucide-react";
+import { EllipsisHorizontalIcon, PlusIcon } from "@/components/ui/hero-icons";
 
-import { SurfaceCard } from "@/components/layout/surface-card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CardHeader, CardTitle } from "@/components/ui/card";
 import { IssueCard } from "@/components/board/issue-card";
 import {
   BoardColumnBodySkeleton,
@@ -52,34 +49,31 @@ export function BoardColumn({
   });
 
   return (
-    <SurfaceCard className="flex h-full min-h-0 flex-col overflow-hidden">
-      <CardHeader className="flex shrink-0 flex-row items-start justify-between gap-2 space-y-0 border-b border-border/60 pb-3">
-        <div className="space-y-2">
-          <CardTitle className="text-base">{label}</CardTitle>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-4 flex shrink-0 items-start justify-between gap-2">
+        <div className="min-w-0 space-y-0.5">
+          <h2 className="text-xs font-medium tracking-tight">{label}</h2>
           {isInitialLoading ? (
             <BoardColumnCountSkeleton />
           ) : (
-            <Badge variant="secondary" className="font-normal">
+            <p className="text-sm text-muted-foreground">
               {issueCount} {issueCount === 1 ? "task" : "tasks"}
-            </Badge>
+            </p>
           )}
         </div>
-        {canCreateIssue ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8 shrink-0"
-            aria-label={`Add task to ${label}`}
-            disabled={disabled}
-            onClick={onAddTask}
-          >
-            <Plus className="size-4" />
-          </Button>
-        ) : null}
-      </CardHeader>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8 shrink-0 text-muted-foreground"
+          aria-label={`${label} column options`}
+          disabled
+        >
+          <EllipsisHorizontalIcon className="size-4" />
+        </Button>
+      </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-3">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
         {error ? (
           <BoardColumnErrorState error={error} />
         ) : isInitialLoading ? (
@@ -88,15 +82,14 @@ export function BoardColumn({
           <div
             ref={setNodeRef}
             className={cn(
-              "min-h-[12rem] space-y-2 rounded-lg border border-dashed border-transparent bg-muted/20 p-2 transition-colors",
-              dragEnabled && isOver && "border-primary/40 bg-accent/40",
-              issueCount === 0 && "border-border/70",
+              "min-h-[10rem] space-y-3 rounded-lg transition-colors",
+              dragEnabled && isOver && "bg-accent/30 ring-1 ring-inset ring-primary/20",
             )}
           >
             {issueCount === 0 ? (
               <BoardColumnEmptyState showCreateHint={canCreateIssue} />
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 {issues?.map((issue) => (
                   <li key={issue.issueId}>
                     <IssueCard
@@ -109,9 +102,22 @@ export function BoardColumn({
                 ))}
               </ul>
             )}
+
+            {canCreateIssue ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-center gap-2 font-normal"
+                disabled={disabled}
+                onClick={onAddTask}
+              >
+                <PlusIcon className="size-4" />
+                Add
+              </Button>
+            ) : null}
           </div>
         )}
       </div>
-    </SurfaceCard>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Plus } from "lucide-react";
+import { PlusIcon } from "@/components/ui/hero-icons";
 import { useState } from "react";
 
 import {
@@ -9,6 +9,7 @@ import {
 } from "@/components/agents/agent-form-dialog";
 import { AgentsTable } from "@/components/agents/agents-table";
 import { ProjectAgentAssignment } from "@/components/agents/project-agent-assignment";
+import { AgentsIcon } from "@/components/layout/nav-icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageShell } from "@/components/layout/page-shell";
 import { SurfaceCard } from "@/components/layout/surface-card";
@@ -25,7 +26,7 @@ function AgentsLoadingState() {
     <PageShell>
       <PageHeader
         eyebrow="Registry"
-        icon={Bot}
+        icon={AgentsIcon}
         title="Agents"
         description="Manage agent definitions and project assignments."
         isLoading
@@ -147,12 +148,12 @@ export default function AgentsPage() {
     <PageShell>
       <PageHeader
         eyebrow="Registry"
-        icon={Bot}
+        icon={AgentsIcon}
         title="Agents"
         description="Manage agent definitions and project assignments."
         actions={
           <Button type="button" size="sm" onClick={openCreateDialog}>
-            <Plus className="mr-2 h-4 w-4" />
+            <PlusIcon className="mr-2 h-4 w-4" />
             Add agent
           </Button>
         }

@@ -21,28 +21,35 @@ Next.js App Router UI in `src/`. Pages use domain hooks over Tauri IPC — do no
 
 | Route | Purpose |
 | ----- | ------- |
-| `/` | Dashboard — runtime stats, activity charts, audit feed |
-| `/board` | Kanban — four fixed columns, drag-and-drop, issue sheet |
+| `/` | Dashboard — runtime stats, running/retry panels, activity charts, audit feed |
+| `/board` | Kanban — four fixed columns, drag-and-drop, create issue dialog, issue sheet |
 | `/issue/[id]` | Issue detail — comments, run history, session timeline, permission panel |
 | `/agents` | Agent registry CRUD + project assignment |
-| `/settings` | Project settings — general, workflow, runtime, permissions |
+| `/settings` | Project settings — general, workflow, prompt template, runtime, permissions |
 
-Shell layout: `src/app/(shell)/layout.tsx` wraps all routes with sidebar nav, project switcher, and `ActiveProjectProvider`.
+Shell layout: `src/app/(shell)/layout.tsx` wraps all routes with sidebar nav, project switcher (create/edit projects), and `ActiveProjectProvider`.
 
 ### domain hooks
 
 | Hook | Responsibility |
 | ---- | -------------- |
-| `useProject()` | Project list, active project, `setActiveProject` |
-| `useRuntime()` | Runtime summary slices + start/stop/tick/poll controls |
+| `useProject()` | Project list, active project, create/rename/delete, `setActiveProject` |
+| `useRuntime()` | Runtime summary slices + start/stop/tick/poll override + pause/resume/cancel run |
 | `useAgentActivity(timeRange)` | Dashboard activity chart buckets |
-| `useBoardColumn(column)` | Column issues, `transitionIssue`, `createIssue` |
+| `useBoard()` | All board columns, `transitionIssue`, `createIssue` |
 | `useIssue(id)` | Issue reads/writes, comments, session events |
 | `useIssuePermissions(issueId)` | Pending permissions + resolve (issue page only) |
-| `useProjectSettings()` | Narrow project field reads/writes |
+| `useProjectSettings()` | Narrow project field reads/writes including prompt template |
 | `useAgents()` | Agent CRUD + project assign/unassign |
 
 Private IPC primitives: `useIpcQuery`, `useIpcMutation` in `src/lib/ipc/hooks.ts` (not exported from the barrel).
+
+### ui conventions
+
+- Design tokens in `src/app/globals.css` (Roboto sans, Bricolage Grotesque brand, radius/shadow presets)
+- Heroicons via `src/components/ui/hero-icons.tsx` — no Lucide in app code
+- Permissions UI is scoped to `/issue/[id]` only — no global permission queue in the shell
+- Run controls (pause/resume/cancel) live on the dashboard running sessions table
 
 ### layout
 
@@ -55,14 +62,14 @@ src/
   lib/ipc/              # channels, types, client, hooks
 ```
 
-Design tokens live in `src/app/globals.css`. Permissions UI is scoped to `/issue/[id]` only — no global permission queue in the shell.
+See [docs/connecting-acp-agents.md](docs/connecting-acp-agents.md) for agent setup.
 
 ## database
 
 SQLite database opened on app start:
 
 ```
-{app_data_dir}/opensymphony.sqlite
+{app_data_dir}/symphony.sqlite
 ```
 
 - schema: `src-tauri/migrations/001_init.sql`
@@ -79,7 +86,7 @@ cd src-tauri && cargo test
 
 Narrow Tauri commands — one read slice or write action per handler. No monolithic `mutate_issue` / `control_runtime` enums.
 
-**60 commands** registered in `src-tauri/src/lib.rs` (28 reads, 32 writes).
+**62 commands** registered in `src-tauri/src/lib.rs` (28 reads, 32 writes, plus analytics).
 
 | module | reads | writes |
 |--------|------:|-------:|
@@ -90,6 +97,7 @@ Narrow Tauri commands — one read slice or write action per handler. No monolit
 | `commands/project.rs` | 11 | 10 |
 | `commands/agent.rs` | 3 | 6 |
 | `commands/app_state.rs` | 1 | 1 |
+| `commands/analytics.rs` | 2 | — |
 
 Channel naming: `opensymphony:<kebab-case-action>` (e.g. `opensymphony:get-board-column`, `opensymphony:create-issue`).
 

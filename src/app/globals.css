@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,8 +9,9 @@
     color-scheme: light;
 
     /* typography: font families */
-    --font-family-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --font-family-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
     --font-family-mono: "JetBrains Mono", ui-monospace, monospace;
+    --font-family-brand: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
 
     /* typography: font sizes */
     --font-size-xs: 0.75rem;
@@ -29,11 +32,18 @@
     --line-height-normal: 1.5;
 
     /* radius: component corners */
-    --radius-sm: 0.375rem;
-    --radius-md: 0.5rem;
-    --radius-lg: 0.75rem;
-    --radius-xl: 1rem;
-    --radius: var(--radius-lg);
+    --radius-sm: 0.1875rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.625rem;
+    --radius: var(--radius-md);
+
+    /* shadow: elevation */
+    --shadow-sm: 0 1px 1px 0 rgb(0 0 0 / 0.025);
+    --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.035);
+    --shadow-card: var(--shadow);
+    --shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.03);
+    --shadow-lg: 0 4px 6px -2px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04);
 
     /* spacing: page and component padding */
     --spacing-page-x: 1.5rem;
@@ -44,8 +54,8 @@
     /* layout: shell and panel widths */
     --sidebar-width: 16rem;
     --settings-nav-width: 14rem;
-    --board-column-width: 18rem;
-    --board-column-gap: 1rem;
+    --board-column-width: 25rem;
+    --board-column-gap: 1.25rem;
 
     /* color: page canvas behind cards */
     --page-background: 240 4.8% 95.9%;

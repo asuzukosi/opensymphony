@@ -22,8 +22,14 @@ export type UseProjectResult = {
   isRefreshing: boolean;
   refetch: () => Promise<void>;
   setActiveProject: (projectId: string) => Promise<void>;
+  createProject: (name: string) => Promise<void>;
+  renameProject: (projectId: string, name: string) => Promise<void>;
+  deleteProject: (projectId: string) => Promise<void>;
   isSettingActive: boolean;
+  isMutatingProject: boolean;
   setActiveError: Error | null;
+  projectMutationError: Error | null;
+  resetProjectMutation: () => void;
 };
 
 export function useProject(): UseProjectResult {
@@ -47,12 +53,65 @@ export function useProject(): UseProjectResult {
     await client.setActiveProjectId(projectId);
   });
 
+  const {
+    mutateAsync: mutateProject,
+    isPending: isMutatingProject,
+    error: projectMutationError,
+    reset: resetProjectMutation,
+  } = useIpcMutation(
+    async (
+      client,
+      input:
+        | { action: "create"; name: string }
+        | { action: "rename"; projectId: string; name: string }
+        | { action: "delete"; projectId: string },
+    ) => {
+      switch (input.action) {
+        case "create": {
+          const project = await client.createProject(input.name);
+          await client.setActiveProjectId(project.id);
+          return;
+        }
+        case "rename":
+          await client.setProjectName(input.projectId, input.name);
+          return;
+        case "delete":
+          await client.deleteProject(input.projectId);
+          return;
+      }
+    },
+  );
+
   const setActiveProject = useCallback(
     async (projectId: string): Promise<void> => {
       await setActiveProjectId(projectId);
       await refetch();
     },
     [refetch, setActiveProjectId],
+  );
+
+  const createProject = useCallback(
+    async (name: string): Promise<void> => {
+      await mutateProject({ action: "create", name });
+      await refetch();
+    },
+    [mutateProject, refetch],
+  );
+
+  const renameProject = useCallback(
+    async (projectId: string, name: string): Promise<void> => {
+      await mutateProject({ action: "rename", projectId, name });
+      await refetch();
+    },
+    [mutateProject, refetch],
+  );
+
+  const deleteProject = useCallback(
+    async (projectId: string): Promise<void> => {
+      await mutateProject({ action: "delete", projectId });
+      await refetch();
+    },
+    [mutateProject, refetch],
   );
 
   return {
@@ -63,7 +122,13 @@ export function useProject(): UseProjectResult {
     isRefreshing,
     refetch,
     setActiveProject,
+    createProject,
+    renameProject,
+    deleteProject,
     isSettingActive,
+    isMutatingProject,
     setActiveError,
+    projectMutationError,
+    resetProjectMutation,
   };
 }

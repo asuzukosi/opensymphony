@@ -12,7 +12,7 @@ export function PanelSection({ title, description, children }: PanelSectionProps
   return (
     <SurfaceCard className="space-y-4">
       <div className="space-y-1">
-        <h3 className="text-base font-semibold tracking-tight">{title}</h3>
+        <h3 className="text-base font-normal tracking-tight">{title}</h3>
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       {children}

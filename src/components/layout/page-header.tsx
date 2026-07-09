@@ -1,11 +1,10 @@
-import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode, SVGProps } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 type PageHeaderProps = {
   eyebrow?: string;
-  icon?: LucideIcon;
+  icon?: ComponentType<SVGProps<SVGSVGElement>>;
   title: string;
   description?: string;
   actions?: ReactNode;
@@ -39,9 +38,9 @@ export function PageHeader({
             </>
           ) : (
             <>
-              <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+              <h1 className="text-lg font-medium tracking-tight">{title}</h1>
               {description ? (
-                <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>
+                <p className="max-w-lg text-sm text-muted-foreground">{description}</p>
               ) : null}
             </>
           )}

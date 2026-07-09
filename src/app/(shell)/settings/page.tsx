@@ -1,14 +1,15 @@
 "use client";
 
-import { Settings } from "lucide-react";
 import { useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { SettingsIcon } from "@/components/layout/nav-icons";
 import { PageShell } from "@/components/layout/page-shell";
 import { SurfaceCard } from "@/components/layout/surface-card";
 import { SettingsGeneralSection } from "@/components/settings/settings-general-section";
 import { SettingsLayout } from "@/components/settings/settings-layout";
 import { SettingsPermissionsSection } from "@/components/settings/settings-permissions-section";
+import { SettingsPromptSection } from "@/components/settings/settings-prompt-section";
 import { SettingsRuntimeSection } from "@/components/settings/settings-runtime-section";
 import { SettingsWorkflowSection } from "@/components/settings/settings-workflow-section";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,7 +24,7 @@ function SettingsLoadingState() {
     <PageShell>
       <PageHeader
         eyebrow="Configuration"
-        icon={Settings}
+        icon={SettingsIcon}
         title="Settings"
         description="Configure the active project workflow, runtime, and permissions."
         isLoading
@@ -54,6 +55,7 @@ export default function SettingsPage() {
     setMaxConcurrency,
     setRetryPolicy,
     setPermissionMode,
+    setPromptTemplate,
     isMutating,
     mutationError,
     resetMutation,
@@ -66,6 +68,7 @@ export default function SettingsPage() {
     "pollInterval" | "maxConcurrency" | "retryPolicy" | null
   >(null);
   const [failedPermissionMode, setFailedPermissionMode] = useState(false);
+  const [failedPromptTemplate, setFailedPromptTemplate] = useState(false);
 
   const isInitialLoading =
     isProjectLoading || (projectId != null && isLoading && settings === undefined);
@@ -75,6 +78,7 @@ export default function SettingsPage() {
     setFailedWorkflowAction(null);
     setFailedRuntimeAction(null);
     setFailedPermissionMode(false);
+    setFailedPromptTemplate(false);
   };
 
   const handleSaveName = async (name: string): Promise<void> => {
@@ -154,6 +158,17 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSavePromptTemplate = async (promptTemplate: string): Promise<void> => {
+    resetMutation();
+    clearFailedActions();
+
+    try {
+      await setPromptTemplate(promptTemplate);
+    } catch {
+      setFailedPromptTemplate(true);
+    }
+  };
+
   if (isInitialLoading) {
     return <SettingsLoadingState />;
   }
@@ -162,7 +177,7 @@ export default function SettingsPage() {
     <PageShell>
       <PageHeader
         eyebrow="Configuration"
-        icon={Settings}
+        icon={SettingsIcon}
         title="Settings"
         description="Configure the active project workflow, runtime, and permissions."
       />
@@ -198,6 +213,12 @@ export default function SettingsPage() {
             isPending={isMutating}
             linkError={failedWorkflowAction === "link" ? mutationError : null}
             importError={failedWorkflowAction === "import" ? mutationError : null}
+          />
+          <SettingsPromptSection
+            promptTemplate={settings.promptTemplate}
+            onSavePromptTemplate={handleSavePromptTemplate}
+            isPending={isMutating}
+            submitError={failedPromptTemplate ? mutationError : null}
           />
           <SettingsRuntimeSection
             pollIntervalMs={settings.pollIntervalMs}

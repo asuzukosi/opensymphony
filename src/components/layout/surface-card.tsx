@@ -7,7 +7,7 @@ type SurfaceCardProps = ComponentProps<typeof Card>;
 
 export function SurfaceCard({ className, children, ...props }: SurfaceCardProps) {
   return (
-    <Card className={cn("rounded-lg bg-card p-card", className)} {...props}>
+    <Card className={cn("bg-card p-card", className)} {...props}>
       {children}
     </Card>
   );

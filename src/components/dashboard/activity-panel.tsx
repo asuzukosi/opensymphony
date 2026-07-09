@@ -1,8 +1,8 @@
 "use client";
 
-import { BarChart3 } from "lucide-react";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 
+import { ChartBarIcon, ShieldCheckIcon } from "@/components/dashboard/dashboard-icons";
 import { BorderedTable, tableHeadClass, tableHeaderRowClass } from "@/components/dashboard/shared";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PanelSection } from "@/components/layout/panel-section";
@@ -194,6 +194,7 @@ function BucketPanel({
   title,
   description,
   emptyTitle,
+  emptyIcon,
   isLoading,
   hasData,
   children,
@@ -201,6 +202,7 @@ function BucketPanel({
   title: string;
   description: string;
   emptyTitle: string;
+  emptyIcon: ComponentType<SVGProps<SVGSVGElement>>;
   isLoading: boolean;
   hasData: boolean;
   children: ReactNode;
@@ -210,7 +212,7 @@ function BucketPanel({
       {isLoading ? (
         <Skeleton className="h-[240px] w-full rounded-lg" />
       ) : !hasData ? (
-        <EmptyState icon={BarChart3} title={emptyTitle} description="Try a wider time range." />
+        <EmptyState icon={emptyIcon} title={emptyTitle} description="Try a wider time range." />
       ) : (
         <div className="h-[240px] overflow-auto">{children}</div>
       )}
@@ -260,6 +262,7 @@ export function ActivityPanel({
           title="Agent activity"
           description="Session events per bucket (excludes stream chunks)"
           emptyTitle="No agent activity for this period"
+          emptyIcon={ChartBarIcon}
           isLoading={pending}
           hasData={agentData.length > 0}
         >
@@ -287,6 +290,7 @@ export function ActivityPanel({
           title="Permission requests"
           description="Opened, resolved, and pending per bucket"
           emptyTitle="No permission activity for this period"
+          emptyIcon={ShieldCheckIcon}
           isLoading={pending}
           hasData={permissionData.length > 0}
         >

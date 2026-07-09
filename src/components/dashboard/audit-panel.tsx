@@ -1,7 +1,6 @@
 "use client";
 
-import { History } from "lucide-react";
-
+import { ClockIcon } from "@/components/dashboard/dashboard-icons";
 import { EmptyState } from "@/components/layout/empty-state";
 import { IssueLink } from "@/components/layout/issue-link";
 import { PanelSection } from "@/components/layout/panel-section";
@@ -48,7 +47,7 @@ export function AuditPanel({ recentEvents, isLoading = false }: { recentEvents?:
         </ul>
       ) : (
         <EmptyState
-          icon={History}
+          icon={ClockIcon}
           title="No recent orchestration events"
           description="Runtime audit events will appear here as the orchestrator acts on issues."
         />

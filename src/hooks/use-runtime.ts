@@ -32,7 +32,10 @@ type RuntimeControlInput =
   | { action: "stop"; projectId: string }
   | { action: "tick"; projectId: string }
   | { action: "setPollInterval"; projectId: string; pollIntervalMs: number }
-  | { action: "clearPollIntervalOverride"; projectId: string };
+  | { action: "clearPollIntervalOverride"; projectId: string }
+  | { action: "pause"; projectId: string; runAttemptId: string }
+  | { action: "resume"; projectId: string; runAttemptId: string }
+  | { action: "cancel"; projectId: string; runAttemptId: string };
 
 export type UseRuntimeOptions = {
   pollIntervalMs?: number;
@@ -56,6 +59,9 @@ export type UseRuntimeResult = {
   tickRuntime: () => Promise<void>;
   setRuntimePollInterval: (pollIntervalMs: number) => Promise<void>;
   clearRuntimePollIntervalOverride: () => Promise<void>;
+  pauseRun: (runAttemptId: string) => Promise<void>;
+  resumeRun: (runAttemptId: string) => Promise<void>;
+  cancelRun: (runAttemptId: string) => Promise<void>;
   isControlling: boolean;
   controlError: Error | null;
   resetControl: () => void;
@@ -111,6 +117,12 @@ export function useRuntime(options?: UseRuntimeOptions): UseRuntimeResult {
         return client.setRuntimePollInterval(input.projectId, input.pollIntervalMs);
       case "clearPollIntervalOverride":
         return client.clearRuntimePollIntervalOverride(input.projectId);
+      case "pause":
+        return client.pauseRun(input.projectId, input.runAttemptId);
+      case "resume":
+        return client.resumeRun(input.projectId, input.runAttemptId);
+      case "cancel":
+        return client.cancelRun(input.projectId, input.runAttemptId);
     }
   });
 
@@ -149,6 +161,42 @@ export function useRuntime(options?: UseRuntimeOptions): UseRuntimeResult {
     await refetch();
   }, [projectId, refetch, runControl]);
 
+  const pauseRun = useCallback(
+    async (runAttemptId: string): Promise<void> => {
+      await runControl({
+        action: "pause",
+        projectId: requireProjectId(projectId),
+        runAttemptId,
+      });
+      await refetch();
+    },
+    [projectId, refetch, runControl],
+  );
+
+  const resumeRun = useCallback(
+    async (runAttemptId: string): Promise<void> => {
+      await runControl({
+        action: "resume",
+        projectId: requireProjectId(projectId),
+        runAttemptId,
+      });
+      await refetch();
+    },
+    [projectId, refetch, runControl],
+  );
+
+  const cancelRun = useCallback(
+    async (runAttemptId: string): Promise<void> => {
+      await runControl({
+        action: "cancel",
+        projectId: requireProjectId(projectId),
+        runAttemptId,
+      });
+      await refetch();
+    },
+    [projectId, refetch, runControl],
+  );
+
   return {
     summary: data?.summary,
     running: data?.running,
@@ -166,6 +214,9 @@ export function useRuntime(options?: UseRuntimeOptions): UseRuntimeResult {
     tickRuntime,
     setRuntimePollInterval,
     clearRuntimePollIntervalOverride,
+    pauseRun,
+    resumeRun,
+    cancelRun,
     isControlling,
     controlError,
     resetControl,

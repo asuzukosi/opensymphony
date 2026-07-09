@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle } from "lucide-react";
+import { ExclamationCircleIcon } from "@/components/ui/hero-icons";
 import { useEffect, useState } from "react";
 
 import { ActivityPanel } from "@/components/dashboard/activity-panel";
@@ -9,7 +9,7 @@ import { FinishedPanel } from "@/components/dashboard/finished-panel";
 import { RetryPanel } from "@/components/dashboard/retry-panel";
 import { RunningPanel } from "@/components/dashboard/running-panel";
 import { RuntimePanel } from "@/components/dashboard/runtime-panel";
-import { StatCards } from "@/components/dashboard/stat-cards";
+import { StatCards } from "@/components/stat-cards/stat-cards";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useActiveProject } from "@/contexts/active-project-context";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
@@ -42,7 +42,7 @@ export function DashboardPageContent() {
         <div className="space-y-3">
           {errors.map((item) => (
             <Alert key={item.title} variant="destructive">
-              <AlertCircle className="h-4 w-4" />
+              <ExclamationCircleIcon className="h-4 w-4" />
               <AlertTitle>{item.title}</AlertTitle>
               <AlertDescription>{item.message}</AlertDescription>
             </Alert>
@@ -62,7 +62,14 @@ export function DashboardPageContent() {
 
       <section aria-label="Runtime overview" className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <RuntimePanel projectId={projectId ?? null} runtime={runtime} />
-        <RunningPanel running={runtime.running} isLoading={runtime.isLoading} />
+        <RunningPanel
+          running={runtime.running}
+          isLoading={runtime.isLoading}
+          onPauseRun={projectId != null ? runtime.pauseRun : undefined}
+          onResumeRun={projectId != null ? runtime.resumeRun : undefined}
+          onCancelRun={projectId != null ? runtime.cancelRun : undefined}
+          isControlling={runtime.isControlling}
+        />
         <div className="min-w-0 lg:col-span-2 xl:col-span-1">
           <RetryPanel retrying={runtime.retrying} isLoading={runtime.isLoading} />
         </div>

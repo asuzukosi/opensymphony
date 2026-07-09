@@ -1,16 +1,16 @@
 "use client";
 
-import {
-  Activity,
-  AlertCircle,
-  MessageSquare,
-  ShieldAlert,
-  Terminal,
-  Wrench,
-  type LucideIcon,
-} from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import {
+  BoltIcon,
+  ChatBubbleLeftIcon,
+  CommandLineIcon,
+  ExclamationCircleIcon,
+  ShieldExclamationIcon,
+  WrenchScrewdriverIcon,
+} from "@/components/ui/hero-icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTime } from "@/lib/format-date-time";
 import type { SessionEvent, SessionEventKind } from "@/lib/ipc/types";
@@ -25,40 +25,40 @@ type IssueSessionTimelineProps = {
 
 type TimelineKindConfig = {
   label: string;
-  icon: LucideIcon;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   badgeClassName?: string;
 };
 
 const timelineKindConfig: Record<Exclude<SessionEventKind, "StreamChunk">, TimelineKindConfig> = {
   Prompt: {
     label: "Prompt",
-    icon: MessageSquare,
+    icon: ChatBubbleLeftIcon,
   },
   ToolCall: {
     label: "Tool call",
-    icon: Wrench,
+    icon: WrenchScrewdriverIcon,
   },
   ToolResult: {
     label: "Tool result",
-    icon: Wrench,
+    icon: WrenchScrewdriverIcon,
   },
   PermissionRequest: {
     label: "Permission",
-    icon: ShieldAlert,
+    icon: ShieldExclamationIcon,
     badgeClassName: "border-amber-500/40 text-amber-700 dark:text-amber-300",
   },
   SessionUpdate: {
     label: "Update",
-    icon: Activity,
+    icon: BoltIcon,
   },
   Error: {
     label: "Error",
-    icon: AlertCircle,
+    icon: ExclamationCircleIcon,
     badgeClassName: "border-destructive/40 text-destructive",
   },
   Terminal: {
     label: "Terminal",
-    icon: Terminal,
+    icon: CommandLineIcon,
   },
 };
 

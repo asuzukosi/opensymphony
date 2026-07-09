@@ -119,7 +119,7 @@ export function RuntimePanel({ projectId, runtime }: RuntimePanelProps) {
       <Separator />
 
       <div className="space-y-3">
-        <h4 className="text-sm font-medium">Controls</h4>
+        <h4 className="text-sm font-normal">Controls</h4>
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" disabled={controlsDisabled} onClick={() => void runControl(startRuntime)}>
             Start
@@ -134,7 +134,7 @@ export function RuntimePanel({ projectId, runtime }: RuntimePanelProps) {
       </div>
 
       <div className="space-y-3">
-        <h4 className="text-sm font-medium">Poll interval override</h4>
+        <h4 className="text-sm font-normal">Poll interval override</h4>
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-2">
             <Label htmlFor="runtime-poll-interval">Interval (ms)</Label>

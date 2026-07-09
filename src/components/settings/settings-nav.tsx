@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 export const SETTINGS_SECTIONS = [
   { id: "general", label: "General" },
   { id: "workflow", label: "Workflow" },
+  { id: "prompt", label: "Prompt" },
   { id: "runtime", label: "Runtime" },
   { id: "permissions", label: "Permissions" },
 ] as const;

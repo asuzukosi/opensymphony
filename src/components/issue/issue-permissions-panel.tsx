@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldAlert } from "lucide-react";
+import { ShieldExclamationIcon } from "@/components/ui/hero-icons";
 import { useMemo, useState } from "react";
 
 import { IssueErrorAlert } from "@/components/issue/issue-states";
@@ -150,7 +150,7 @@ export function IssuePermissionsPanel({ issueId, attempts }: IssuePermissionsPan
 
   return (
     <Alert className="border-amber-500/40 bg-amber-500/5">
-      <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+      <ShieldExclamationIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
       <AlertTitle className="text-amber-950 dark:text-amber-100">
         Pending agent permissions ({permissions.length})
       </AlertTitle>

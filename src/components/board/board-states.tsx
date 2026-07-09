@@ -1,10 +1,8 @@
 "use client";
 
-import { AlertCircle } from "lucide-react";
+import { ExclamationCircleIcon } from "@/components/ui/hero-icons";
 
-import { SurfaceCard } from "@/components/layout/surface-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ColumnTrack, ColumnsScroller } from "@/components/layout/columns-scroller";
 import { BOARD_COLUMN_IDS, type BoardColumnId } from "@/lib/ipc/types";
@@ -17,15 +15,15 @@ export const BOARD_COLUMN_LABELS: Record<BoardColumnId, string> = {
 };
 
 export function BoardColumnCountSkeleton() {
-  return <Skeleton className="h-5 w-16" />;
+  return <Skeleton className="h-4 w-20" />;
 }
 
 export function BoardColumnBodySkeleton() {
   return (
-    <div className="space-y-2">
-      <Skeleton className="h-[4.5rem] w-full rounded-xl" />
-      <Skeleton className="h-[4.5rem] w-full rounded-xl" />
-      <Skeleton className="h-[4.5rem] w-full rounded-xl" />
+    <div className="space-y-3">
+      <Skeleton className="h-[7.5rem] w-full rounded-xl" />
+      <Skeleton className="h-[7.5rem] w-full rounded-xl" />
+      <Skeleton className="h-[7.5rem] w-full rounded-xl" />
     </div>
   );
 }
@@ -38,18 +36,18 @@ export function BoardColumnSkeleton({ columnId }: BoardColumnSkeletonProps) {
   const label = BOARD_COLUMN_LABELS[columnId];
 
   return (
-    <SurfaceCard className="flex h-full min-h-0 flex-col overflow-hidden">
-      <CardHeader className="flex shrink-0 flex-row items-start justify-between gap-2 space-y-0 border-b border-border/60 pb-3">
-        <div className="space-y-2">
-          <CardTitle className="text-base">{label}</CardTitle>
-          <BoardColumnCountSkeleton />
-        </div>
-        {columnId === "backlog" ? <Skeleton className="size-8 shrink-0 rounded-md" /> : null}
-      </CardHeader>
-      <div className="min-h-0 flex-1 overflow-hidden px-3 pb-3 pt-3">
-        <BoardColumnBodySkeleton />
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-4 space-y-1">
+        <p className="text-base font-medium">{label}</p>
+        <BoardColumnCountSkeleton />
       </div>
-    </SurfaceCard>
+      <div className="min-h-0 flex-1">
+        <BoardColumnBodySkeleton />
+        {columnId === "backlog" ? (
+          <Skeleton className="mt-3 h-9 w-full rounded-md" />
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -75,11 +73,11 @@ type BoardColumnEmptyStateProps = {
 
 export function BoardColumnEmptyState({ showCreateHint = false }: BoardColumnEmptyStateProps) {
   return (
-    <div className="flex min-h-[12rem] flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/20 px-4 py-8 text-center">
-      <p className="text-sm font-medium text-muted-foreground">No tasks</p>
+    <div className="flex min-h-[10rem] flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-card/40 px-4 py-10 text-center">
+      <p className="text-sm text-muted-foreground">No tasks</p>
       {showCreateHint ? (
         <p className="mt-1 text-xs text-muted-foreground">
-          Drop a task here or use + to create one
+          Drop a task here or use Add below
         </p>
       ) : (
         <p className="mt-1 text-xs text-muted-foreground">Drop a task here to move it</p>
@@ -95,7 +93,7 @@ type BoardColumnErrorStateProps = {
 export function BoardColumnErrorState({ error }: BoardColumnErrorStateProps) {
   return (
     <Alert variant="destructive">
-      <AlertCircle className="h-4 w-4" />
+      <ExclamationCircleIcon className="h-4 w-4" />
       <AlertTitle>Column unavailable</AlertTitle>
       <AlertDescription>{error.message}</AlertDescription>
     </Alert>

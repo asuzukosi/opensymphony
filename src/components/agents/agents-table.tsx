@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot } from "lucide-react";
+import { AgentsIcon } from "@/components/ui/hero-icons";
 
 import { SurfaceCard } from "@/components/layout/surface-card";
 import { Badge } from "@/components/ui/badge";
@@ -69,8 +69,8 @@ function AgentsTableSkeleton({ showActions = false }: { showActions?: boolean })
 function AgentsTableEmptyState({ onAddAgent }: { onAddAgent?: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/20 px-6 py-12 text-center">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-        <Bot className="h-5 w-5 text-muted-foreground" />
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-border/40 bg-background">
+        <AgentsIcon className="h-5 w-5 text-muted-foreground" />
       </div>
       <p className="text-sm font-medium">No agents registered</p>
       <p className="mt-1 max-w-sm text-sm text-muted-foreground">

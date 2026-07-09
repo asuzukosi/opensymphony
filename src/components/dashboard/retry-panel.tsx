@@ -1,7 +1,6 @@
 "use client";
 
-import { RotateCcw } from "lucide-react";
-
+import { ArrowPathIcon } from "@/components/dashboard/dashboard-icons";
 import { BorderedTable, tableHeadClass, tableHeaderRowClass } from "@/components/dashboard/shared";
 import { EmptyState } from "@/components/layout/empty-state";
 import { IssueLink } from "@/components/layout/issue-link";
@@ -62,7 +61,7 @@ export function RetryPanel({ retrying, isLoading = false }: { retrying?: Runtime
         </BorderedTable>
       ) : (
         <EmptyState
-          icon={RotateCcw}
+          icon={ArrowPathIcon}
           title="No retry queue entries"
           description="Failed run attempts scheduled for retry will appear here."
         />

@@ -1,6 +1,6 @@
 "use client";
 
-import { Link2 } from "lucide-react";
+import { LinkIcon } from "@/components/ui/hero-icons";
 
 import { SurfaceCard } from "@/components/layout/surface-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -133,7 +133,7 @@ export function ProjectAgentAssignment({
                         disabled={!hasProject || isPending}
                         onClick={() => void onAssign(agent.id)}
                       >
-                        <Link2 className="mr-2 h-3.5 w-3.5" />
+                        <LinkIcon className="mr-2 h-3.5 w-3.5" />
                         {isAgentPending ? "Assigning..." : "Assign"}
                       </Button>
                     )}

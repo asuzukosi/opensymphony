@@ -1,10 +1,16 @@
 "use client";
 
-import { Bot, Kanban, LayoutDashboard, Settings, Sparkles, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode, SVGProps } from "react";
 
+import {
+  AgentsIcon,
+  BoardIcon,
+  DashboardIcon,
+  SettingsIcon,
+} from "@/components/layout/nav-icons";
+import { ProjectSwitcher } from "@/components/layout/project-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -19,20 +25,21 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { ProjectSwitcher } from "@/components/layout/project-switcher";
 import { cn } from "@/lib/utils";
+
+type NavIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
 type NavItem = {
   href: string;
   label: string;
-  icon: LucideIcon;
+  icon: NavIcon;
 };
 
 const navItems: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/board", label: "Board", icon: Kanban },
-  { href: "/agents", label: "Agents", icon: Bot },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/", label: "Dashboard", icon: DashboardIcon },
+  { href: "/board", label: "Board", icon: BoardIcon },
+  { href: "/agents", label: "Agents", icon: AgentsIcon },
+  { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
 const pageTitles: Record<string, string> = {
@@ -84,12 +91,8 @@ export function AppShell({ children, className }: AppShellProps) {
       <Sidebar variant="inset" className="border-r border-sidebar-border">
         <SidebarHeader className="border-b border-sidebar-border">
           <div className="flex items-center gap-2 px-2 py-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-              <Sparkles className="h-4 w-4" />
-            </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold tracking-tight">Open Symphony</p>
-              <p className="truncate text-xs text-sidebar-foreground/70">Local agent orchestrator</p>
+              <p className="truncate font-brand text-xs font-bold tracking-wide">OPENSYMPHONY</p>
             </div>
           </div>
           <div className="px-2 pb-3">

@@ -1,12 +1,12 @@
 "use client";
 
-import { FileQuestion } from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { SurfaceCard } from "@/components/layout/surface-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CardContent, CardHeader } from "@/components/ui/card";
+import { QuestionMarkCircleIcon } from "@/components/ui/hero-icons";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function IssueLoadingState() {
@@ -43,7 +43,7 @@ type IssueNotFoundStateProps = {
 export function IssueNotFoundState({ issueId }: IssueNotFoundStateProps) {
   return (
     <Alert>
-      <FileQuestion className="h-4 w-4" />
+      <QuestionMarkCircleIcon className="h-4 w-4" />
       <AlertTitle>Issue not found</AlertTitle>
       <AlertDescription>
         No issue exists for id <span className="font-mono">{issueId}</span>.{" "}
