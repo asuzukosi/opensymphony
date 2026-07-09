@@ -153,27 +153,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
-name = "app"
-version = "0.1.0"
-dependencies = [
- "agent-client-protocol",
- "agent-client-protocol-tokio",
- "anyhow",
- "chrono",
- "log",
- "rusqlite",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-log",
- "thiserror 2.0.18",
- "tokio",
- "tokio-util",
- "uuid",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2391,6 +2370,27 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+
+[[package]]
+name = "opensymphony"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol",
+ "agent-client-protocol-tokio",
+ "anyhow",
+ "chrono",
+ "log",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-log",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
 
 [[package]]
 name = "opensymphony-mock-acp-agent"

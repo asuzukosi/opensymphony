@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "opensymphony",
+  "productName": "Open Symphony",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "com.opensymphony.desktop",
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://127.0.0.1:3000",
@@ -12,7 +12,8 @@
   "app": {
     "windows": [
       {
-        "title": "opensymphony",
+        "title": "Open Symphony",
+        "hiddenTitle": true,
         "width": 800,
         "height": 600,
         "resizable": true,

@@ -3,7 +3,7 @@ members = [".", "mock-acp-agent"]
 resolver = "2"
 
 [package]
-name = "app"
+name = "opensymphony"
 version = "0.1.0"
 description = "Agent orchestation runtime manager"
 license = "MIT"
