@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const MonacoEditorField = dynamic(
   () =>
-    import("@/components/ui/monaco-editor-field").then((module) => ({
+    import("@/components/ui/monaco").then((module) => ({
       default: module.MonacoEditorField,
     })),
   {

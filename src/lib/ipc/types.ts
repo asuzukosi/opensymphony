@@ -9,6 +9,8 @@ export type PermissionMode = "autoApprove" | "requiresApproval";
 
 export type PermissionDecision = "approve" | "deny";
 
+export type { PlatformId } from "@/lib/platforms";
+
 // --- board reads ---
 
 export type BoardColumnId = "backlog" | "inProgress" | "review" | "done";

@@ -20,7 +20,7 @@ use tauri::async_runtime::RuntimeHandle;
 
 use crate::db::repos::agent_session::AgentSessionRepo;
 use crate::db::Db;
-use crate::types::{RuntimeSessionPhase, SessionEventKind};
+use crate::types::{Platform, RuntimeSessionPhase, SessionEventKind};
 
 use super::client::connect;
 use super::context::{SessionCtx, StoredSession};
@@ -62,9 +62,12 @@ impl AcpClientConfig {
         }
     }
 
+    pub fn from_platform(platform: Platform) -> Result<Self, String> {
+        Self::from_acp_command(platform.acp_command())
+    }
+
     pub fn dev_default() -> Self {
-        Self::from_acp_command("opensymphony-mock-acp-agent")
-            .expect("valid default mock acp command")
+        Self::from_platform(Platform::Hermes).expect("valid default hermes acp command")
     }
 }
 
@@ -380,5 +383,28 @@ async fn exit_if_cancelled(
         *cancel_sent = true;
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Platform;
+
+    #[test]
+    fn from_platform_parses_native_binary_commands() {
+        let config = AcpClientConfig::from_platform(Platform::Hermes).expect("hermes");
+        assert_eq!(config.command.to_string_lossy(), "hermes");
+        assert_eq!(config.args, vec!["acp"]);
+    }
+
+    #[test]
+    fn from_platform_parses_npx_commands_with_flags() {
+        let config = AcpClientConfig::from_platform(Platform::Codex).expect("codex");
+        assert_eq!(config.command.to_string_lossy(), "npx");
+        assert_eq!(
+            config.args,
+            vec!["-y", "@agentclientprotocol/codex-acp"]
+        );
+    }
 }
 

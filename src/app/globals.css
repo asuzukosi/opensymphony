@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -9,7 +9,7 @@
     color-scheme: light;
 
     /* typography: font families */
-    --font-family-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
+    --font-family-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
     --font-family-mono: "JetBrains Mono", ui-monospace, monospace;
     --font-family-brand: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
 
@@ -173,6 +173,5 @@
   body {
     @apply bg-page font-sans text-foreground;
     margin: 0;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }

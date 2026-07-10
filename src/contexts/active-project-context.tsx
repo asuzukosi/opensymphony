@@ -3,12 +3,13 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 import { useProject } from "@/hooks/use-project";
+import type { CreateProjectInput } from "@/lib/create-project-form";
 import type { ProjectSummary } from "@/lib/ipc/types";
 
 type ActiveProjectContextValue = {
   projectId: string | null | undefined;
   setProjectId: (projectId: string) => Promise<void>;
-  createProject: (name: string) => Promise<void>;
+  createProject: (input: CreateProjectInput) => Promise<void>;
   renameProject: (projectId: string, name: string) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   isLoading: boolean;

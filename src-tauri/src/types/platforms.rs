@@ -1,0 +1,116 @@
+use std::fmt;
+use std::str::FromStr;
+
+use serde::{Deserialize, Serialize};
+
+pub const DEFAULT_PLATFORM: Platform = Platform::Hermes;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Platform {
+    Hermes,
+    OpenClaw,
+    ClaudeCode,
+    Codex,
+    Pi,
+    GeminiCli,
+}
+
+impl Platform {
+    pub const ALL: [Self; 6] = [
+        Self::Hermes,
+        Self::OpenClaw,
+        Self::ClaudeCode,
+        Self::Codex,
+        Self::Pi,
+        Self::GeminiCli,
+    ];
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Hermes => "Hermes",
+            Self::OpenClaw => "OpenClaw",
+            Self::ClaudeCode => "Claude Code",
+            Self::Codex => "Codex",
+            Self::Pi => "Pi",
+            Self::GeminiCli => "Gemini CLI",
+        }
+    }
+
+    pub fn acp_command(self) -> &'static str {
+        match self {
+            Self::Hermes => "hermes acp",
+            Self::OpenClaw => "openclaw acp",
+            Self::ClaudeCode => "npx claude-code-acp",
+            Self::Codex => "npx -y @agentclientprotocol/codex-acp",
+            Self::Pi => "npx pi-acp",
+            Self::GeminiCli => "gemini --acp",
+        }
+    }
+
+    pub fn install_binaries(self) -> &'static [&'static str] {
+        match self {
+            Self::Hermes => &["hermes"],
+            Self::OpenClaw => &["openclaw"],
+            Self::ClaudeCode => &["npx", "claude"],
+            Self::Codex => &["npx", "codex"],
+            Self::Pi => &["npx", "pi"],
+            Self::GeminiCli => &["gemini"],
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Hermes => "hermes",
+            Self::OpenClaw => "openclaw",
+            Self::ClaudeCode => "claude_code",
+            Self::Codex => "codex",
+            Self::Pi => "pi",
+            Self::GeminiCli => "gemini_cli",
+        }
+    }
+}
+
+impl fmt::Display for Platform {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for Platform {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "hermes" => Ok(Self::Hermes),
+            "openclaw" => Ok(Self::OpenClaw),
+            "claude_code" => Ok(Self::ClaudeCode),
+            "codex" => Ok(Self::Codex),
+            "pi" => Ok(Self::Pi),
+            "gemini_cli" => Ok(Self::GeminiCli),
+            other => Err(format!("unknown platform: {other}")),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::acp::adapter::AcpClientConfig;
+
+    #[test]
+    fn platform_id_round_trips() {
+        for platform in Platform::ALL {
+            let parsed = platform.as_str().parse::<Platform>().expect("parse");
+            assert_eq!(parsed, platform);
+        }
+    }
+
+    #[test]
+    fn all_platforms_resolve_to_acp_config() {
+        for platform in Platform::ALL {
+            AcpClientConfig::from_platform(platform)
+                .unwrap_or_else(|err| panic!("{} failed: {err}", platform.as_str()));
+        }
+    }
+}

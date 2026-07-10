@@ -10,7 +10,7 @@ import {
   DashboardIcon,
   SettingsIcon,
 } from "@/components/layout/nav-icons";
-import { ProjectSwitcher } from "@/components/layout/project-switcher";
+import { ProjectSwitcher } from "@/components/project/project-switcher";
 import {
   Sidebar,
   SidebarContent,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ProjectFormDialog } from "@/components/layout/project-form-dialog";
+import { ProjectFormDialog } from "@/components/project/project-form-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

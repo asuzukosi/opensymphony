@@ -58,7 +58,7 @@ export function MonacoEditorField({
     <div
       id={id}
       className={cn(
-        "overflow-hidden rounded-md border border-input bg-background shadow-sm",
+        "overflow-hidden rounded-md border border-zinc-800 bg-[#1e1e1e] shadow-sm",
         className,
       )}
     >
@@ -88,7 +88,7 @@ export function MonacoEditorField({
           overviewRulerBorder: false,
           tabSize: 2,
         }}
-        theme="vs"
+        theme="vs-dark"
       />
     </div>
   );

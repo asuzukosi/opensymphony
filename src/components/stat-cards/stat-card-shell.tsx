@@ -35,7 +35,7 @@ export function StatCardShell({
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-3">
             <p className="text-sm font-normal text-muted-foreground">{title}</p>
-            <p className="text-lg font-normal tabular-nums">{value}</p>
+            <p className="text-xs font-medium ">{value}</p>
             <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
           </div>
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-white text-muted-foreground">

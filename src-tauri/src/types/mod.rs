@@ -2,6 +2,7 @@
 //! split into submodules; all public items re-exported here for `crate::types::*` compatibility.
 
 mod agent;
+mod platforms;
 mod analytics;
 mod audit;
 mod board;
@@ -14,6 +15,7 @@ mod runtime;
 mod session;
 
 pub use agent::*;
+pub use platforms::*;
 pub use analytics::*;
 pub use audit::*;
 pub use board::*;

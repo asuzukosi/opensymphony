@@ -7,6 +7,7 @@ import {
   useIpcMutation,
   useIpcQuery,
 } from "@/lib/ipc/hooks";
+import type { CreateProjectInput } from "@/lib/create-project-form";
 import type { ProjectSummary } from "@/lib/ipc/types";
 
 type ProjectData = {
@@ -22,7 +23,7 @@ export type UseProjectResult = {
   isRefreshing: boolean;
   refetch: () => Promise<void>;
   setActiveProject: (projectId: string) => Promise<void>;
-  createProject: (name: string) => Promise<void>;
+  createProject: (input: CreateProjectInput) => Promise<void>;
   renameProject: (projectId: string, name: string) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   isSettingActive: boolean;
@@ -62,13 +63,13 @@ export function useProject(): UseProjectResult {
     async (
       client,
       input:
-        | { action: "create"; name: string }
+        | { action: "create"; input: CreateProjectInput }
         | { action: "rename"; projectId: string; name: string }
         | { action: "delete"; projectId: string },
     ) => {
       switch (input.action) {
         case "create": {
-          const project = await client.createProject(input.name);
+          const project = await client.createProject(input.input.name);
           await client.setActiveProjectId(project.id);
           return;
         }
@@ -91,8 +92,8 @@ export function useProject(): UseProjectResult {
   );
 
   const createProject = useCallback(
-    async (name: string): Promise<void> => {
-      await mutateProject({ action: "create", name });
+    async (input: CreateProjectInput): Promise<void> => {
+      await mutateProject({ action: "create", input });
       await refetch();
     },
     [mutateProject, refetch],
