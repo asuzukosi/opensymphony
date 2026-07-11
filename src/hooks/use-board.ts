@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 
 import { useActiveProject } from "@/contexts/active-project-context";
+import { groupIssuesByColumn } from "@/lib/group-issues-by-column";
 import {
   DEFAULT_IPC_POLL_INTERVAL_MS,
   useIpcMutation,
@@ -10,14 +11,11 @@ import {
 } from "@/lib/ipc/hooks";
 import { requireProjectId } from "@/lib/require-project-id";
 import type {
-  BoardColumn,
   BoardColumnId,
   CreateIssueResponse,
   PlatformId,
   ProjectBoardIssue,
 } from "@/lib/ipc/types";
-
-export const BOARD_COLUMN_IDS: BoardColumnId[] = ["backlog", "inProgress", "review", "done"];
 
 export type CreateIssueInput = {
   projectId?: string;
@@ -28,8 +26,6 @@ export type CreateIssueInput = {
   tags?: string[];
   filePaths?: string[];
 };
-
-type BoardData = Record<BoardColumnId, BoardColumn>;
 
 type TransitionIssueInput = {
   issueId: string;
@@ -43,12 +39,8 @@ type CreateIssueMutationInput = CreateIssueInput & {
 
 export type UseBoardResult = {
   issuesByColumn: Record<BoardColumnId, ProjectBoardIssue[] | undefined>;
-  columns: BoardData | undefined;
   error: Error | null;
   isLoading: boolean;
-  isRefreshing: boolean;
-  refetch: () => Promise<void>;
-  refetchColumn: (column: BoardColumnId) => Promise<void>;
   transitionIssue: (
     issueId: string,
     column: BoardColumnId,
@@ -67,14 +59,12 @@ export function useBoard(): UseBoardResult {
   const { projectId } = useActiveProject();
   const enabled = projectId != null;
 
-  const { data, error, isLoading, isRefreshing, refetch } = useIpcQuery<BoardData>(
+  const { data, error, isLoading, refetch } = useIpcQuery(
     `board:${projectId ?? "none"}`,
     async (client) => {
       const id = projectId as string;
-      const [backlog, inProgress, review, done] = await Promise.all(
-        BOARD_COLUMN_IDS.map((column) => client.getBoardColumn(id, column)),
-      );
-      return { backlog, inProgress, review, done };
+      const issues = await client.listProjectIssues(id);
+      return groupIssuesByColumn(issues);
     },
     { pollIntervalMs: DEFAULT_IPC_POLL_INTERVAL_MS, enabled },
   );
@@ -128,25 +118,17 @@ export function useBoard(): UseBoardResult {
     [createIssueMutation, projectId, refetch],
   );
 
-  const refetchColumn = useCallback(async (_column: BoardColumnId): Promise<void> => {
-    await refetch();
-  }, [refetch]);
-
-  const issuesByColumn: Record<BoardColumnId, ProjectBoardIssue[] | undefined> = {
-    backlog: data?.backlog.issues,
-    inProgress: data?.inProgress.issues,
-    review: data?.review.issues,
-    done: data?.done.issues,
+  const issuesByColumn = data ?? {
+    backlog: undefined,
+    inProgress: undefined,
+    review: undefined,
+    done: undefined,
   };
 
   return {
     issuesByColumn,
-    columns: data,
     error,
     isLoading,
-    isRefreshing,
-    refetch,
-    refetchColumn,
     transitionIssue,
     isTransitioning,
     transitionError,

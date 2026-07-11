@@ -118,7 +118,6 @@ export type IpcMutationFn<TInput, TResult> = (
 ) => Promise<TResult>;
 
 export type UseIpcMutationResult<TInput, TResult> = {
-  mutate: (input: TInput) => void;
   mutateAsync: (input: TInput) => Promise<TResult>;
   isPending: boolean;
   error: Error | null;
@@ -172,14 +171,5 @@ export function useIpcMutation<TInput, TResult>(
     }
   }, []);
 
-  const mutate = useCallback(
-    (input: TInput): void => {
-      void mutateAsync(input).catch(() => {
-        // error is stored in hook state
-      });
-    },
-    [mutateAsync],
-  );
-
-  return { mutate, mutateAsync, isPending, error, reset };
+  return { mutateAsync, isPending, error, reset };
 }

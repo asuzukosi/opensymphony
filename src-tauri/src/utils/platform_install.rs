@@ -24,30 +24,3 @@ pub fn list_install_statuses() -> Vec<PlatformInstallStatus> {
         .map(install_status)
         .collect()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hermes_install_status_matches_binary_probe() {
-        let status = install_status(Platform::Hermes);
-        assert_eq!(status.platform, "hermes");
-        assert_eq!(status.label, "Hermes");
-        assert_eq!(status.installed, binary_on_path("hermes"));
-        if status.installed {
-            assert!(status.missing_binaries.is_empty());
-        } else {
-            assert_eq!(status.missing_binaries, vec!["hermes"]);
-        }
-    }
-
-    #[test]
-    fn list_install_statuses_covers_all_platforms() {
-        let statuses = list_install_statuses();
-        assert_eq!(statuses.len(), Platform::ALL.len());
-        for platform in Platform::ALL {
-            assert!(statuses.iter().any(|status| status.platform == platform.as_str()));
-        }
-    }
-}

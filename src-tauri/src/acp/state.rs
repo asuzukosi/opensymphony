@@ -3,7 +3,7 @@ use tauri::async_runtime::RuntimeHandle;
 
 use crate::db::Db;
 
-use super::adapter::{AcpClientAdapter, AcpClientConfig};
+use super::adapter::AcpClientAdapter;
 use super::permissions::PermissionGate;
 
 pub struct AcpState {
@@ -15,9 +15,8 @@ impl AcpState {
         runtime_handle: RuntimeHandle,
         db: Arc<Db>,
     ) -> (Self, Arc<dyn super::types::AcpAdapter>) {
-        let permission_gate = Arc::new(PermissionGate::new(Arc::clone(&db)));
+        let permission_gate = Arc::new(PermissionGate::new());
         let adapter: Arc<dyn super::types::AcpAdapter> = Arc::new(AcpClientAdapter::new(
-            AcpClientConfig::dev_default(),
             Arc::clone(&db),
             Arc::clone(&permission_gate),
             runtime_handle,

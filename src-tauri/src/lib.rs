@@ -10,14 +10,12 @@ use acp::AcpState;
 use orchestrator::Manager as OrchestratorManager;
 use orchestrator::workspace::WorkspaceManager;
 use commands::{
-    // board
-    get_board_column, get_board_issue_card,
     // issue
     add_issue_comment, attach_issue_files, create_issue, get_issue_header, list_issue_comments,
-    list_issue_run_attempts, list_session_events, set_issue_executor, set_issue_tags,
-    transition_issue_column, update_issue_description, update_issue_priority, update_issue_title,
-    // permissions
-    list_issue_pending_permissions, resolve_session_permission,
+    list_issue_pending_permissions, list_issue_run_attempts, list_project_issues,
+    list_session_events, resolve_session_permission, set_issue_auto_approve_permissions,
+    set_issue_executor, set_issue_tags, transition_issue_column, update_issue_description,
+    update_issue_priority, update_issue_title,
     // runtime
     cancel_run, clear_runtime_poll_interval_override, get_runtime_candidates,
     get_runtime_recent_events, get_runtime_recent_finished, get_runtime_retrying,
@@ -25,21 +23,14 @@ use commands::{
     start_runtime, stop_runtime, tick_runtime,
     // project
     create_project, delete_project, get_project_max_concurrency, get_project_name,
-    get_project_orchestrator_status, get_project_permission_mode, get_project_poll_interval,
-    get_project_prompt_template, get_project_retry_policy, get_project_workflow_file_path,
-    get_project_workflow_source, get_project_workflow_version, import_project_workflow_file,
-    list_project_summaries, set_project_max_concurrency, set_project_name,
-    set_project_permission_mode, set_project_poll_interval, set_project_prompt_template,
-    set_project_retry_policy, set_project_workflow_file,
-    // agent
-    assign_agent_to_project, create_agent, delete_agent, get_agent, list_agent_summaries,
-    list_project_agent_ids, set_agent_acp_command, set_agent_name, unassign_agent_from_project,
+    get_project_orchestrator_status, get_project_poll_interval,
+    get_project_prompt_template, get_project_retry_policy, list_project_summaries,
+    set_project_max_concurrency, set_project_name, set_project_poll_interval,
+    set_project_prompt_template, set_project_retry_policy,
     // platform
-    list_agent_platform_statuses, list_project_platforms,
+    list_platform_statuses, list_project_platforms,
     // analytics
-    get_project_agent_activity_over_time, get_project_permission_activity_over_time,
-    // app state
-    get_active_project_id, set_active_project_id,
+    get_agent_activity_over_time,
 };
 use db::{Db, DbError};
 
@@ -64,19 +55,16 @@ pub fn run() {
                 tauri::async_runtime::handle(),
                 Arc::clone(&database),
             );
-            let permission_gate = Arc::clone(&acp_state.permission_gate);
             app.manage(acp_state);
             let manager = Arc::new(Mutex::new(OrchestratorManager::new(
                 Arc::clone(&database),
                 tauri::async_runtime::handle(),
                 adapter,
-                Arc::clone(&permission_gate),
                 WorkspaceManager::from_app_data(&app_data_dir),
             )));
             OrchestratorManager::attach_handle(&manager);
             {
                 let conn = database.conn()?;
-                permission_gate.hydrate_project_modes(&conn)?;
                 manager
                     .lock()
                     .map_err(|_| DbError::Internal("orchestrator lock poisoned".into()))?
@@ -86,11 +74,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // board
-            get_board_column,
-            get_board_issue_card,
             // issue
             get_issue_header,
+            list_project_issues,
             list_issue_comments,
             list_issue_run_attempts,
             list_session_events,
@@ -98,12 +84,12 @@ pub fn run() {
             attach_issue_files,
             create_issue,
             set_issue_executor,
+            set_issue_auto_approve_permissions,
             set_issue_tags,
             transition_issue_column,
             update_issue_description,
             update_issue_priority,
             update_issue_title,
-            // permissions
             list_issue_pending_permissions,
             resolve_session_permission,
             // runtime
@@ -124,44 +110,23 @@ pub fn run() {
             // project
             list_project_summaries,
             get_project_name,
-            get_project_workflow_source,
-            get_project_workflow_file_path,
-            get_project_workflow_version,
             get_project_prompt_template,
             get_project_poll_interval,
             get_project_max_concurrency,
             get_project_retry_policy,
-            get_project_permission_mode,
             get_project_orchestrator_status,
             create_project,
             delete_project,
             set_project_name,
-            set_project_workflow_file,
-            import_project_workflow_file,
             set_project_prompt_template,
             set_project_poll_interval,
             set_project_max_concurrency,
             set_project_retry_policy,
-            set_project_permission_mode,
-            // agent
-            list_agent_summaries,
-            get_agent,
-            list_project_agent_ids,
-            create_agent,
-            delete_agent,
-            set_agent_name,
-            set_agent_acp_command,
-            assign_agent_to_project,
-            unassign_agent_from_project,
             // platform
-            list_agent_platform_statuses,
+            list_platform_statuses,
             list_project_platforms,
             // analytics
-            get_project_agent_activity_over_time,
-            get_project_permission_activity_over_time,
-            // app state
-            get_active_project_id,
-            set_active_project_id,
+            get_agent_activity_over_time,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

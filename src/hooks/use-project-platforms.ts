@@ -9,12 +9,10 @@ export type UseProjectPlatformsResult = {
   platformIds: PlatformId[];
   error: Error | null;
   isLoading: boolean;
-  isRefreshing: boolean;
-  refetch: () => Promise<void>;
 };
 
 export function useProjectPlatforms(projectId: string | null): UseProjectPlatformsResult {
-  const { data, error, isLoading, isRefreshing, refetch } = useIpcQuery<string[]>(
+  const { data, error, isLoading } = useIpcQuery<string[]>(
     `project-platforms:${projectId ?? "none"}`,
     (client) => client.listProjectPlatforms(projectId as string),
     { enabled: projectId != null },
@@ -31,7 +29,5 @@ export function useProjectPlatforms(projectId: string | null): UseProjectPlatfor
     platformIds,
     error,
     isLoading,
-    isRefreshing,
-    refetch,
   };
 }

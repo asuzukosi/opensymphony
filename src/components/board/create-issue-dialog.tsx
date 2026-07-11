@@ -26,7 +26,6 @@ import type { PlatformId } from "@/lib/platforms";
 type CreateIssueDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  columnLabel: string;
   onCreate: (input: CreateIssueInput) => Promise<void>;
   isPending?: boolean;
   submitError?: Error | null;
@@ -35,7 +34,6 @@ type CreateIssueDialogProps = {
 export function CreateIssueDialog({
   open,
   onOpenChange,
-  columnLabel,
   onCreate,
   isPending = false,
   submitError = null,
@@ -110,7 +108,7 @@ export function CreateIssueDialog({
         <form onSubmit={(event) => void handleSubmit(event)}>
           <DialogHeader>
             <DialogTitle>Create task</DialogTitle>
-            <DialogDescription>Add a new task to {columnLabel}.</DialogDescription>
+            <DialogDescription>Add a new task to Backlog.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">

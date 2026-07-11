@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import type { ComponentType, ReactNode, SVGProps } from "react";
 
 import {
-  AgentsIcon,
   BoardIcon,
   DashboardIcon,
   SettingsIcon,
@@ -39,14 +38,12 @@ type NavItem = {
 const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: DashboardIcon },
   { href: "/board", label: "Board", icon: BoardIcon },
-  { href: "/agents", label: "Agents", icon: AgentsIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
 const pageTitles: Record<string, string> = {
   "/": "Dashboard",
   "/board": "Task board",
-  "/agents": "Agents",
   "/settings": "Settings",
 };
 
@@ -71,7 +68,7 @@ function SidebarNavLink({ href, label, icon: Icon }: SidebarNavLinkProps) {
       <SidebarMenuButton asChild isActive={active} tooltip={label}>
         <Link href={href}>
           <Icon />
-          <span>{label}</span>
+          <span className="text-xs">{label}</span>
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>

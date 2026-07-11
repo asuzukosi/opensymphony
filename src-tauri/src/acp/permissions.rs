@@ -1,4 +1,4 @@
-//! permission gate: route acp requests, persist pending rows, block until resolve.
+//! permission gate: route acp requests in memory, block until resolve.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -9,14 +9,11 @@ use agent_client_protocol::schema::{
     PermissionOptionKind, RequestPermissionOutcome, RequestPermissionRequest,
     RequestPermissionResponse, SelectedPermissionOutcome,
 };
-use rusqlite::Connection;
+use chrono::Utc;
 use serde_json::json;
+use uuid::Uuid;
 
-use crate::db::repos::issue::IssueRepo;
-use crate::db::repos::pending_permission::PendingPermissionRepo;
-use crate::db::repos::project::ProjectRepo;
-use crate::db::{Db, DbError, DbResult};
-use crate::types::{PermissionDecision, PermissionMode, SessionEventKind};
+use crate::types::{PendingPermission, PermissionDecision, SessionEventKind};
 use super::context::SessionCtx;
 
 pub type RequestPermissionFn = Arc<
@@ -26,48 +23,30 @@ pub type RequestPermissionFn = Arc<
 >;
 
 struct PendingEntry {
+    permission: PendingPermission,
     request: RequestPermissionRequest,
     sender: tokio::sync::oneshot::Sender<RequestPermissionResponse>,
 }
 
 pub struct PermissionGate {
-    db: Arc<Db>,
-    project_modes: Mutex<HashMap<String, PermissionMode>>,
     pending: Mutex<HashMap<String, PendingEntry>>,
 }
 
 impl PermissionGate {
-    pub fn new(db: Arc<Db>) -> Self {
+    pub fn new() -> Self {
         Self {
-            db,
-            project_modes: Mutex::new(HashMap::new()),
             pending: Mutex::new(HashMap::new()),
         }
     }
 
-    pub fn sync_project_mode(&self, project_id: &str, mode: PermissionMode) {
-        self.project_modes
+    pub fn list_by_issue(&self, issue_id: &str) -> Vec<PendingPermission> {
+        self.pending
             .lock()
             .expect("permission gate lock")
-            .insert(project_id.to_string(), mode);
-    }
-
-    fn project_mode(&self, project_id: &str) -> PermissionMode {
-        self.project_modes
-            .lock()
-            .expect("permission gate lock")
-            .get(project_id)
-            .copied()
-            .unwrap_or(PermissionMode::RequiresApproval)
-    }
-
-    pub fn hydrate_project_modes(&self, conn: &Connection) -> DbResult<()> {
-        let mut modes = self.project_modes.lock().expect("permission gate lock");
-        modes.clear();
-        for (project_id, permission_mode) in ProjectRepo::new(conn).list_permission_modes()? {
-            modes.insert(project_id, permission_mode);
-        }
-        Ok(())
+            .values()
+            .filter(|entry| entry.permission.issue_id == issue_id)
+            .map(|entry| entry.permission.clone())
+            .collect()
     }
 
     pub async fn route(
@@ -75,11 +54,7 @@ impl PermissionGate {
         session_id: &str,
         issue_id: &str,
         request: RequestPermissionRequest,
-    ) -> DbResult<RequestPermissionResponse> {
-        if self.mode_for_issue(issue_id)? == PermissionMode::AutoApprove {
-            return Ok(build_response(&request, PermissionDecision::Approve));
-        }
-
+    ) -> Result<RequestPermissionResponse, String> {
         let summary = request
             .tool_call
             .fields
@@ -89,48 +64,39 @@ impl PermissionGate {
             .filter(|title| !title.is_empty())
             .unwrap_or("permission requested")
             .to_string();
-        let payload_json = serde_json::to_string(&request)
-            .map_err(|err| DbError::Internal(err.to_string()))?;
-
-        let permission_id = {
-            let conn = self.db.conn()?;
-            PendingPermissionRepo::new(&conn)
-                .insert(session_id, issue_id, &summary, &payload_json)?
-                .id
+        let permission_id = Uuid::new_v4().to_string();
+        let permission = PendingPermission {
+            id: permission_id.clone(),
+            session_id: session_id.to_string(),
+            issue_id: issue_id.to_string(),
+            summary,
+            created_at: Utc::now()
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         };
 
         let (sender, receiver) = tokio::sync::oneshot::channel();
         self.pending.lock().expect("permission gate lock").insert(
             permission_id,
-            PendingEntry { request, sender },
+            PendingEntry {
+                permission,
+                request,
+                sender,
+            },
         );
 
         receiver
             .await
-            .map_err(|_| DbError::Internal("permission decision channel closed".into()))
+            .map_err(|_| "permission decision channel closed".into())
     }
 
     pub fn resolve(&self, id: &str, decision: PermissionDecision) -> bool {
-        self.complete(id, |request| build_response(request, decision))
-    }
-
-    fn complete(
-        &self,
-        id: &str,
-        response: impl FnOnce(&RequestPermissionRequest) -> RequestPermissionResponse,
-    ) -> bool {
         let Some(entry) = self.pending.lock().expect("permission gate lock").remove(id) else {
             return false;
         };
-        entry.sender.send(response(&entry.request)).is_ok()
-    }
-
-    fn mode_for_issue(&self, issue_id: &str) -> DbResult<PermissionMode> {
-        let conn = self.db.conn()?;
-        let Some(issue) = IssueRepo::new(&conn).get(issue_id)? else {
-            return Ok(PermissionMode::RequiresApproval);
-        };
-        Ok(self.project_mode(&issue.project_id))
+        entry
+            .sender
+            .send(build_response(&entry.request, decision))
+            .is_ok()
     }
 }
 
@@ -139,6 +105,7 @@ pub fn permission_handler(
     gate: Arc<PermissionGate>,
     session_id: String,
     issue_id: String,
+    auto_approve: bool,
 ) -> RequestPermissionFn {
     Arc::new(move |request| {
         let ctx = ctx.clone();
@@ -147,6 +114,10 @@ pub fn permission_handler(
         let issue_id = issue_id.clone();
         Box::pin(async move {
             ctx.wait_pause().await;
+            if auto_approve {
+                return approve_request(&request);
+            }
+
             let payload = serde_json::to_value(&request).unwrap_or(json!({}));
             ctx.append_event(SessionEventKind::PermissionRequest, payload);
             let fallback = approve_request(&request);
@@ -191,4 +162,3 @@ fn build_response(
         None => RequestPermissionResponse::new(RequestPermissionOutcome::Cancelled),
     }
 }
-

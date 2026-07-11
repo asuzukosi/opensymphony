@@ -5,8 +5,7 @@ import { ExclamationCircleIcon } from "@/components/ui/hero-icons";
 import { EmptyState } from "@/components/layout/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ColumnTrack, ColumnsScroller } from "@/components/layout/columns-scroller";
-import { BOARD_COLUMN_IDS, type BoardColumnId } from "@/lib/ipc/types";
+import type { BoardColumnId } from "@/lib/ipc/types";
 
 export const BOARD_COLUMN_LABELS: Record<BoardColumnId, string> = {
   backlog: "Backlog",
@@ -26,45 +25,6 @@ export function BoardColumnBodySkeleton() {
       <Skeleton className="h-[7.5rem] w-full rounded-xl" />
       <Skeleton className="h-[7.5rem] w-full rounded-xl" />
     </div>
-  );
-}
-
-type BoardColumnSkeletonProps = {
-  columnId: BoardColumnId;
-};
-
-export function BoardColumnSkeleton({ columnId }: BoardColumnSkeletonProps) {
-  const label = BOARD_COLUMN_LABELS[columnId];
-
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-4 space-y-1">
-        <p className="text-base font-medium">{label}</p>
-        <BoardColumnCountSkeleton />
-      </div>
-      <div className="min-h-0 flex-1">
-        <BoardColumnBodySkeleton />
-        {columnId === "backlog" ? (
-          <Skeleton className="mt-3 h-9 w-full rounded-md" />
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-type BoardColumnsSkeletonProps = {
-  className?: string;
-};
-
-export function BoardColumnsSkeleton({ className }: BoardColumnsSkeletonProps) {
-  return (
-    <ColumnsScroller className={className}>
-      {BOARD_COLUMN_IDS.map((columnId) => (
-        <ColumnTrack key={columnId}>
-          <BoardColumnSkeleton columnId={columnId} />
-        </ColumnTrack>
-      ))}
-    </ColumnsScroller>
   );
 }
 

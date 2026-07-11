@@ -27,12 +27,8 @@ function truncateSessionId(sessionId: string): string {
   return `${sessionId.slice(0, 8)}...${sessionId.slice(-4)}`;
 }
 
-export function issueHasActiveSession(attempts: IssueDetailRunAttempt[]): boolean {
-  return attempts.some(
-    (attempt) =>
-      attempt.finishedAt == null ||
-      attempt.sessions.some((session) => session.finishedAt == null),
-  );
+function issueHasActiveSession(attempts: IssueDetailRunAttempt[]): boolean {
+  return attempts.some((attempt) => attempt.finishedAt == null);
 }
 
 type PermissionItemProps = {

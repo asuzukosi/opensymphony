@@ -5,26 +5,30 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { pickWorkflowFolder } from "@/lib/pick-workflow-folder";
+import { pickWorkspaceFolder } from "@/lib/pick-workspace-folder";
 import { cn } from "@/lib/utils";
 
-type WorkflowFolderFieldProps = {
+type WorkspaceFolderFieldProps = {
   id?: string;
   value: string;
   onChange: (value: string) => void;
+  usePerIssueWorkspaces: boolean;
+  onUsePerIssueWorkspacesChange: (usePerIssueWorkspaces: boolean) => void;
   useWorktrees: boolean;
   onUseWorktreesChange: (useWorktrees: boolean) => void;
   disabled?: boolean;
 };
 
-export function WorkflowFolderField({
-  id = "project-workflow-folder",
+export function WorkspaceFolderField({
+  id = "project-workspace-folder",
   value,
   onChange,
+  usePerIssueWorkspaces,
+  onUsePerIssueWorkspacesChange,
   useWorktrees,
   onUseWorktreesChange,
   disabled = false,
-}: WorkflowFolderFieldProps) {
+}: WorkspaceFolderFieldProps) {
   const [isPicking, setIsPicking] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
 
@@ -32,7 +36,7 @@ export function WorkflowFolderField({
     setPickError(null);
     setIsPicking(true);
     try {
-      const selected = await pickWorkflowFolder(value);
+      const selected = await pickWorkspaceFolder(value);
       if (selected != null) {
         onChange(selected);
       }
@@ -47,7 +51,8 @@ export function WorkflowFolderField({
     <div className="grid gap-2">
       <Label htmlFor={id}>Workspace folder</Label>
       <p className="text-xs text-muted-foreground">
-        Project workspace path used as the agent working directory.
+        Source repo or folder agents work from. Each issue can use an isolated copy or share this
+        path directly.
       </p>
       <div className="flex gap-2">
         <button
@@ -76,12 +81,34 @@ export function WorkflowFolderField({
       </div>
       <div className="flex items-center gap-2">
         <Checkbox
+          id={`${id}-per-issue-workspaces`}
+          checked={usePerIssueWorkspaces}
+          onCheckedChange={(checked) => onUsePerIssueWorkspacesChange(checked === true)}
+          disabled={disabled}
+        />
+        <Label htmlFor={`${id}-per-issue-workspaces`} className="cursor-pointer text-sm font-normal">
+          Per-issue workspaces
+        </Label>
+      </div>
+      {!usePerIssueWorkspaces ? (
+        <p className="text-xs text-muted-foreground">
+          Agents share the workspace folder. Concurrent issues may modify the same files.
+        </p>
+      ) : null}
+      <div className="flex items-center gap-2">
+        <Checkbox
           id={`${id}-worktrees`}
           checked={useWorktrees}
           onCheckedChange={(checked) => onUseWorktreesChange(checked === true)}
-          disabled={disabled}
+          disabled={disabled || !usePerIssueWorkspaces}
         />
-        <Label htmlFor={`${id}-worktrees`} className="cursor-pointer text-sm font-normal">
+        <Label
+          htmlFor={`${id}-worktrees`}
+          className={cn(
+            "text-sm font-normal",
+            usePerIssueWorkspaces ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground",
+          )}
+        >
           Use worktrees
         </Label>
       </div>

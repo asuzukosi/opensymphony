@@ -12,14 +12,12 @@ export type UsePlatformStatusesResult = {
   isPlatformInstalled: (platformId: PlatformId) => boolean;
   error: Error | null;
   isLoading: boolean;
-  isRefreshing: boolean;
-  refetch: () => Promise<void>;
 };
 
 export function usePlatformStatuses(): UsePlatformStatusesResult {
-  const { data, error, isLoading, isRefreshing, refetch } = useIpcQuery<PlatformInstallStatus[]>(
+  const { data, error, isLoading } = useIpcQuery<PlatformInstallStatus[]>(
     "platform-statuses",
-    (client) => client.listAgentPlatformStatuses(),
+    (client) => client.listPlatformStatuses(),
   );
 
   const byPlatformId = useMemo(() => {
@@ -43,7 +41,5 @@ export function usePlatformStatuses(): UsePlatformStatusesResult {
     isPlatformInstalled,
     error,
     isLoading,
-    isRefreshing,
-    refetch,
   };
 }

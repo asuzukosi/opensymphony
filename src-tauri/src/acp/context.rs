@@ -21,7 +21,6 @@ pub(crate) struct StoredSession {
     pub issue_id: String,
     pub attempt_number: u32,
     pub agent_name: Option<String>,
-    pub started_at: String,
     pub finished_at: Option<String>,
     pub status: RuntimeSessionStatus,
     pub error_message: Option<String>,
@@ -29,6 +28,7 @@ pub(crate) struct StoredSession {
     pub agent_session_ref: Option<String>,
     pub cancelled: bool,
     pub pause_gate: Arc<dyn PauseGate>,
+    pub auto_approve_permissions: bool,
     pub recorder: Recorder,
     pub child: Option<Child>,
 }
@@ -251,12 +251,9 @@ fn to_runtime_record(session: &StoredSession) -> RuntimeSessionRecord {
         run_attempt_id: session.run_attempt_id.clone(),
         issue_id: session.issue_id.clone(),
         attempt_number: session.attempt_number,
-        session_ref: session.agent_session_ref.clone(),
         status: session.status,
-        started_at: session.started_at.clone(),
         finished_at: session.finished_at.clone(),
         error_message: session.error_message.clone(),
         agent_name: session.agent_name.clone(),
-        paused: session.pause_gate.is_paused(),
     }
 }

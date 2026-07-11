@@ -56,20 +56,6 @@ impl FromStr for SessionEventKind {
     }
 }
 
-/// typed payload for common session event kinds; unknown shapes fall back to Other.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum SessionEventPayload {
-    Prompt { text: String },
-    StreamChunk { text: String },
-    SessionUpdate { status: String },
-    ToolCall { name: String },
-    ToolResult { output: String },
-    PermissionRequest { summary: String },
-    Error { message: String },
-    Other(serde_json::Value),
-}
-
 /// session event row — shared by repos and ipc.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,12 +66,6 @@ pub struct SessionEvent {
     pub kind: SessionEventKind,
     pub payload: serde_json::Value,
     pub created_at: String,
-}
-
-impl SessionEvent {
-    pub fn payload_json(&self) -> String {
-        self.payload.to_string()
-    }
 }
 
 /// agent session row from the database.

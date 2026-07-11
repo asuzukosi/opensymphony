@@ -1,58 +1,54 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import {
+  readStoredActiveProjectId,
+  resolveActiveProjectId,
+  writeStoredActiveProjectId,
+} from "@/lib/active-project-storage";
+import type { CreateProjectInput } from "@/lib/create-project-form";
 import {
   DEFAULT_IPC_POLL_INTERVAL_MS,
   useIpcMutation,
   useIpcQuery,
 } from "@/lib/ipc/hooks";
-import type { CreateProjectInput } from "@/lib/create-project-form";
 import type { ProjectSummary } from "@/lib/ipc/types";
-
-type ProjectData = {
-  projects: ProjectSummary[];
-  activeProjectId: string | null;
-};
 
 export type UseProjectResult = {
   projects: ProjectSummary[] | undefined;
   activeProjectId: string | null | undefined;
   error: Error | null;
   isLoading: boolean;
-  isRefreshing: boolean;
-  refetch: () => Promise<void>;
   setActiveProject: (projectId: string) => Promise<void>;
   createProject: (input: CreateProjectInput) => Promise<void>;
   renameProject: (projectId: string, name: string) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
-  isSettingActive: boolean;
   isMutatingProject: boolean;
-  setActiveError: Error | null;
   projectMutationError: Error | null;
   resetProjectMutation: () => void;
 };
 
 export function useProject(): UseProjectResult {
-  const { data, error, isLoading, isRefreshing, refetch } = useIpcQuery<ProjectData>(
-    "project",
-    async (client) => {
-      const [projects, activeProjectId] = await Promise.all([
-        client.listProjectSummaries(),
-        client.getActiveProjectId(),
-      ]);
-      return { projects, activeProjectId };
-    },
+  const [activeProjectId, setActiveProjectIdState] = useState<string | null | undefined>(undefined);
+
+  const { data: projects, error, isLoading, refetch } = useIpcQuery<
+    ProjectSummary[]
+  >(
+    "projects",
+    async (client) => client.listProjectSummaries(),
     { pollIntervalMs: DEFAULT_IPC_POLL_INTERVAL_MS },
   );
 
-  const {
-    mutateAsync: setActiveProjectId,
-    isPending: isSettingActive,
-    error: setActiveError,
-  } = useIpcMutation(async (client, projectId: string) => {
-    await client.setActiveProjectId(projectId);
-  });
+  useEffect(() => {
+    if (projects == null) {
+      return;
+    }
+
+    const resolved = resolveActiveProjectId(projects, readStoredActiveProjectId());
+    writeStoredActiveProjectId(resolved);
+    setActiveProjectIdState(resolved);
+  }, [projects]);
 
   const {
     mutateAsync: mutateProject,
@@ -70,7 +66,8 @@ export function useProject(): UseProjectResult {
       switch (input.action) {
         case "create": {
           const project = await client.createProject(input.input);
-          await client.setActiveProjectId(project.id);
+          writeStoredActiveProjectId(project.id);
+          setActiveProjectIdState(project.id);
           return;
         }
         case "rename":
@@ -83,13 +80,10 @@ export function useProject(): UseProjectResult {
     },
   );
 
-  const setActiveProject = useCallback(
-    async (projectId: string): Promise<void> => {
-      await setActiveProjectId(projectId);
-      await refetch();
-    },
-    [refetch, setActiveProjectId],
-  );
+  const setActiveProject = useCallback(async (projectId: string): Promise<void> => {
+    writeStoredActiveProjectId(projectId);
+    setActiveProjectIdState(projectId);
+  }, []);
 
   const createProject = useCallback(
     async (input: CreateProjectInput): Promise<void> => {
@@ -109,26 +103,33 @@ export function useProject(): UseProjectResult {
 
   const deleteProject = useCallback(
     async (projectId: string): Promise<void> => {
+      const nextProjects = projects?.filter((project) => project.id !== projectId) ?? [];
+      const shouldReassignActive = activeProjectId === projectId;
+      const nextActive = shouldReassignActive
+        ? resolveActiveProjectId(nextProjects, readStoredActiveProjectId())
+        : (activeProjectId ?? null);
+
       await mutateProject({ action: "delete", projectId });
       await refetch();
+
+      if (shouldReassignActive) {
+        writeStoredActiveProjectId(nextActive);
+        setActiveProjectIdState(nextActive);
+      }
     },
-    [mutateProject, refetch],
+    [activeProjectId, mutateProject, projects, refetch],
   );
 
   return {
-    projects: data?.projects,
-    activeProjectId: data?.activeProjectId,
+    projects,
+    activeProjectId,
     error,
-    isLoading,
-    isRefreshing,
-    refetch,
+    isLoading: isLoading || activeProjectId === undefined,
     setActiveProject,
     createProject,
     renameProject,
     deleteProject,
-    isSettingActive,
     isMutatingProject,
-    setActiveError,
     projectMutationError,
     resetProjectMutation,
   };

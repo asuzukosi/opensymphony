@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::board::BoardColumnId;
-use super::session::{AgentSession, RunAttempt, SessionEvent};
+use super::session::RunAttempt;
 
 /// full issue row from the database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,6 +15,7 @@ pub struct Issue {
     pub priority: Option<i32>,
     pub board_column: BoardColumnId,
     pub executor: Option<String>,
+    pub auto_approve_permissions: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -38,6 +39,7 @@ pub struct IssueHeader {
     pub priority: Option<i32>,
     pub board_column: BoardColumnId,
     pub executor: Option<String>,
+    pub auto_approve_permissions: bool,
     pub tags: Vec<String>,
     pub files: Vec<IssueFile>,
 }
@@ -64,33 +66,9 @@ impl From<Issue> for IssueHeader {
             priority: issue.priority,
             board_column: issue.board_column,
             executor: issue.executor,
+            auto_approve_permissions: issue.auto_approve_permissions,
             tags: Vec::new(),
             files: Vec::new(),
-        }
-    }
-}
-
-/// agent session nested under a run attempt on the issue detail view.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct IssueDetailSession {
-    pub session_id: String,
-    pub session_ref: Option<String>,
-    pub status: String,
-    pub started_at: String,
-    pub finished_at: Option<String>,
-    pub events: Vec<SessionEvent>,
-}
-
-impl From<AgentSession> for IssueDetailSession {
-    fn from(session: AgentSession) -> Self {
-        Self {
-            session_id: session.id,
-            session_ref: session.session_ref,
-            status: session.status,
-            started_at: session.started_at,
-            finished_at: session.finished_at,
-            events: Vec::new(),
         }
     }
 }
@@ -105,7 +83,6 @@ pub struct IssueDetailRunAttempt {
     pub started_at: String,
     pub finished_at: Option<String>,
     pub error_message: Option<String>,
-    pub sessions: Vec<IssueDetailSession>,
 }
 
 impl From<RunAttempt> for IssueDetailRunAttempt {
@@ -117,7 +94,6 @@ impl From<RunAttempt> for IssueDetailRunAttempt {
             started_at: attempt.started_at,
             finished_at: attempt.finished_at,
             error_message: attempt.error_message,
-            sessions: Vec::new(),
         }
     }
 }

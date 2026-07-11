@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use rusqlite::Connection;
-use std::collections::HashMap;
 use tauri::async_runtime::JoinHandle;
 
 use crate::db::error::{DbError, DbResult};
@@ -15,16 +14,14 @@ use crate::utils::iso_timestamp;
 use super::audit::{self, action};
 use super::pause::PauseGateRegistry;
 use super::poll::{poll_running_sessions, reconcile_running_attempts, run_poll_cycle};
-use super::workspace::WorkspaceManager;
+use super::workspace::{cleanup_done_workspaces, WorkspaceManager};
 use super::DEFAULT_POLL_INTERVAL_MS;
-use crate::acp::permissions::PermissionGate;
 use crate::acp::types::AcpAdapter;
 
 pub(crate) struct TickContext<'a> {
     pub adapter: &'a dyn AcpAdapter,
     pub workspaces: &'a WorkspaceManager,
     pub pause_gates: &'a PauseGateRegistry,
-    pub permission_gate: &'a PermissionGate,
 }
 
 pub struct Runtime {
@@ -39,7 +36,6 @@ pub struct Runtime {
     pub(crate) last_dispatched_count: u32,
     pub(crate) last_action: Option<String>,
     pub(crate) last_error: Option<String>,
-    workspaces: HashMap<String, String>,
     timer: Option<JoinHandle<()>>,
 }
 
@@ -57,29 +53,8 @@ impl Runtime {
             last_dispatched_count: 0,
             last_action: None,
             last_error: None,
-            workspaces: HashMap::new(),
             timer: None,
         }
-    }
-
-    pub(crate) fn track_workspace(
-        &mut self,
-        run_attempt_id: impl Into<String>,
-        issue_id: impl Into<String>,
-    ) {
-        self.workspaces
-            .insert(run_attempt_id.into(), issue_id.into());
-    }
-
-    pub(crate) fn release_workspace(
-        &mut self,
-        run_attempt_id: &str,
-        workspaces: &WorkspaceManager,
-    ) -> DbResult<()> {
-        let Some(issue_id) = self.workspaces.remove(run_attempt_id) else {
-            return Ok(());
-        };
-        workspaces.remove_workspace(&self.project_id, &issue_id)
     }
 
     pub fn apply_orchestrator_status(&mut self, value: &str) {
@@ -137,20 +112,8 @@ impl Runtime {
 
     pub fn tick(&mut self, conn: &Connection, ctx: &TickContext<'_>) -> DbResult<()> {
         self.reload_config(conn)?;
-        let workflow_reloaded = self.reload_workflow_if_changed(conn)?;
-        if let Some(project) = self.config.as_ref() {
-            ctx.permission_gate
-                .sync_project_mode(&self.project_id, project.permission_mode);
-        }
-        if workflow_reloaded {
-            audit::log(conn, &self.project_id, action::WORKFLOW_RELOADED, None)?;
-        }
 
-        let mut last_action = if workflow_reloaded {
-            "workflow_reloaded".to_string()
-        } else {
-            "tick_completed".to_string()
-        };
+        let mut last_action = "tick_completed".to_string();
 
         if self.status == RuntimeStatus::Running {
             let project = self
@@ -167,14 +130,7 @@ impl Runtime {
             let sessions = AgentSessionRepo::new(conn);
             let retries = RetryQueueRepo::new(conn);
 
-            reconcile_running_attempts(
-                &attempts,
-                &issues,
-                &retries,
-                self,
-                ctx.workspaces,
-                &project_id,
-            )?;
+            reconcile_running_attempts(&attempts, &issues, &retries, &project_id)?;
 
             let finished = poll_running_sessions(
                 conn,
@@ -183,8 +139,6 @@ impl Runtime {
                 &issues,
                 &sessions,
                 &retries,
-                ctx.workspaces,
-                self,
                 ctx.pause_gates,
                 &project,
                 &now_iso,
@@ -201,7 +155,6 @@ impl Runtime {
                 &sessions,
                 &retries,
                 ctx.workspaces,
-                self,
                 &project,
                 &now_iso,
                 ctx.pause_gates,
@@ -210,6 +163,8 @@ impl Runtime {
             if !dispatched.is_empty() {
                 last_action = format!("dispatched_{}", dispatched.len());
             }
+
+            let _ = cleanup_done_workspaces(&issues, ctx.workspaces, &project)?;
         } else {
             self.last_dispatched_count = 0;
         }
@@ -220,10 +175,6 @@ impl Runtime {
         self.last_error = None;
         audit::log(conn, &self.project_id, action::TICK_COMPLETED, None)?;
         Ok(())
-    }
-
-    fn reload_workflow_if_changed(&mut self, _conn: &Connection) -> DbResult<bool> {
-        Ok(false)
     }
 
     pub(crate) fn set_timer(&mut self, handle: JoinHandle<()>) {

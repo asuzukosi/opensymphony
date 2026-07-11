@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "mock-acp-agent"]
+members = ["."]
 resolver = "2"
 
 [package]

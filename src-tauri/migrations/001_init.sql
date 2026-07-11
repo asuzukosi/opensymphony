@@ -15,8 +15,7 @@ CREATE TABLE IF NOT EXISTS projects (
   max_concurrency INTEGER NOT NULL DEFAULT 1,
   retry_max_attempts INTEGER NOT NULL DEFAULT 3,
   retry_backoff_ms INTEGER NOT NULL DEFAULT 30000,
-  permission_mode TEXT NOT NULL DEFAULT 'requiresApproval'
-    CHECK (permission_mode IN ('autoApprove', 'requiresApproval')),
+  use_per_issue_workspaces INTEGER NOT NULL DEFAULT 1,
   use_worktrees INTEGER NOT NULL DEFAULT 0,
   orchestrator_status TEXT NOT NULL DEFAULT 'idle'
     CHECK (orchestrator_status IN ('idle', 'running', 'stopped')),
@@ -42,6 +41,7 @@ CREATE TABLE IF NOT EXISTS issues (
   board_column TEXT NOT NULL DEFAULT 'backlog'
     CHECK (board_column IN ('backlog', 'inProgress', 'review', 'done')),
   executor TEXT,
+  auto_approve_permissions INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (project_id, identifier),
@@ -107,17 +107,6 @@ CREATE TABLE IF NOT EXISTS session_events (
   FOREIGN KEY (session_id) REFERENCES agent_sessions(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS pending_permissions (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL,
-  issue_id TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  payload_json TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (session_id) REFERENCES agent_sessions(id) ON DELETE CASCADE,
-  FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS retry_queue (
   issue_id TEXT PRIMARY KEY,
   attempt_number INTEGER NOT NULL,
@@ -138,14 +127,6 @@ CREATE TABLE IF NOT EXISTS audit_events (
   FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE SET NULL
 );
 
-CREATE TABLE IF NOT EXISTS app_state (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  active_project_id TEXT,
-  FOREIGN KEY (active_project_id) REFERENCES projects(id) ON DELETE SET NULL
-);
-
-INSERT OR IGNORE INTO app_state (id, active_project_id) VALUES (1, NULL);
-
 CREATE INDEX IF NOT EXISTS idx_platforms_project ON platforms(project_id);
 CREATE INDEX IF NOT EXISTS idx_issues_project_column ON issues(project_id, board_column);
 CREATE INDEX IF NOT EXISTS idx_issues_updated_at ON issues(updated_at);
@@ -157,4 +138,3 @@ CREATE INDEX IF NOT EXISTS idx_agent_sessions_attempt ON agent_sessions(run_atte
 CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events(session_id);
 CREATE INDEX IF NOT EXISTS idx_retry_queue_due_at ON retry_queue(due_at);
 CREATE INDEX IF NOT EXISTS idx_audit_events_project_created ON audit_events(project_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_pending_permissions_issue ON pending_permissions(issue_id);

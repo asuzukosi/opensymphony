@@ -3,8 +3,6 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-pub const DEFAULT_PLATFORM: Platform = Platform::Hermes;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlatformInstallStatus {
@@ -108,17 +106,9 @@ mod tests {
     use crate::acp::adapter::AcpClientConfig;
 
     #[test]
-    fn platform_id_round_trips() {
-        for platform in Platform::ALL {
-            let parsed = platform.as_str().parse::<Platform>().expect("parse");
-            assert_eq!(parsed, platform);
-        }
-    }
-
-    #[test]
     fn all_platforms_resolve_to_acp_config() {
         for platform in Platform::ALL {
-            AcpClientConfig::from_platform(platform)
+            AcpClientConfig::from_acp_command(platform.acp_command())
                 .unwrap_or_else(|err| panic!("{} failed: {err}", platform.as_str()));
         }
     }

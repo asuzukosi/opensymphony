@@ -2395,17 +2395,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "opensymphony-mock-acp-agent"
-version = "0.1.0"
-dependencies = [
- "agent-client-protocol",
- "anyhow",
- "tokio",
- "tokio-util",
- "uuid",
-]
-
-[[package]]
 name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

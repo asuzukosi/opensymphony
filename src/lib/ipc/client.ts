@@ -4,26 +4,19 @@ import { IPC_CHANNELS } from "@/lib/ipc/channels";
 import type {
   ActivityTimeRange,
   AddIssueCommentResponse,
-  Agent,
   AgentActivityOverTimeResponse,
-  AgentSummary,
-  BoardColumn,
   BoardColumnId,
   ClearRuntimePollIntervalOverrideResponse,
-  CreateAgentResponse,
   CreateIssueResponse,
   CreateProjectResponse,
   IssueComment,
   IssueDetailRunAttempt,
-  IssueFile,
   IssueHeader,
   PendingPermission,
-  PermissionActivityOverTimeResponse,
   PermissionDecision,
-  PermissionMode,
   PlatformId,
   PlatformInstallStatus,
-  ProjectBoardIssue,
+  ProjectIssueListItem,
   ProjectSummary,
   RetryPolicy,
   RuntimeAuditEvent,
@@ -33,19 +26,15 @@ import type {
   RuntimeRunningEntry,
   RuntimeSummary,
   SessionEvent,
-  SetActiveProjectIdResponse,
-  SetAgentAcpCommandResponse,
-  SetAgentNameResponse,
   SetProjectMaxConcurrencyResponse,
   SetProjectNameResponse,
-  SetProjectPermissionModeResponse,
   SetProjectPollIntervalResponse,
   SetProjectPromptTemplateResponse,
   SetProjectRetryPolicyResponse,
-  SetProjectWorkflowFileResponse,
   SetRuntimePollIntervalResponse,
   AttachIssueFilesResponse,
   SetIssueExecutorResponse,
+  SetIssueAutoApprovePermissionsResponse,
   SetIssueTagsResponse,
   StartRuntimeResponse,
   StopRuntimeResponse,
@@ -68,11 +57,9 @@ export function isIpcAvailable(): boolean {
 }
 
 export interface OpenSymphonyDesktopApi {
-  // board reads
-  getBoardColumn(projectId: string, column: BoardColumnId): Promise<BoardColumn>;
-  getBoardIssueCard(issueId: string): Promise<ProjectBoardIssue>;
   // issue reads
   getIssueHeader(issueId: string): Promise<IssueHeader>;
+  listProjectIssues(projectId: string): Promise<ProjectIssueListItem[]>;
   listIssueComments(issueId: string): Promise<IssueComment[]>;
   listIssueRunAttempts(issueId: string): Promise<IssueDetailRunAttempt[]>;
   listSessionEvents(issueId: string): Promise<SessionEvent[]>;
@@ -89,6 +76,10 @@ export interface OpenSymphonyDesktopApi {
     issueId: string,
     executor?: PlatformId | null,
   ): Promise<SetIssueExecutorResponse>;
+  setIssueAutoApprovePermissions(
+    issueId: string,
+    autoApprovePermissions: boolean,
+  ): Promise<SetIssueAutoApprovePermissionsResponse>;
   setIssueTags(issueId: string, tags: string[]): Promise<SetIssueTagsResponse>;
   attachIssueFiles(issueId: string, sourcePaths: string[]): Promise<AttachIssueFilesResponse>;
   updateIssueTitle(issueId: string, title: string): Promise<UpdateIssueTitleResponse>;
@@ -141,27 +132,15 @@ export interface OpenSymphonyDesktopApi {
   // project reads
   listProjectSummaries(): Promise<ProjectSummary[]>;
   getProjectName(projectId: string): Promise<string>;
-  getProjectWorkflowSource(projectId: string): Promise<string | null>;
-  getProjectWorkflowFilePath(projectId: string): Promise<string | null>;
-  getProjectWorkflowVersion(projectId: string): Promise<string | null>;
   getProjectPromptTemplate(projectId: string): Promise<string>;
   getProjectPollInterval(projectId: string): Promise<number>;
   getProjectMaxConcurrency(projectId: string): Promise<number>;
   getProjectRetryPolicy(projectId: string): Promise<RetryPolicy>;
-  getProjectPermissionMode(projectId: string): Promise<PermissionMode>;
   getProjectOrchestratorStatus(projectId: string): Promise<string>;
   // project writes
   createProject(input: CreateProjectInput): Promise<CreateProjectResponse>;
   deleteProject(projectId: string): Promise<void>;
   setProjectName(projectId: string, name: string): Promise<SetProjectNameResponse>;
-  setProjectWorkflowFile(
-    projectId: string,
-    sourcePath: string,
-  ): Promise<SetProjectWorkflowFileResponse>;
-  importProjectWorkflowFile(
-    projectId: string,
-    sourcePath: string,
-  ): Promise<SetProjectWorkflowFileResponse>;
   setProjectPromptTemplate(
     projectId: string,
     promptTemplate: string,
@@ -179,52 +158,23 @@ export interface OpenSymphonyDesktopApi {
     maxAttempts: number,
     backoffMs: number,
   ): Promise<SetProjectRetryPolicyResponse>;
-  setProjectPermissionMode(
-    projectId: string,
-    permissionMode: PermissionMode,
-  ): Promise<SetProjectPermissionModeResponse>;
-  // agent reads
-  listAgentSummaries(): Promise<AgentSummary[]>;
-  getAgent(agentId: string): Promise<Agent>;
-  listProjectAgentIds(projectId: string): Promise<string[]>;
-  // agent writes
-  createAgent(name: string, acpCommand?: string | null): Promise<CreateAgentResponse>;
-  deleteAgent(agentId: string): Promise<void>;
-  setAgentName(agentId: string, name: string): Promise<SetAgentNameResponse>;
-  setAgentAcpCommand(
-    agentId: string,
-    acpCommand?: string | null,
-  ): Promise<SetAgentAcpCommandResponse>;
-  assignAgentToProject(projectId: string, agentId: string): Promise<void>;
-  unassignAgentFromProject(projectId: string, agentId: string): Promise<void>;
   // platform
-  listAgentPlatformStatuses(): Promise<PlatformInstallStatus[]>;
+  listPlatformStatuses(): Promise<PlatformInstallStatus[]>;
   listProjectPlatforms(projectId: string): Promise<PlatformId[]>;
   // analytics reads
-  getProjectAgentActivityOverTime(
-    projectId: string,
+  getAgentActivityOverTime(
     timeRange: ActivityTimeRange,
+    projectId?: string | null,
   ): Promise<AgentActivityOverTimeResponse>;
-  getProjectPermissionActivityOverTime(
-    projectId: string,
-    timeRange: ActivityTimeRange,
-  ): Promise<PermissionActivityOverTimeResponse>;
-  // app state reads
-  getActiveProjectId(): Promise<string | null>;
-  // app state writes
-  setActiveProjectId(projectId?: string | null): Promise<SetActiveProjectIdResponse>;
 }
 
 function createIpcClient(): OpenSymphonyDesktopApi {
   return {
-    // board reads
-    getBoardColumn: (projectId, column) =>
-      invoke<BoardColumn>(IPC_CHANNELS.getBoardColumn, { projectId, column }),
-    getBoardIssueCard: (issueId) =>
-      invoke<ProjectBoardIssue>(IPC_CHANNELS.getBoardIssueCard, { issueId }),
     // issue reads
     getIssueHeader: (issueId) =>
       invoke<IssueHeader>(IPC_CHANNELS.getIssueHeader, { issueId }),
+    listProjectIssues: (projectId) =>
+      invoke<ProjectIssueListItem[]>(IPC_CHANNELS.listProjectIssues, { projectId }),
     listIssueComments: (issueId) =>
       invoke<IssueComment[]>(IPC_CHANNELS.listIssueComments, { issueId }),
     listIssueRunAttempts: (issueId) =>
@@ -246,6 +196,11 @@ function createIpcClient(): OpenSymphonyDesktopApi {
         issueId,
         executor: executor ?? null,
       }),
+    setIssueAutoApprovePermissions: (issueId, autoApprovePermissions) =>
+      invoke<SetIssueAutoApprovePermissionsResponse>(
+        IPC_CHANNELS.setIssueAutoApprovePermissions,
+        { issueId, autoApprovePermissions },
+      ),
     setIssueTags: (issueId, tags) =>
       invoke<SetIssueTagsResponse>(IPC_CHANNELS.setIssueTags, { issueId, tags }),
     attachIssueFiles: (issueId, sourcePaths) =>
@@ -326,12 +281,6 @@ function createIpcClient(): OpenSymphonyDesktopApi {
       invoke<ProjectSummary[]>(IPC_CHANNELS.listProjectSummaries),
     getProjectName: (projectId) =>
       invoke<string>(IPC_CHANNELS.getProjectName, { projectId }),
-    getProjectWorkflowSource: (projectId) =>
-      invoke<string | null>(IPC_CHANNELS.getProjectWorkflowSource, { projectId }),
-    getProjectWorkflowFilePath: (projectId) =>
-      invoke<string | null>(IPC_CHANNELS.getProjectWorkflowFilePath, { projectId }),
-    getProjectWorkflowVersion: (projectId) =>
-      invoke<string | null>(IPC_CHANNELS.getProjectWorkflowVersion, { projectId }),
     getProjectPromptTemplate: (projectId) =>
       invoke<string>(IPC_CHANNELS.getProjectPromptTemplate, { projectId }),
     getProjectPollInterval: (projectId) =>
@@ -340,8 +289,6 @@ function createIpcClient(): OpenSymphonyDesktopApi {
       invoke<number>(IPC_CHANNELS.getProjectMaxConcurrency, { projectId }),
     getProjectRetryPolicy: (projectId) =>
       invoke<RetryPolicy>(IPC_CHANNELS.getProjectRetryPolicy, { projectId }),
-    getProjectPermissionMode: (projectId) =>
-      invoke<PermissionMode>(IPC_CHANNELS.getProjectPermissionMode, { projectId }),
     getProjectOrchestratorStatus: (projectId) =>
       invoke<string>(IPC_CHANNELS.getProjectOrchestratorStatus, { projectId }),
     // project writes
@@ -350,16 +297,6 @@ function createIpcClient(): OpenSymphonyDesktopApi {
     deleteProject: (projectId) => invoke<void>(IPC_CHANNELS.deleteProject, { projectId }),
     setProjectName: (projectId, name) =>
       invoke<SetProjectNameResponse>(IPC_CHANNELS.setProjectName, { projectId, name }),
-    setProjectWorkflowFile: (projectId, sourcePath) =>
-      invoke<SetProjectWorkflowFileResponse>(IPC_CHANNELS.setProjectWorkflowFile, {
-        projectId,
-        sourcePath,
-      }),
-    importProjectWorkflowFile: (projectId, sourcePath) =>
-      invoke<SetProjectWorkflowFileResponse>(IPC_CHANNELS.importProjectWorkflowFile, {
-        projectId,
-        sourcePath,
-      }),
     setProjectPromptTemplate: (projectId, promptTemplate) =>
       invoke<SetProjectPromptTemplateResponse>(IPC_CHANNELS.setProjectPromptTemplate, {
         projectId,
@@ -381,55 +318,15 @@ function createIpcClient(): OpenSymphonyDesktopApi {
         maxAttempts,
         backoffMs,
       }),
-    setProjectPermissionMode: (projectId, permissionMode) =>
-      invoke<SetProjectPermissionModeResponse>(IPC_CHANNELS.setProjectPermissionMode, {
-        projectId,
-        permissionMode,
-      }),
-    // agent reads
-    listAgentSummaries: () => invoke<AgentSummary[]>(IPC_CHANNELS.listAgentSummaries),
-    getAgent: (agentId) => invoke<Agent>(IPC_CHANNELS.getAgent, { agentId }),
-    listProjectAgentIds: (projectId) =>
-      invoke<string[]>(IPC_CHANNELS.listProjectAgentIds, { projectId }),
-    // agent writes
-    createAgent: (name, acpCommand) =>
-      invoke<CreateAgentResponse>(IPC_CHANNELS.createAgent, {
-        name,
-        acpCommand: acpCommand ?? null,
-      }),
-    deleteAgent: (agentId) => invoke<void>(IPC_CHANNELS.deleteAgent, { agentId }),
-    setAgentName: (agentId, name) =>
-      invoke<SetAgentNameResponse>(IPC_CHANNELS.setAgentName, { agentId, name }),
-    setAgentAcpCommand: (agentId, acpCommand) =>
-      invoke<SetAgentAcpCommandResponse>(IPC_CHANNELS.setAgentAcpCommand, {
-        agentId,
-        acpCommand: acpCommand ?? null,
-      }),
-    assignAgentToProject: (projectId, agentId) =>
-      invoke<void>(IPC_CHANNELS.assignAgentToProject, { projectId, agentId }),
-    unassignAgentFromProject: (projectId, agentId) =>
-      invoke<void>(IPC_CHANNELS.unassignAgentFromProject, { projectId, agentId }),
     // platform
-    listAgentPlatformStatuses: () =>
-      invoke<PlatformInstallStatus[]>(IPC_CHANNELS.listAgentPlatformStatuses),
+    listPlatformStatuses: () =>
+      invoke<PlatformInstallStatus[]>(IPC_CHANNELS.listPlatformStatuses),
     listProjectPlatforms: (projectId) =>
       invoke<PlatformId[]>(IPC_CHANNELS.listProjectPlatforms, { projectId }),
     // analytics reads
-    getProjectAgentActivityOverTime: (projectId, timeRange) =>
-      invoke<AgentActivityOverTimeResponse>(IPC_CHANNELS.getProjectAgentActivityOverTime, {
-        projectId,
+    getAgentActivityOverTime: (timeRange, projectId) =>
+      invoke<AgentActivityOverTimeResponse>(IPC_CHANNELS.getAgentActivityOverTime, {
         timeRange,
-      }),
-    getProjectPermissionActivityOverTime: (projectId, timeRange) =>
-      invoke<PermissionActivityOverTimeResponse>(
-        IPC_CHANNELS.getProjectPermissionActivityOverTime,
-        { projectId, timeRange },
-      ),
-    // app state reads
-    getActiveProjectId: () => invoke<string | null>(IPC_CHANNELS.getActiveProjectId),
-    // app state writes
-    setActiveProjectId: (projectId) =>
-      invoke<SetActiveProjectIdResponse>(IPC_CHANNELS.setActiveProjectId, {
         projectId: projectId ?? null,
       }),
   };

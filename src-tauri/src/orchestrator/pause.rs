@@ -98,13 +98,5 @@ impl PauseGateRegistry {
         gate.resume();
         Ok(())
     }
-
-    pub fn is_paused(&self, session_id: &str) -> bool {
-        self.gates
-            .lock()
-            .ok()
-            .and_then(|guard| guard.get(session_id).map(|gate| gate.is_paused()))
-            .unwrap_or(false)
-    }
 }
 

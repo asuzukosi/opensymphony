@@ -1,42 +1,40 @@
-//! dispatch helpers: resolve project agent acp command for session start.
-
+//! dispatch helpers: resolve issue executor to platform acp command.
+use std::str::FromStr;
 use rusqlite::Connection;
+use crate::db::error::{DbError, DbResult};
+use crate::db::repos::issue::IssueRepo;
+use crate::db::repos::platforms::PlatformsRepo;
+use crate::types::Platform;
 
-use crate::db::error::DbResult;
-use crate::db::repos::agent::AgentRepo;
-use crate::db::repos::project_agents::ProjectAgentsRepo;
-
-pub struct DispatchAgent {
-    pub name: String,
+pub struct DispatchTarget {
+    pub label: String,
     pub acp_command: String,
 }
 
-pub fn resolve_dispatch_agent(
+pub fn resolve_dispatch_for_issue(
     conn: &Connection,
-    project_id: &str,
-) -> DbResult<Option<DispatchAgent>> {
-    for agent_id in ProjectAgentsRepo::new(conn).list_agent_ids(project_id)? {
-        let Some(agent) = AgentRepo::new(conn).get(&agent_id)? else {
-            continue;
-        };
-        if let Some(command) = agent
-            .acp_command
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            return Ok(Some(DispatchAgent {
-                name: agent.name,
-                acp_command: command.into(),
-            }));
-        }
-    }
-    Ok(None)
-}
+    issue_id: &str,
+) -> DbResult<Option<DispatchTarget>> {
+    let issue = IssueRepo::new(conn)
+        .get(issue_id)?
+        .ok_or_else(|| DbError::NotFound(format!("issue {issue_id}")))?;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    #[ignore = "agent registry removed in V1d; rewrite in V4 dispatch resolver"]
-    fn resolve_returns_first_assigned_agent_with_command() {}
+    let Some(executor) = issue
+        .executor
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+
+    let platform = Platform::from_str(executor).map_err(DbError::Internal)?;
+    if !PlatformsRepo::new(conn).is_connected(&issue.project_id, platform.as_str())? {
+        return Ok(None);
+    }
+
+    Ok(Some(DispatchTarget {
+        label: platform.display_name().into(),
+        acp_command: platform.acp_command().into(),
+    }))
 }

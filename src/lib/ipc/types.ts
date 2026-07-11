@@ -5,8 +5,6 @@
 
 // --- shared ---
 
-export type PermissionMode = "autoApprove" | "requiresApproval";
-
 export type PermissionDecision = "approve" | "deny";
 
 import type { PlatformId } from "@/lib/platforms";
@@ -31,11 +29,15 @@ export interface ProjectBoardIssue {
   priority: number | null;
 }
 
+export interface ProjectIssueListItem extends ProjectBoardIssue {
+  boardColumn: BoardColumnId;
+}
+
 export interface BoardColumn {
   issues: ProjectBoardIssue[];
 }
 
-/** frontend composite assembled from getBoardColumn calls. */
+/** frontend composite grouped from listProjectIssues. */
 export interface ProjectBoard {
   backlog: BoardColumn;
   inProgress: BoardColumn;
@@ -54,6 +56,7 @@ export interface IssueHeader {
   priority: number | null;
   boardColumn: BoardColumnId;
   executor: PlatformId | null;
+  autoApprovePermissions: boolean;
   tags: string[];
   files: IssueFile[];
 }
@@ -93,15 +96,6 @@ export interface SessionEvent {
   createdAt: string;
 }
 
-export interface IssueDetailSession {
-  sessionId: string;
-  sessionRef: string | null;
-  status: string;
-  startedAt: string;
-  finishedAt: string | null;
-  events: SessionEvent[];
-}
-
 export interface IssueDetailRunAttempt {
   runAttemptId: string;
   attemptNumber: number;
@@ -109,45 +103,6 @@ export interface IssueDetailRunAttempt {
   startedAt: string;
   finishedAt: string | null;
   errorMessage: string | null;
-  sessions: IssueDetailSession[];
-}
-
-// --- issue writes ---
-
-export interface CreateIssueRequest {
-  projectId: string;
-  title: string;
-  description?: string | null;
-  executor?: PlatformId | null;
-  priority?: number | null;
-  tags?: string[];
-}
-
-export interface SetIssueTagsRequest {
-  issueId: string;
-  tags: string[];
-}
-
-export interface AttachIssueFilesRequest {
-  issueId: string;
-  sourcePaths: string[];
-}
-
-export interface SetIssueExecutorRequest {
-  issueId: string;
-  executor?: PlatformId | null;
-}
-
-export interface TransitionIssueColumnRequest {
-  issueId: string;
-  column: BoardColumnId;
-  actor?: string | null;
-}
-
-export interface AddIssueCommentRequest {
-  issueId: string;
-  body: string;
-  author?: string | null;
 }
 
 export type CreateIssueResponse = IssueHeader;
@@ -156,6 +111,7 @@ export type UpdateIssueDescriptionResponse = IssueHeader;
 export type UpdateIssuePriorityResponse = IssueHeader;
 export type TransitionIssueColumnResponse = IssueHeader;
 export type SetIssueExecutorResponse = IssueHeader;
+export type SetIssueAutoApprovePermissionsResponse = IssueHeader;
 export type SetIssueTagsResponse = IssueHeader;
 export type AttachIssueFilesResponse = IssueFile[];
 export type AddIssueCommentResponse = IssueComment;
@@ -167,15 +123,7 @@ export interface PendingPermission {
   sessionId: string;
   issueId: string;
   summary: string;
-  payload: unknown;
   createdAt: string;
-}
-
-// --- permissions writes ---
-
-export interface ResolveSessionPermissionRequest {
-  permissionId: string;
-  decision: PermissionDecision;
 }
 
 // --- runtime reads ---
@@ -253,13 +201,6 @@ export interface RuntimeSummary {
   validationError: string | null;
 }
 
-// --- runtime writes ---
-
-export interface RunControlRequest {
-  projectId: string;
-  runAttemptId: string;
-}
-
 export type StartRuntimeResponse = RuntimeSummary;
 export type StopRuntimeResponse = RuntimeSummary;
 export type TickRuntimeResponse = RuntimeSummary;
@@ -282,21 +223,19 @@ export interface AgentActivityOverTimeBucket {
   bucketStart: string;
   totalEvents: number;
   byKind?: AgentActivityByKind;
+  projectId?: string;
+  projectName?: string;
+}
+
+export interface AgentActivitySummary {
+  totalEvents: number;
+  runAttemptCount: number;
+  sessionCount: number;
 }
 
 export interface AgentActivityOverTimeResponse {
   buckets: AgentActivityOverTimeBucket[];
-}
-
-export interface PermissionActivityOverTimeBucket {
-  bucketStart: string;
-  activePending: number;
-  requestsOpened: number;
-  requestsResolved: number;
-}
-
-export interface PermissionActivityOverTimeResponse {
-  buckets: PermissionActivityOverTimeBucket[];
+  summary?: AgentActivitySummary;
 }
 
 // --- project reads ---
@@ -313,78 +252,12 @@ export interface RetryPolicy {
   backoffMs: number;
 }
 
-export interface Project {
-  id: string;
-  name: string;
-  slug: string;
-  workspaceRoot: string | null;
-  workflowSource: string | null;
-  workflowFilePath: string | null;
-  workflowFileMtime: string | null;
-  workflowVersion: string | null;
-  workflowLastLoadedAt: string | null;
-  maxConcurrency: number;
-  retryMaxAttempts: number;
-  retryBackoffMs: number;
-  promptTemplate: string;
-  pollIntervalMs: number;
-  permissionMode: PermissionMode;
-  orchestratorStatus: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// --- project writes ---
-
-export interface SetProjectWorkflowFileRequest {
-  projectId: string;
-  sourcePath: string;
-}
-
-export interface SetProjectRetryPolicyRequest {
-  maxAttempts: number;
-  backoffMs: number;
-}
-
 export type CreateProjectResponse = ProjectSummary;
 export type SetProjectNameResponse = string;
-export type SetProjectWorkflowFileResponse = string | null;
 export type SetProjectPromptTemplateResponse = string;
 export type SetProjectPollIntervalResponse = number;
 export type SetProjectMaxConcurrencyResponse = number;
 export type SetProjectRetryPolicyResponse = RetryPolicy;
-export type SetProjectPermissionModeResponse = PermissionMode;
-
-// --- agent reads ---
-
-export interface AgentSummary {
-  id: string;
-  name: string;
-}
-
-export interface Agent {
-  id: string;
-  name: string;
-  acpCommand: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// --- agent writes ---
-
-export interface CreateAgentRequest {
-  name: string;
-  acpCommand?: string | null;
-}
-
-export interface AssignAgentToProjectRequest {
-  projectId: string;
-  agentId: string;
-}
-
-export type CreateAgentResponse = Agent;
-export type SetAgentNameResponse = string;
-export type SetAgentAcpCommandResponse = string | null;
 
 // --- platform ---
 
@@ -394,11 +267,3 @@ export interface PlatformInstallStatus {
   installed: boolean;
   missingBinaries: string[];
 }
-
-// --- app state reads ---
-
-export type GetActiveProjectIdResponse = string | null;
-
-// --- app state writes ---
-
-export type SetActiveProjectIdResponse = string | null;

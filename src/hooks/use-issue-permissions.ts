@@ -26,8 +26,6 @@ export type UseIssuePermissionsResult = {
   permissions: PendingPermission[] | undefined;
   error: Error | null;
   isLoading: boolean;
-  isRefreshing: boolean;
-  refetch: () => Promise<void>;
   resolvePermission: (permissionId: string, decision: PermissionDecision) => Promise<void>;
   isResolving: boolean;
   resolveError: Error | null;
@@ -51,7 +49,7 @@ export function useIssuePermissions(
   } = options;
   const enabled = enabledOption && issueId != null;
 
-  const { data, error, isLoading, isRefreshing, refetch } = useIpcQuery<PendingPermission[]>(
+  const { data, error, isLoading, refetch } = useIpcQuery<PendingPermission[]>(
     `issue-permissions:${issueId ?? "none"}`,
     async (client) => client.listIssuePendingPermissions(issueId as string),
     { pollIntervalMs, enabled },
@@ -79,8 +77,6 @@ export function useIssuePermissions(
     permissions: data,
     error,
     isLoading,
-    isRefreshing,
-    refetch,
     resolvePermission,
     isResolving,
     resolveError,

@@ -13,20 +13,6 @@ impl<'a> RunAttemptRepo<'a> {
         Self { conn }
     }
 
-    pub fn create(&self, issue_id: &str) -> DbResult<RunAttempt> {
-        let id = Uuid::new_v4().to_string();
-        self.conn.execute(
-            "INSERT INTO run_attempts (id, issue_id, attempt_number, status)
-             VALUES (
-               ?1, ?2,
-               (SELECT COALESCE(MAX(attempt_number), 0) + 1 FROM run_attempts WHERE issue_id = ?2),
-               'running'
-             )",
-            params![id, issue_id],
-        )?;
-        self.get(&id)?.ok_or_else(|| DbError::Internal("run attempt missing after create".into()))
-    }
-
     pub fn create_with_attempt_number(
         &self,
         issue_id: &str,

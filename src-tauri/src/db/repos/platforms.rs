@@ -1,9 +1,6 @@
-use std::str::FromStr;
-
 use rusqlite::{params, Connection};
 
 use crate::db::error::{DbError, DbResult};
-use crate::types::Platform;
 
 pub struct PlatformsRepo<'a> {
     conn: &'a Connection,
@@ -40,17 +37,6 @@ impl<'a> PlatformsRepo<'a> {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
             Err(err) => Err(DbError::from(err)),
         }
-    }
-
-    pub fn replace(&self, project_id: &str, platforms: &[String]) -> DbResult<()> {
-        for platform_id in platforms {
-            Platform::from_str(platform_id).map_err(DbError::Internal)?;
-        }
-
-        let tx = self.conn.unchecked_transaction()?;
-        write_platforms(&tx, project_id, platforms)?;
-        tx.commit()?;
-        Ok(())
     }
 }
 

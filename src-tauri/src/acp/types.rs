@@ -34,11 +34,11 @@ pub struct StartRuntimeSessionInput {
     pub description: Option<String>,
     pub prompt_template: String,
     pub attempt_number: u32,
-    pub started_at: String,
     pub workspace_path: String,
     pub acp_command: Option<String>,
     pub agent_name: Option<String>,
     pub pause_gate: Arc<dyn PauseGate>,
+    pub auto_approve_permissions: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -47,13 +47,10 @@ pub struct RuntimeSessionRecord {
     pub run_attempt_id: String,
     pub issue_id: String,
     pub attempt_number: u32,
-    pub session_ref: Option<String>,
     pub status: RuntimeSessionStatus,
-    pub started_at: String,
     pub finished_at: Option<String>,
     pub error_message: Option<String>,
     pub agent_name: Option<String>,
-    pub paused: bool,
 }
 
 /// acp runtime adapter. pause/resume live on orchestrator-owned PauseGate, not here.

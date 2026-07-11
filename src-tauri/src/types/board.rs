@@ -13,8 +13,6 @@ pub enum BoardColumnId {
 }
 
 impl BoardColumnId {
-    pub const ALL: [Self; 4] = [Self::Backlog, Self::InProgress, Self::Review, Self::Done];
-
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Backlog => "backlog",
@@ -55,17 +53,12 @@ pub struct ProjectBoardIssue {
     pub priority: Option<i32>,
 }
 
-/// issues in one fixed board column.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BoardColumn {
-    pub issues: Vec<ProjectBoardIssue>,
-}
-
-impl Default for BoardColumn {
-    fn default() -> Self {
-        Self {
-            issues: Vec::new(),
-        }
-    }
+pub struct ProjectIssueListItem {
+    pub issue_id: String,
+    pub identifier: String,
+    pub title: String,
+    pub priority: Option<i32>,
+    pub board_column: BoardColumnId,
 }

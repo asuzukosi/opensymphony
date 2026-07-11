@@ -1,4 +1,4 @@
-//! substitute workflow prompt template placeholders before session/prompt.
+//! substitute project prompt template placeholders before session/prompt.
 
 use thiserror::Error;
 

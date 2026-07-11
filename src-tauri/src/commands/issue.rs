@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
+use crate::acp::AcpState;
 use crate::db::error::DbError;
 use crate::db::repos::comment::CommentRepo;
 use crate::db::repos::issue::IssueRepo;
@@ -11,7 +12,7 @@ use crate::db::repos::session_event::SessionEventRepo;
 use crate::db::Db;
 use crate::types::{
     BoardColumnId, Issue, IssueComment, IssueDetailRunAttempt, IssueFile, IssueHeader,
-    IssuePatch, SessionEvent,
+    IssuePatch, PendingPermission, PermissionDecision, ProjectIssueListItem, SessionEvent,
 };
 
 fn load_header(conn: &rusqlite::Connection, issue: Issue) -> Result<IssueHeader, String> {
@@ -27,6 +28,17 @@ fn load_header_by_id(conn: &rusqlite::Connection, issue_id: &str) -> Result<Issu
 }
 
 // reads
+
+#[tauri::command(rename = "opensymphony:list-project-issues")]
+pub fn list_project_issues(
+    db: State<Arc<Db>>,
+    project_id: String,
+) -> Result<Vec<ProjectIssueListItem>, String> {
+    let conn = db.conn().map_err(|err| err.to_string())?;
+    IssueRepo::new(&conn)
+        .list_by_project(&project_id)
+        .map_err(|err| err.to_string())
+}
 
 #[tauri::command(rename = "opensymphony:get-issue-header")]
 pub fn get_issue_header(db: State<Arc<Db>>, issue_id: String) -> Result<IssueHeader, String> {
@@ -103,6 +115,17 @@ pub fn set_issue_executor(
 ) -> Result<IssueHeader, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     let issue = IssueRepo::new(&conn).set_executor(&issue_id, executor.as_deref())?;
+    load_header(&conn, issue)
+}
+
+#[tauri::command(rename = "opensymphony:set-issue-auto-approve-permissions")]
+pub fn set_issue_auto_approve_permissions(
+    db: State<Arc<Db>>,
+    issue_id: String,
+    auto_approve_permissions: bool,
+) -> Result<IssueHeader, String> {
+    let conn = db.conn().map_err(|err| err.to_string())?;
+    let issue = IssueRepo::new(&conn).set_auto_approve_permissions(&issue_id, auto_approve_permissions)?;
     load_header(&conn, issue)
 }
 
@@ -205,4 +228,25 @@ pub fn add_issue_comment(
     CommentRepo::new(&conn)
         .append(&issue_id, &body, author.as_deref())
         .map_err(|err| err.to_string())
+}
+
+#[tauri::command(rename = "opensymphony:list-issue-pending-permissions")]
+pub fn list_issue_pending_permissions(
+    acp: State<AcpState>,
+    issue_id: String,
+) -> Result<Vec<PendingPermission>, String> {
+    Ok(acp.permission_gate.list_by_issue(&issue_id))
+}
+
+#[tauri::command(rename = "opensymphony:resolve-session-permission")]
+pub fn resolve_session_permission(
+    acp: State<AcpState>,
+    permission_id: String,
+    decision: PermissionDecision,
+) -> Result<(), String> {
+    if acp.permission_gate.resolve(&permission_id, decision) {
+        Ok(())
+    } else {
+        Err(format!("pending permission {permission_id} not found"))
+    }
 }

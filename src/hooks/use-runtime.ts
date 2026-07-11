@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback } from "react";
-import { useActiveProject } from "@/contexts/active-project-context";
 import {
   DEFAULT_IPC_POLL_INTERVAL_MS,
   useIpcMutation,
@@ -24,7 +23,6 @@ type RuntimeData = {
   candidates: RuntimeCandidateEntry[];
   recentFinished: RuntimeRecentFinishedEntry[];
   recentEvents: RuntimeAuditEvent[];
-  fetchedAt: string;
 };
 
 type RuntimeControlInput =
@@ -38,6 +36,7 @@ type RuntimeControlInput =
   | { action: "cancel"; projectId: string; runAttemptId: string };
 
 export type UseRuntimeOptions = {
+  projectId?: string | null;
   pollIntervalMs?: number;
   enabled?: boolean;
 };
@@ -49,11 +48,8 @@ export type UseRuntimeResult = {
   candidates: RuntimeCandidateEntry[] | undefined;
   recentFinished: RuntimeRecentFinishedEntry[] | undefined;
   recentEvents: RuntimeAuditEvent[] | undefined;
-  fetchedAt: string | undefined;
   error: Error | null;
   isLoading: boolean;
-  isRefreshing: boolean;
-  refetch: () => Promise<void>;
   startRuntime: () => Promise<void>;
   stopRuntime: () => Promise<void>;
   tickRuntime: () => Promise<void>;
@@ -68,12 +64,14 @@ export type UseRuntimeResult = {
 };
 
 export function useRuntime(options?: UseRuntimeOptions): UseRuntimeResult {
-  const { pollIntervalMs = DEFAULT_IPC_POLL_INTERVAL_MS, enabled: enabledOption = true } =
-    options ?? {};
-  const { projectId } = useActiveProject();
+  const {
+    projectId = null,
+    pollIntervalMs = DEFAULT_IPC_POLL_INTERVAL_MS,
+    enabled: enabledOption = true,
+  } = options ?? {};
   const enabled = enabledOption && projectId != null;
 
-  const { data, error, isLoading, isRefreshing, refetch } = useIpcQuery<RuntimeData>(
+  const { data, error, isLoading, refetch } = useIpcQuery<RuntimeData>(
     `runtime:${projectId ?? "none"}`,
     async (client) => {
       const id = projectId as string;
@@ -94,7 +92,6 @@ export function useRuntime(options?: UseRuntimeOptions): UseRuntimeResult {
         candidates,
         recentFinished,
         recentEvents,
-        fetchedAt: new Date().toISOString(),
       };
     },
     { pollIntervalMs, enabled },
@@ -204,11 +201,8 @@ export function useRuntime(options?: UseRuntimeOptions): UseRuntimeResult {
     candidates: data?.candidates,
     recentFinished: data?.recentFinished,
     recentEvents: data?.recentEvents,
-    fetchedAt: data?.fetchedAt,
     error,
     isLoading,
-    isRefreshing,
-    refetch,
     startRuntime,
     stopRuntime,
     tickRuntime,

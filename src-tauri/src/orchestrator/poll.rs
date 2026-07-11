@@ -10,15 +10,14 @@ use crate::db::repos::comment::CommentRepo;
 use crate::db::repos::issue::IssueRepo;
 use crate::db::repos::retry_queue::RetryQueueRepo;
 use crate::db::repos::run_attempt::RunAttemptRepo;
-use crate::acp::dispatch::resolve_dispatch_agent;
+use crate::acp::dispatch::resolve_dispatch_for_issue;
 use crate::acp::PauseGate;
 use crate::types::{BoardColumnId, Issue, Project, RetryQueueEntry};
 use crate::utils::retry_delay_ms;
 
 use super::audit::{self, action};
 use super::pause::PauseGateRegistry;
-use super::runtime::Runtime;
-use super::workspace::WorkspaceManager;
+use super::workspace::{resolve_dispatch_cwd, WorkspaceManager};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DispatchedRun {
@@ -68,15 +67,12 @@ pub(crate) fn reconcile_running_attempts(
     attempts: &RunAttemptRepo<'_>,
     issues: &IssueRepo<'_>,
     retries: &RetryQueueRepo<'_>,
-    runtime: &mut Runtime,
-    workspaces: &WorkspaceManager,
     project_id: &str,
 ) -> DbResult<()> {
     for attempt in attempts.list_running(project_id)? {
         let Some(issue) = issues.get(&attempt.issue_id)? else {
             attempts.finish(&attempt.id, "cancelled", Some("reconciled_missing_issue"))?;
             retries.remove(&attempt.issue_id)?;
-            runtime.release_workspace(&attempt.id, workspaces)?;
             continue;
         };
 
@@ -87,7 +83,6 @@ pub(crate) fn reconcile_running_attempts(
         let reason = format!("reconciled_out_of_scope:{}", issue.board_column.as_str());
         attempts.finish(&attempt.id, "cancelled", Some(&reason))?;
         retries.remove(&attempt.issue_id)?;
-        runtime.release_workspace(&attempt.id, workspaces)?;
     }
     Ok(())
 }
@@ -100,7 +95,6 @@ pub(crate) fn run_poll_cycle(
     sessions: &AgentSessionRepo<'_>,
     retries: &RetryQueueRepo<'_>,
     workspaces: &WorkspaceManager,
-    runtime: &mut Runtime,
     project: &Project,
     now_iso: &str,
     pause_gates: &PauseGateRegistry,
@@ -115,22 +109,21 @@ pub(crate) fn run_poll_cycle(
         if running_issue_ids.contains(&retry.issue_id) {
             continue;
         }
-        let run = dispatch_attempt(
+        if let Some(run) = dispatch_attempt(
             conn,
             adapter,
             attempts,
             issues,
             sessions,
             workspaces,
-            runtime,
             project,
             &retry.issue_id,
             retry.attempt_number,
-            now_iso,
             pause_gates,
-        )?;
-        running_issue_ids.insert(retry.issue_id);
-        dispatched.push(run);
+        )? {
+            running_issue_ids.insert(retry.issue_id);
+            dispatched.push(run);
+        }
     }
 
     let remaining_slots = (available_slots - dispatched.len() as i32).max(0) as usize;
@@ -144,22 +137,21 @@ pub(crate) fn run_poll_cycle(
         }
 
         let attempt_number = next_attempt_number(attempts, &candidate.issue_id)?;
-        let run = dispatch_attempt(
+        if let Some(run) = dispatch_attempt(
             conn,
             adapter,
             attempts,
             issues,
             sessions,
             workspaces,
-            runtime,
             project,
             &candidate.issue_id,
             attempt_number,
-            now_iso,
             pause_gates,
-        )?;
-        running_issue_ids.insert(candidate.issue_id);
-        dispatched.push(run);
+        )? {
+            running_issue_ids.insert(candidate.issue_id);
+            dispatched.push(run);
+        }
     }
 
     Ok(dispatched)
@@ -172,8 +164,6 @@ pub(crate) fn poll_running_sessions(
     issues: &IssueRepo<'_>,
     sessions: &AgentSessionRepo<'_>,
     retries: &RetryQueueRepo<'_>,
-    workspaces: &WorkspaceManager,
-    runtime: &mut Runtime,
     pause_gates: &PauseGateRegistry,
     project: &Project,
     now_iso: &str,
@@ -219,8 +209,6 @@ pub(crate) fn poll_running_sessions(
             issues,
             sessions,
             retries,
-            workspaces,
-            runtime,
             pause_gates,
             project,
             now_iso,
@@ -240,8 +228,6 @@ fn sync_session_outcome(
     issues: &IssueRepo<'_>,
     sessions: &AgentSessionRepo<'_>,
     retries: &RetryQueueRepo<'_>,
-    workspaces: &WorkspaceManager,
-    runtime: &mut Runtime,
     pause_gates: &PauseGateRegistry,
     project: &Project,
     now_iso: &str,
@@ -267,7 +253,6 @@ fn sync_session_outcome(
             sessions.finish(db_session_id, "succeeded", finished_at)?;
             attempts.finish(&record.run_attempt_id, "succeeded", None)?;
             issues.transition_column(&record.issue_id, BoardColumnId::Review)?;
-            runtime.release_workspace(&record.run_attempt_id, workspaces)?;
             pause_gates.remove(db_session_id);
             audit::log(
                 conn,
@@ -287,7 +272,6 @@ fn sync_session_outcome(
                 record.attempt_number as i32 + 1,
                 error,
             )?;
-            runtime.release_workspace(&record.run_attempt_id, workspaces)?;
             pause_gates.remove(db_session_id);
             audit::log(
                 conn,
@@ -301,7 +285,6 @@ fn sync_session_outcome(
             sessions.finish(db_session_id, "cancelled", finished_at)?;
             attempts.finish(&record.run_attempt_id, "cancelled", error)?;
             retries.remove(&record.issue_id)?;
-            runtime.release_workspace(&record.run_attempt_id, workspaces)?;
             pause_gates.remove(db_session_id);
             audit::log(
                 conn,
@@ -323,8 +306,6 @@ pub(crate) fn cancel_run_attempt(
     attempts: &RunAttemptRepo<'_>,
     sessions: &AgentSessionRepo<'_>,
     retries: &RetryQueueRepo<'_>,
-    workspaces: &WorkspaceManager,
-    runtime: &mut Runtime,
     pause_gates: &PauseGateRegistry,
     project: &Project,
     run_attempt_id: &str,
@@ -352,7 +333,6 @@ pub(crate) fn cancel_run_attempt(
 
     attempts.finish(run_attempt_id, "cancelled", Some(CANCEL_BY_OPERATOR))?;
     retries.remove(&attempt.issue_id)?;
-    runtime.release_workspace(run_attempt_id, workspaces)?;
     audit::log(
         conn,
         &project.id,
@@ -378,24 +358,27 @@ fn dispatch_attempt(
     issues: &IssueRepo<'_>,
     sessions: &AgentSessionRepo<'_>,
     workspaces: &WorkspaceManager,
-    runtime: &mut Runtime,
     project: &Project,
     issue_id: &str,
     attempt_number: i32,
-    now_iso: &str,
     pause_gates: &PauseGateRegistry,
-) -> DbResult<DispatchedRun> {
+) -> DbResult<Option<DispatchedRun>> {
     let issue = issues
         .get(issue_id)?
         .ok_or_else(|| crate::db::error::DbError::NotFound(format!("issue {issue_id}")))?;
 
+    let Some(dispatch) = resolve_dispatch_for_issue(conn, issue_id)? else {
+        return Ok(None);
+    };
+
+    let Some(workspace_path) = resolve_dispatch_cwd(workspaces, project, issue_id)? else {
+        return Ok(None);
+    };
+
     let attempt = attempts.create_with_attempt_number(issue_id, attempt_number)?;
     issues.transition_column(issue_id, BoardColumnId::InProgress)?;
-    let workspace_path = workspaces.ensure_workspace(&project.id, issue_id)?;
-    runtime.track_workspace(&attempt.id, issue_id);
 
     let session = sessions.create(&attempt.id, "acp")?;
-    let dispatch_agent = resolve_dispatch_agent(conn, &project.id)?;
     let pause_gate = pause_gates.create_gate();
     let record = adapter.start_session(build_session_input(
         project,
@@ -403,10 +386,9 @@ fn dispatch_attempt(
         &attempt.id,
         &session.id,
         attempt_number,
-        now_iso,
         workspace_path.to_string_lossy().into_owned(),
-        dispatch_agent.as_ref().map(|agent| agent.acp_command.clone()),
-        dispatch_agent.map(|agent| agent.name),
+        Some(dispatch.acp_command),
+        Some(dispatch.label),
         pause_gate.clone(),
     ));
 
@@ -415,17 +397,21 @@ fn dispatch_attempt(
     audit::log(
         conn,
         &project.id,
-        action::ATTEMPT_DISPATCHED,
+        &format!(
+            "{} cwd={}",
+            action::ATTEMPT_DISPATCHED,
+            workspace_path.display()
+        ),
         Some(issue_id),
     )?;
 
-    Ok(DispatchedRun {
+    Ok(Some(DispatchedRun {
         issue_id: issue.id,
         identifier: issue.identifier,
         run_attempt_id: attempt.id,
         attempt_number,
         session_id: record.session_id,
-    })
+    }))
 }
 
 fn build_session_input(
@@ -434,7 +420,6 @@ fn build_session_input(
     run_attempt_id: &str,
     agent_session_id: &str,
     attempt_number: i32,
-    now_iso: &str,
     workspace_path: String,
     acp_command: Option<String>,
     agent_name: Option<String>,
@@ -449,10 +434,10 @@ fn build_session_input(
         description: issue.description.clone(),
         prompt_template: project.prompt_template.clone(),
         attempt_number: attempt_number as u32,
-        started_at: now_iso.into(),
         workspace_path,
         acp_command,
         agent_name,
         pause_gate,
+        auto_approve_permissions: issue.auto_approve_permissions,
     }
 }

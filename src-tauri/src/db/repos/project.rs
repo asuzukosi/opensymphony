@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use crate::db::error::{DbError, DbResult};
 use crate::db::repos::platforms::write_platforms;
-use crate::types::{CreateProjectParams, PermissionMode, Platform, Project, ProjectPatch, ProjectSummary};
-use crate::utils::{parse_permission_mode, permission_mode_as_str, slugify};
+use crate::types::{CreateProjectParams, Platform, Project, ProjectPatch, ProjectSummary};
+use crate::utils::slugify;
 
 pub struct ProjectRepo<'a> {
     conn: &'a Connection,
@@ -24,8 +24,8 @@ impl<'a> ProjectRepo<'a> {
         tx.execute(
             "INSERT INTO projects (
                 id, name, slug, workspace_root, prompt_template, poll_interval_ms,
-                max_concurrency, retry_max_attempts, retry_backoff_ms, permission_mode,
-                use_worktrees
+                max_concurrency, retry_max_attempts, retry_backoff_ms,
+                use_per_issue_workspaces, use_worktrees
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 id,
@@ -37,7 +37,7 @@ impl<'a> ProjectRepo<'a> {
                 params.max_concurrency,
                 params.retry_max_attempts,
                 params.retry_backoff_ms,
-                permission_mode_as_str(params.permission_mode),
+                i32::from(params.use_per_issue_workspaces),
                 i32::from(params.use_worktrees),
             ],
         )?;
@@ -52,8 +52,8 @@ impl<'a> ProjectRepo<'a> {
     pub fn get(&self, id: &str) -> DbResult<Option<Project>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, name, slug, workspace_root, prompt_template, poll_interval_ms,
-                    max_concurrency, retry_max_attempts, retry_backoff_ms, permission_mode,
-                    use_worktrees, orchestrator_status, created_at, updated_at
+                    max_concurrency, retry_max_attempts, retry_backoff_ms,
+                    use_per_issue_workspaces, use_worktrees, orchestrator_status, created_at, updated_at
              FROM projects WHERE id = ?1",
         )?;
 
@@ -81,20 +81,6 @@ impl<'a> ProjectRepo<'a> {
             });
         }
         Ok(summaries)
-    }
-
-    pub fn list_permission_modes(&self) -> DbResult<Vec<(String, PermissionMode)>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, permission_mode FROM projects ORDER BY name ASC",
-        )?;
-        let mut rows = stmt.query([])?;
-        let mut modes = Vec::new();
-        while let Some(row) = rows.next()? {
-            let id: String = row.get(0)?;
-            let permission_mode: String = row.get(1)?;
-            modes.push((id, parse_permission_mode(&permission_mode)?));
-        }
-        Ok(modes)
     }
 
     pub fn update(&self, id: &str, patch: &ProjectPatch) -> DbResult<Project> {
@@ -129,9 +115,9 @@ impl<'a> ProjectRepo<'a> {
             sets.push("retry_backoff_ms = ?");
             values.push(Box::new(retry_backoff_ms));
         }
-        if let Some(permission_mode) = patch.permission_mode {
-            sets.push("permission_mode = ?");
-            values.push(Box::new(permission_mode_as_str(permission_mode).to_string()));
+        if let Some(use_per_issue_workspaces) = patch.use_per_issue_workspaces {
+            sets.push("use_per_issue_workspaces = ?");
+            values.push(Box::new(i32::from(use_per_issue_workspaces)));
         }
         if let Some(use_worktrees) = patch.use_worktrees {
             sets.push("use_worktrees = ?");
@@ -173,7 +159,7 @@ impl<'a> ProjectRepo<'a> {
 }
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
-    let permission_mode: String = row.get(9)?;
+    let use_per_issue_workspaces: i32 = row.get(9)?;
     let use_worktrees: i32 = row.get(10)?;
     Ok(Project {
         id: row.get(0)?,
@@ -185,8 +171,7 @@ fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         max_concurrency: row.get(6)?,
         retry_max_attempts: row.get(7)?,
         retry_backoff_ms: row.get(8)?,
-        permission_mode: parse_permission_mode(&permission_mode)
-            .map_err(|err| rusqlite::Error::InvalidColumnType(9, err.to_string(), rusqlite::types::Type::Text))?,
+        use_per_issue_workspaces: use_per_issue_workspaces != 0,
         use_worktrees: use_worktrees != 0,
         orchestrator_status: row.get(11)?,
         created_at: row.get(12)?,

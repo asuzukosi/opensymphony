@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, Row};
 
 use crate::db::error::DbResult;
-use crate::orchestrator::audit;
 use crate::types::{
     ActivityTimeRange, AgentActivityOverTimeBucket, AgentActivityOverTimeResponse,
-    PermissionActivityOverTimeBucket, PermissionActivityOverTimeResponse, SessionEventKind,
+    AgentActivitySummary, SessionEventKind,
 };
 use crate::utils::{
     bucket_index, build_bucket_starts, format_bucket_start, format_timestamp, parse_activity_time_range,
@@ -24,25 +22,54 @@ impl<'a> AnalyticsRepo<'a> {
         Self { conn }
     }
 
-    pub fn agent_activity_over_time(
+    pub fn list_agent_activity_over_time(
         &self,
-        project_id: &str,
         time_range: &ActivityTimeRange,
+        project_id: Option<&str>,
     ) -> DbResult<AgentActivityOverTimeResponse> {
         let (start, end, bucket_ms) = parse_activity_time_range(time_range)?;
         let bucket_starts = build_bucket_starts(start, end, bucket_ms);
+        let summary = self.activity_summary(start, end, project_id)?;
+
+        if bucket_starts.is_empty() {
+            return Ok(AgentActivityOverTimeResponse {
+                buckets: Vec::new(),
+                summary: Some(summary),
+            });
+        }
+
+        let buckets = match project_id {
+            Some(project_id) => {
+                self.buckets_for_project(project_id, start, end, bucket_ms, &bucket_starts)?
+            }
+            None => self.buckets_global(start, end, bucket_ms, &bucket_starts)?,
+        };
+
+        Ok(AgentActivityOverTimeResponse {
+            buckets,
+            summary: Some(summary),
+        })
+    }
+
+    fn buckets_for_project(
+        &self,
+        project_id: &str,
+        start: chrono::DateTime<chrono::Utc>,
+        end: chrono::DateTime<chrono::Utc>,
+        bucket_ms: u64,
+        bucket_starts: &[chrono::DateTime<chrono::Utc>],
+    ) -> DbResult<Vec<AgentActivityOverTimeBucket>> {
+        let project_name = self.project_name(project_id)?;
         let mut buckets: Vec<AgentActivityOverTimeBucket> = bucket_starts
             .iter()
             .map(|bucket_start| AgentActivityOverTimeBucket {
                 bucket_start: format_bucket_start(*bucket_start),
                 total_events: 0,
                 by_kind: HashMap::new(),
+                project_id: Some(project_id.to_string()),
+                project_name: project_name.clone(),
             })
             .collect();
-
-        if buckets.is_empty() {
-            return Ok(AgentActivityOverTimeResponse { buckets });
-        }
 
         let mut stmt = self.conn.prepare(
             "SELECT se.kind, se.created_at
@@ -82,241 +109,304 @@ impl<'a> AnalyticsRepo<'a> {
             *bucket.by_kind.entry(kind).or_insert(0) += 1;
         }
 
-        Ok(AgentActivityOverTimeResponse { buckets })
+        Ok(buckets)
     }
 
-    pub fn permission_activity_over_time(
+    fn buckets_global(
         &self,
-        project_id: &str,
-        time_range: &ActivityTimeRange,
-    ) -> DbResult<PermissionActivityOverTimeResponse> {
-        let (start, end, bucket_ms) = parse_activity_time_range(time_range)?;
-        let bucket_starts = build_bucket_starts(start, end, bucket_ms);
-        let mut buckets: Vec<PermissionActivityOverTimeBucket> = bucket_starts
-            .iter()
-            .map(|bucket_start| PermissionActivityOverTimeBucket {
-                bucket_start: format_bucket_start(*bucket_start),
-                active_pending: 0,
-                requests_opened: 0,
-                requests_resolved: 0,
-            })
-            .collect();
+        start: chrono::DateTime<chrono::Utc>,
+        end: chrono::DateTime<chrono::Utc>,
+        bucket_ms: u64,
+        bucket_starts: &[chrono::DateTime<chrono::Utc>],
+    ) -> DbResult<Vec<AgentActivityOverTimeBucket>> {
+        let mut buckets: HashMap<(usize, String), AgentActivityOverTimeBucket> = HashMap::new();
 
-        if buckets.is_empty() {
-            return Ok(PermissionActivityOverTimeResponse { buckets });
-        }
-
-        let opened_events = self.list_permission_request_times(project_id, start, end)?;
-        let resolved_events = self.list_permission_resolved_times(project_id, start, end)?;
-
-        for bucket in &mut buckets {
-            let bucket_start = parse_timestamp(&bucket.bucket_start)?;
-            let bucket_end = bucket_start + chrono::Duration::milliseconds(bucket_ms as i64);
-
-            bucket.requests_opened = opened_events
-                .iter()
-                .filter(|timestamp| **timestamp >= bucket_start && **timestamp < bucket_end)
-                .count() as u32;
-
-            bucket.requests_resolved = resolved_events
-                .iter()
-                .filter(|timestamp| **timestamp >= bucket_start && **timestamp < bucket_end)
-                .count() as u32;
-
-            let opened_before_end = opened_events
-                .iter()
-                .filter(|timestamp| **timestamp < bucket_end)
-                .count() as u32;
-            let resolved_before_end = resolved_events
-                .iter()
-                .filter(|timestamp| **timestamp < bucket_end)
-                .count() as u32;
-
-            bucket.active_pending = opened_before_end.saturating_sub(resolved_before_end);
-        }
-
-        Ok(PermissionActivityOverTimeResponse { buckets })
-    }
-
-    fn list_permission_request_times(
-        &self,
-        project_id: &str,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-    ) -> DbResult<Vec<DateTime<Utc>>> {
         let mut stmt = self.conn.prepare(
-            "SELECT se.created_at
+            "SELECT se.kind, se.created_at, i.project_id, p.name
              FROM session_events se
              JOIN agent_sessions s ON s.id = se.session_id
              JOIN run_attempts ra ON ra.id = s.run_attempt_id
              JOIN issues i ON i.id = ra.issue_id
-             WHERE i.project_id = ?1
-               AND se.kind = 'PermissionRequest'
-               AND se.created_at >= ?2
-               AND se.created_at < ?3
+             JOIN projects p ON p.id = i.project_id
+             WHERE se.kind != 'StreamChunk'
+               AND se.created_at >= ?1
+               AND se.created_at < ?2
              ORDER BY se.created_at ASC",
         )?;
-        self.collect_timestamps(&mut stmt, project_id, start, end)
+        let mut rows = stmt.query(params![format_timestamp(start), format_timestamp(end)])?;
+
+        while let Some(row) = rows.next()? {
+            let kind: String = row.get(0)?;
+            let created_at: String = row.get(1)?;
+            let project_id: String = row.get(2)?;
+            let project_name: String = row.get(3)?;
+            let event_time = parse_timestamp(&created_at)?;
+            if event_time < start || event_time >= end {
+                continue;
+            }
+
+            let bucket_index = bucket_index(start, event_time, bucket_ms);
+            if bucket_index >= bucket_starts.len() {
+                continue;
+            }
+
+            let kind = SessionEventKind::from_str(&kind).map_err(|()| {
+                crate::db::error::DbError::Internal(format!("unknown session event kind: {kind}"))
+            })?;
+
+            let bucket = buckets
+                .entry((bucket_index, project_id.clone()))
+                .or_insert_with(|| AgentActivityOverTimeBucket {
+                    bucket_start: format_bucket_start(bucket_starts[bucket_index]),
+                    total_events: 0,
+                    by_kind: HashMap::new(),
+                    project_id: Some(project_id),
+                    project_name: Some(project_name),
+                });
+            bucket.total_events += 1;
+            *bucket.by_kind.entry(kind).or_insert(0) += 1;
+        }
+
+        let mut result: Vec<_> = buckets.into_values().collect();
+        result.sort_by(|left, right| {
+            left.bucket_start
+                .cmp(&right.bucket_start)
+                .then_with(|| left.project_name.cmp(&right.project_name))
+        });
+        Ok(result)
     }
 
-    fn list_permission_resolved_times(
+    fn activity_summary(
         &self,
-        project_id: &str,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-    ) -> DbResult<Vec<DateTime<Utc>>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT created_at
-             FROM audit_events
-             WHERE project_id = ?1
-               AND action = ?2
-               AND created_at >= ?3
-               AND created_at < ?4
-             ORDER BY created_at ASC",
-        )?;
-        let mut rows = stmt.query(params![
-            project_id,
-            audit::action::PERMISSION_RESOLVED,
-            format_timestamp(start),
-            format_timestamp(end),
-        ])?;
-        let mut timestamps = Vec::new();
-        while let Some(row) = rows.next()? {
-            timestamps.push(parse_timestamp(&row.get::<_, String>(0)?)?);
-        }
-        Ok(timestamps)
+        start: chrono::DateTime<chrono::Utc>,
+        end: chrono::DateTime<chrono::Utc>,
+        project_id: Option<&str>,
+    ) -> DbResult<AgentActivitySummary> {
+        let start_at = format_timestamp(start);
+        let end_at = format_timestamp(end);
+
+        let (total_events, run_attempt_count, session_count) = match project_id {
+            Some(project_id) => {
+                let mut stmt = self.conn.prepare(
+                    "SELECT
+                       (SELECT COUNT(*)
+                        FROM session_events se
+                        JOIN agent_sessions s ON s.id = se.session_id
+                        JOIN run_attempts ra ON ra.id = s.run_attempt_id
+                        JOIN issues i ON i.id = ra.issue_id
+                        WHERE i.project_id = ?1
+                          AND se.kind != 'StreamChunk'
+                          AND se.created_at >= ?2
+                          AND se.created_at < ?3) AS total_events,
+                       (SELECT COUNT(DISTINCT ra.id)
+                        FROM run_attempts ra
+                        JOIN issues i ON i.id = ra.issue_id
+                        WHERE i.project_id = ?1
+                          AND ra.started_at >= ?2
+                          AND ra.started_at < ?3) AS run_attempt_count,
+                       (SELECT COUNT(DISTINCT s.id)
+                        FROM agent_sessions s
+                        JOIN run_attempts ra ON ra.id = s.run_attempt_id
+                        JOIN issues i ON i.id = ra.issue_id
+                        WHERE i.project_id = ?1
+                          AND s.started_at >= ?2
+                          AND s.started_at < ?3) AS session_count",
+                )?;
+                let row = stmt.query_row(params![project_id, start_at, end_at], map_summary_row)?;
+                row
+            }
+            None => {
+                let mut stmt = self.conn.prepare(
+                    "SELECT
+                       (SELECT COUNT(*)
+                        FROM session_events se
+                        WHERE se.kind != 'StreamChunk'
+                          AND se.created_at >= ?1
+                          AND se.created_at < ?2) AS total_events,
+                       (SELECT COUNT(DISTINCT ra.id)
+                        FROM run_attempts ra
+                        WHERE ra.started_at >= ?1
+                          AND ra.started_at < ?2) AS run_attempt_count,
+                       (SELECT COUNT(DISTINCT s.id)
+                        FROM agent_sessions s
+                        WHERE s.started_at >= ?1
+                          AND s.started_at < ?2) AS session_count",
+                )?;
+                let row = stmt.query_row(params![start_at, end_at], map_summary_row)?;
+                row
+            }
+        };
+
+        Ok(AgentActivitySummary {
+            total_events,
+            run_attempt_count,
+            session_count,
+        })
     }
 
-    fn collect_timestamps(
-        &self,
-        stmt: &mut rusqlite::Statement<'_>,
-        project_id: &str,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-    ) -> DbResult<Vec<DateTime<Utc>>> {
-        let mut rows = stmt.query(params![
-            project_id,
-            format_timestamp(start),
-            format_timestamp(end),
-        ])?;
-        let mut timestamps = Vec::new();
-        while let Some(row) = rows.next()? {
-            timestamps.push(parse_timestamp(&row.get::<_, String>(0)?)?);
+    fn project_name(&self, project_id: &str) -> DbResult<Option<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT name FROM projects WHERE id = ?1")?;
+        let mut rows = stmt.query([project_id])?;
+        if let Some(row) = rows.next()? {
+            return Ok(Some(row.get(0)?));
         }
-        Ok(timestamps)
+        Ok(None)
     }
+}
+
+fn map_summary_row(row: &Row<'_>) -> rusqlite::Result<(u32, u32, u32)> {
+    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
-    use crate::db::fixtures::{open_test_db, seed_issue_with_session};
+    use crate::db::fixtures::open_test_db;
+    use chrono::{Duration, TimeZone, Utc};
+    use rusqlite::params;
     use uuid::Uuid;
 
-    #[test]
-    fn agent_activity_excludes_stream_chunk_and_buckets_events() -> DbResult<()> {
-        let conn = open_test_db()?;
-        let fixtures = seed_issue_with_session(&conn)?;
+    fn seed_project(conn: &Connection, id: &str, name: &str) {
+        conn.execute(
+            "INSERT INTO projects (id, name, slug, workspace_root) VALUES (?1, ?2, ?3, '/tmp/test')",
+            params![id, name, id],
+        )
+        .expect("seed project");
+    }
+
+    fn seed_activity_chain(
+        conn: &Connection,
+        project_id: &str,
+        started_at: &str,
+    ) -> (String, String) {
+        let issue_id = Uuid::new_v4().to_string();
+        let attempt_id = Uuid::new_v4().to_string();
+        let session_id = Uuid::new_v4().to_string();
+        let identifier = format!("ISS-{}", &issue_id[..8]);
 
         conn.execute(
-            "DELETE FROM session_events WHERE session_id = ?1",
-            params![fixtures.session_id],
-        )?;
+            "INSERT INTO issues (id, project_id, identifier, title, executor)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![issue_id, project_id, identifier, "Test issue", "hermes"],
+        )
+        .expect("seed issue");
+        conn.execute(
+            "INSERT INTO run_attempts (id, issue_id, attempt_number, status, started_at)
+             VALUES (?1, ?2, 1, 'running', ?3)",
+            params![attempt_id, issue_id, started_at],
+        )
+        .expect("seed run attempt");
+        conn.execute(
+            "INSERT INTO agent_sessions (id, run_attempt_id, runtime_kind, status, started_at)
+             VALUES (?1, ?2, 'acp', 'running', ?3)",
+            params![session_id, attempt_id, started_at],
+        )
+        .expect("seed agent session");
 
-        let events = [
-            ("Prompt", r#"{"text":"start"}"#, "2020-01-01T00:05:00Z"),
-            ("StreamChunk", r#"{"text":"chunk"}"#, "2020-01-01T00:10:00Z"),
-            (
-                "SessionUpdate",
-                r#"{"status":"streaming"}"#,
-                "2020-01-01T00:20:00Z",
-            ),
-        ];
+        (session_id, attempt_id)
+    }
 
-        for (kind, payload_json, created_at) in events {
-            conn.execute(
-                "INSERT INTO session_events (id, session_id, kind, payload_json, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![
-                    Uuid::new_v4().to_string(),
-                    fixtures.session_id,
-                    kind,
-                    payload_json,
-                    created_at,
-                ],
-            )?;
+    fn append_session_event(
+        conn: &Connection,
+        session_id: &str,
+        created_at: &str,
+        kind: &str,
+    ) {
+        let event_id = Uuid::new_v4().to_string();
+        conn.execute(
+            "INSERT INTO session_events (id, session_id, kind, payload_json, created_at)
+             VALUES (?1, ?2, ?3, '{}', ?4)",
+            params![event_id, session_id, kind, created_at],
+        )
+        .expect("seed session event");
+    }
+
+    fn test_time_range(start: chrono::DateTime<Utc>, hours: i64) -> ActivityTimeRange {
+        ActivityTimeRange {
+            start_at: format_timestamp(start),
+            end_at: format_timestamp(start + Duration::hours(hours)),
+            bucket_ms: 3_600_000,
         }
-
-        let start = Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap();
-        let end = start + chrono::Duration::hours(1);
-        let response = AnalyticsRepo::new(&conn).agent_activity_over_time(
-            &fixtures.project_id,
-            &ActivityTimeRange {
-                start_at: format_timestamp(start),
-                end_at: format_timestamp(end),
-                bucket_ms: 15 * 60 * 1000,
-            },
-        )?;
-
-        assert_eq!(response.buckets.len(), 4);
-        let total_events: u32 = response.buckets.iter().map(|bucket| bucket.total_events).sum();
-        assert_eq!(total_events, 2);
-        assert!(response
-            .buckets
-            .iter()
-            .flat_map(|bucket| bucket.by_kind.keys())
-            .all(|kind| *kind != SessionEventKind::StreamChunk));
-
-        Ok(())
     }
 
     #[test]
-    fn permission_activity_tracks_open_resolve_and_active_pending() -> DbResult<()> {
-        let conn = open_test_db()?;
-        let fixtures = seed_issue_with_session(&conn)?;
+    fn list_agent_activity_over_time_global_combines_projects() {
+        let conn = open_test_db().expect("open test db");
+        seed_project(&conn, "project-a", "Alpha");
+        seed_project(&conn, "project-b", "Beta");
 
-        conn.execute(
-            "INSERT INTO session_events (id, session_id, kind, payload_json, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                Uuid::new_v4().to_string(),
-                fixtures.session_id,
-                "PermissionRequest",
-                r#"{"summary":"approve tool"}"#,
-                "2020-01-01T00:10:00Z",
-            ],
-        )?;
-        conn.execute(
-            "INSERT INTO audit_events (id, project_id, issue_id, action, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                Uuid::new_v4().to_string(),
-                fixtures.project_id,
-                fixtures.issue_id,
-                audit::action::PERMISSION_RESOLVED,
-                "2020-01-01T00:40:00Z",
-            ],
-        )?;
+        let range_start = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+        let event_time = format_timestamp(range_start + Duration::minutes(30));
 
-        let response = AnalyticsRepo::new(&conn).permission_activity_over_time(
-            &fixtures.project_id,
-            &ActivityTimeRange {
-                start_at: "2020-01-01T00:00:00Z".into(),
-                end_at: "2020-01-01T01:00:00Z".into(),
-                bucket_ms: 15 * 60 * 1000,
-            },
-        )?;
+        let (session_a, _) = seed_activity_chain(&conn, "project-a", &event_time);
+        let (session_b, _) = seed_activity_chain(&conn, "project-b", &event_time);
+        append_session_event(&conn, &session_a, &event_time, "Prompt");
+        append_session_event(&conn, &session_b, &event_time, "ToolCall");
 
-        assert_eq!(response.buckets.len(), 4);
-        assert_eq!(response.buckets[0].requests_opened, 1);
-        assert_eq!(response.buckets[1].requests_opened, 0);
-        assert_eq!(response.buckets[2].requests_resolved, 1);
-        assert_eq!(response.buckets[0].active_pending, 1);
-        assert_eq!(response.buckets[1].active_pending, 1);
-        assert_eq!(response.buckets[2].active_pending, 0);
-        assert_eq!(response.buckets[3].active_pending, 0);
+        let repo = AnalyticsRepo::new(&conn);
+        let response = repo
+            .list_agent_activity_over_time(&test_time_range(range_start, 2), None)
+            .expect("global activity query");
 
-        Ok(())
+        assert_eq!(response.buckets.len(), 2);
+        assert_eq!(
+            response.summary,
+            Some(AgentActivitySummary {
+                total_events: 2,
+                run_attempt_count: 2,
+                session_count: 2,
+            })
+        );
+
+        let project_ids: Vec<_> = response
+            .buckets
+            .iter()
+            .filter_map(|bucket| bucket.project_id.clone())
+            .collect();
+        assert!(project_ids.contains(&"project-a".to_string()));
+        assert!(project_ids.contains(&"project-b".to_string()));
+    }
+
+    #[test]
+    fn list_agent_activity_over_time_filtered_matches_single_project() {
+        let conn = open_test_db().expect("open test db");
+        seed_project(&conn, "project-a", "Alpha");
+        seed_project(&conn, "project-b", "Beta");
+
+        let range_start = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+        let event_time = format_timestamp(range_start + Duration::minutes(30));
+
+        let (session_a, _) = seed_activity_chain(&conn, "project-a", &event_time);
+        let (session_b, _) = seed_activity_chain(&conn, "project-b", &event_time);
+        append_session_event(&conn, &session_a, &event_time, "Prompt");
+        append_session_event(&conn, &session_a, &event_time, "Error");
+        append_session_event(&conn, &session_b, &event_time, "ToolCall");
+
+        let repo = AnalyticsRepo::new(&conn);
+        let time_range = test_time_range(range_start, 2);
+
+        let filtered = repo
+            .list_agent_activity_over_time(&time_range, Some("project-a"))
+            .expect("filtered activity query");
+
+        assert_eq!(
+            filtered.summary,
+            Some(AgentActivitySummary {
+                total_events: 2,
+                run_attempt_count: 1,
+                session_count: 1,
+            })
+        );
+        assert_eq!(
+            filtered.buckets[0].project_id.as_deref(),
+            Some("project-a")
+        );
+        assert_eq!(
+            filtered.buckets[0].project_name.as_deref(),
+            Some("Alpha")
+        );
+        assert_eq!(filtered.buckets[0].total_events, 2);
     }
 }

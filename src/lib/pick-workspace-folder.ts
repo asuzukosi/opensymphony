@@ -2,7 +2,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 
 import { isIpcAvailable } from "@/lib/ipc/client";
 
-export async function pickWorkflowFolder(
+export async function pickWorkspaceFolder(
   defaultPath?: string,
 ): Promise<string | null> {
   if (!isIpcAvailable()) {

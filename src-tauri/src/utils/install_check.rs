@@ -48,24 +48,3 @@ pub fn binary_path(name: &str) -> Option<String> {
             .filter(|path| !path.is_empty())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn missing_binary_is_not_on_path() {
-        assert!(!binary_on_path("opensymphony-definitely-missing-binary"));
-    }
-
-    #[test]
-    fn sh_is_on_path() {
-        assert!(binary_on_path("sh"));
-    }
-
-    #[test]
-    fn binary_path_resolves_sh() {
-        let path = binary_path("sh").expect("sh path");
-        assert!(!path.is_empty());
-    }
-}

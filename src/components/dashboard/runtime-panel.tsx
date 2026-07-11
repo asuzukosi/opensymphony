@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { PanelSection } from "@/components/layout/panel-section";
+import { EmptyState } from "@/components/layout/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,6 @@ function SnapshotField({ label, value }: { label: string; value: ReactNode }) {
 export function RuntimePanel({ projectId, runtime }: RuntimePanelProps) {
   const {
     summary,
-    fetchedAt,
     isLoading,
     startRuntime,
     stopRuntime,
@@ -61,6 +61,18 @@ export function RuntimePanel({ projectId, runtime }: RuntimePanelProps) {
       // surfaced via controlError
     }
   };
+
+  if (projectId == null) {
+    return (
+      <PanelSection title="Runtime snapshot" description="Poll cadence and orchestrator controls.">
+        <EmptyState
+          title="No project selected"
+          description="Select a project in the sidebar to view runtime controls."
+          className="py-10"
+        />
+      </PanelSection>
+    );
+  }
 
   if (pending) {
     return (
@@ -113,7 +125,6 @@ export function RuntimePanel({ projectId, runtime }: RuntimePanelProps) {
             summary?.lastError ? <span className="text-destructive">{summary.lastError}</span> : "none"
           }
         />
-        <SnapshotField label="Fetched at" value={formatDateTime(fetchedAt, "n/a")} />
       </dl>
 
       <Separator />

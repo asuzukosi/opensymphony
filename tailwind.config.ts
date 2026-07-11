@@ -1,8 +1,8 @@
 import type { Config } from "tailwindcss";
-import symphonyPreset from "./tailwind.preset";
+import opensymphonyPreset from "./tailwind.preset";
 
 const config: Config = {
-  presets: [symphonyPreset],
+  presets: [opensymphonyPreset],
   content: ["./src/**/*.{ts,tsx}"],
 };
 

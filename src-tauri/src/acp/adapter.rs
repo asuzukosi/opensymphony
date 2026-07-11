@@ -20,7 +20,7 @@ use tauri::async_runtime::RuntimeHandle;
 
 use crate::db::repos::agent_session::AgentSessionRepo;
 use crate::db::Db;
-use crate::types::{Platform, RuntimeSessionPhase, SessionEventKind};
+use crate::types::{RuntimeSessionPhase, SessionEventKind};
 
 use super::client::connect;
 use super::context::{SessionCtx, StoredSession};
@@ -61,18 +61,9 @@ impl AcpClientConfig {
             _ => Err("acp command must use stdio transport".into()),
         }
     }
-
-    pub fn from_platform(platform: Platform) -> Result<Self, String> {
-        Self::from_acp_command(platform.acp_command())
-    }
-
-    pub fn dev_default() -> Self {
-        Self::from_platform(Platform::Hermes).expect("valid default hermes acp command")
-    }
 }
 
 pub struct AcpClientAdapter {
-    config: AcpClientConfig,
     db: Arc<Db>,
     permission_gate: Arc<PermissionGate>,
     handle: RuntimeHandle,
@@ -81,13 +72,11 @@ pub struct AcpClientAdapter {
 
 impl AcpClientAdapter {
     pub fn new(
-        config: AcpClientConfig,
         db: Arc<Db>,
         permission_gate: Arc<PermissionGate>,
         handle: RuntimeHandle,
     ) -> Self {
         Self {
-            config,
             db,
             permission_gate,
             handle,
@@ -96,18 +85,13 @@ impl AcpClientAdapter {
     }
 
     fn resolve_config(&self, input: &StartRuntimeSessionInput) -> Result<AcpClientConfig, String> {
-        if let Some(command) = input
+        let command = input
             .acp_command
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
-        {
-            return AcpClientConfig::from_acp_command(command);
-        }
-        Ok(AcpClientConfig {
-            command: self.config.command.clone(),
-            args: self.config.args.clone(),
-        })
+            .ok_or_else(|| "acp command is required".to_string())?;
+        AcpClientConfig::from_acp_command(command)
     }
 
     fn ctx(&self, session_id: &str) -> Option<SessionCtx> {
@@ -121,15 +105,10 @@ impl AcpClientAdapter {
     fn spawn_agent_process(
         config: &AcpClientConfig,
         workspace: &str,
-        input: &StartRuntimeSessionInput,
     ) -> Result<(tokio::process::ChildStdin, tokio::process::ChildStdout, Child), String> {
         let mut cmd = Command::new(&config.command);
         cmd.args(&config.args)
             .current_dir(workspace)
-            .env("SYMPHONY_RUN_ATTEMPT_ID", &input.run_attempt_id)
-            .env("SYMPHONY_ISSUE_ID", &input.issue_id)
-            .env("SYMPHONY_ATTEMPT_NUMBER", input.attempt_number.to_string())
-            .env("SYMPHONY_WORKSPACE_PATH", workspace)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -182,7 +161,6 @@ impl AcpAdapter for AcpClientAdapter {
             issue_id: input.issue_id.clone(),
             attempt_number: input.attempt_number,
             agent_name: input.agent_name.clone(),
-            started_at: input.started_at.clone(),
             finished_at: None,
             status: RuntimeSessionStatus::Running,
             error_message: None,
@@ -190,6 +168,7 @@ impl AcpAdapter for AcpClientAdapter {
             agent_session_ref: None,
             cancelled: false,
             pause_gate: Arc::clone(&input.pause_gate),
+            auto_approve_permissions: input.auto_approve_permissions,
             recorder: Recorder::new(),
             child: None,
         }));
@@ -266,15 +245,16 @@ async fn run_session(
     input: StartRuntimeSessionInput,
 ) -> Result<(), String> {
     let workspace = input.workspace_path.trim().to_string();
-    let (session_id, issue_id) = ctx.with_mut(|session| {
+    let (session_id, issue_id, auto_approve) = ctx.with_mut(|session| {
         (
             session.session_id.clone(),
             session.issue_id.clone(),
+            session.auto_approve_permissions,
         )
     });
 
     ctx.set_phase(RuntimeSessionPhase::Spawning);
-    let (stdin, stdout, child) = AcpClientAdapter::spawn_agent_process(&config, &workspace, &input)?;
+    let (stdin, stdout, child) = AcpClientAdapter::spawn_agent_process(&config, &workspace)?;
     ctx.set_child(child);
 
     let permissions_gate = Arc::clone(&permission_gate);
@@ -287,7 +267,13 @@ async fn run_session(
     connect(
         ByteStreams::new(stdin.compat_write(), stdout.compat()),
         on_session_update,
-        permission_handler(ctx_permissions, permissions_gate, session_id, issue_id),
+        permission_handler(
+            ctx_permissions,
+            permissions_gate,
+            session_id,
+            issue_id,
+            auto_approve,
+        ),
         move |connection: ConnectionTo<Agent>| {
             let ctx = ctx.clone();
             let input = input.clone();
@@ -383,28 +369,5 @@ async fn exit_if_cancelled(
         *cancel_sent = true;
     }
     Ok(true)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::Platform;
-
-    #[test]
-    fn from_platform_parses_native_binary_commands() {
-        let config = AcpClientConfig::from_platform(Platform::Hermes).expect("hermes");
-        assert_eq!(config.command.to_string_lossy(), "hermes");
-        assert_eq!(config.args, vec!["acp"]);
-    }
-
-    #[test]
-    fn from_platform_parses_npx_commands_with_flags() {
-        let config = AcpClientConfig::from_platform(Platform::Codex).expect("codex");
-        assert_eq!(config.command.to_string_lossy(), "npx");
-        assert_eq!(
-            config.args,
-            vec!["-y", "@agentclientprotocol/codex-acp"]
-        );
-    }
 }
 

@@ -28,6 +28,7 @@ export function IssuePageClient() {
     transitionColumn,
     updatePriority,
     setExecutor,
+    setAutoApprovePermissions,
     setTags,
     attachFiles,
     addComment,
@@ -76,6 +77,19 @@ export function IssuePageClient() {
       await setExecutor(executor);
     } catch {
       setFailedExecutor(true);
+    }
+  };
+
+  const handleAutoApprovePermissionsChange = async (
+    autoApprovePermissions: boolean,
+  ): Promise<void> => {
+    resetMutation();
+    setFailedMetadata(false);
+
+    try {
+      await setAutoApprovePermissions(autoApprovePermissions);
+    } catch {
+      setFailedMetadata(true);
     }
   };
 
@@ -130,6 +144,7 @@ export function IssuePageClient() {
           <IssueMetadata
             issue={issue}
             onExecutorChange={handleExecutorChange}
+            onAutoApprovePermissionsChange={handleAutoApprovePermissionsChange}
             onPriorityChange={(priority) => handleMetadataChange(() => updatePriority(priority))}
             onTagsChange={(tags) => handleMetadataChange(() => setTags(tags))}
             onAttachFiles={(filePaths) => handleMetadataChange(() => attachFiles(filePaths))}

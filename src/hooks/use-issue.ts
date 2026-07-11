@@ -35,6 +35,7 @@ type IssueWriteInput =
   | { action: "updatePriority"; priority: number | null }
   | { action: "transitionColumn"; column: BoardColumnId; actor?: string | null }
   | { action: "setExecutor"; executor: PlatformId | null }
+  | { action: "setAutoApprovePermissions"; autoApprovePermissions: boolean }
   | { action: "setTags"; tags: string[] }
   | { action: "attachFiles"; filePaths: string[] }
   | { action: "addComment"; body: string; author?: string | null };
@@ -53,13 +54,12 @@ export type UseIssueResult = {
   issue: IssueDetail | undefined;
   error: Error | null;
   isLoading: boolean;
-  isRefreshing: boolean;
-  refetch: () => Promise<void>;
   updateTitle: (title: string) => Promise<void>;
   updateDescription: (description: string | null) => Promise<void>;
   updatePriority: (priority: number | null) => Promise<void>;
   transitionColumn: (column: BoardColumnId, actor?: string | null) => Promise<void>;
   setExecutor: (executor: PlatformId | null) => Promise<void>;
+  setAutoApprovePermissions: (autoApprovePermissions: boolean) => Promise<void>;
   setTags: (tags: string[]) => Promise<void>;
   attachFiles: (filePaths: string[]) => Promise<void>;
   addComment: (body: string, author?: string | null) => Promise<void>;
@@ -83,7 +83,7 @@ export function useIssue(options: UseIssueOptions): UseIssueResult {
   } = options;
   const enabled = enabledOption && issueId != null;
 
-  const { data, error, isLoading, isRefreshing, refetch } = useIpcQuery<IssueDetail>(
+  const { data, error, isLoading, refetch } = useIpcQuery<IssueDetail>(
     `issue:${issueId ?? "none"}`,
     async (client) => {
       const id = issueId as string;
@@ -131,6 +131,11 @@ export function useIssue(options: UseIssueOptions): UseIssueResult {
         return client.transitionIssueColumn(input.issueId, input.column, input.actor ?? null);
       case "setExecutor":
         return client.setIssueExecutor(input.issueId, input.executor);
+      case "setAutoApprovePermissions":
+        return client.setIssueAutoApprovePermissions(
+          input.issueId,
+          input.autoApprovePermissions,
+        );
       case "setTags":
         return client.setIssueTags(input.issueId, input.tags);
       case "attachFiles":
@@ -185,6 +190,13 @@ export function useIssue(options: UseIssueOptions): UseIssueResult {
     [mutateAndRefetch],
   );
 
+  const setAutoApprovePermissions = useCallback(
+    async (autoApprovePermissions: boolean): Promise<void> => {
+      await mutateAndRefetch({ action: "setAutoApprovePermissions", autoApprovePermissions });
+    },
+    [mutateAndRefetch],
+  );
+
   const setTags = useCallback(
     async (tags: string[]): Promise<void> => {
       await mutateAndRefetch({ action: "setTags", tags });
@@ -210,13 +222,12 @@ export function useIssue(options: UseIssueOptions): UseIssueResult {
     issue: data,
     error,
     isLoading,
-    isRefreshing,
-    refetch,
     updateTitle,
     updateDescription,
     updatePriority,
     transitionColumn,
     setExecutor,
+    setAutoApprovePermissions,
     setTags,
     attachFiles,
     addComment,

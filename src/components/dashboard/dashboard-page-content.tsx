@@ -18,18 +18,20 @@ import { createDefaultActivityTimeRange } from "@/lib/activity-time-range";
 import type { ActivityTimeRange } from "@/lib/ipc/types";
 
 export function DashboardPageContent() {
-  const { projectId } = useActiveProject();
-  const runtime = useRuntime();
+  const { projectId: activeProjectId, projects } = useActiveProject();
+  const runtime = useRuntime({
+    projectId: activeProjectId ?? null,
+    enabled: activeProjectId != null,
+  });
   const [timeRange, setTimeRange] = useState<ActivityTimeRange | null>(null);
-  const activity = useAgentActivity(timeRange);
+  const [activityProjectFilter, setActivityProjectFilter] = useState<string | null>(null);
+  const activity = useAgentActivity(timeRange, { projectId: activityProjectFilter });
 
   useEffect(() => {
     setTimeRange(createDefaultActivityTimeRange());
   }, []);
 
-  const handleTimeRangeChange = (next: ActivityTimeRange): void => {
-    setTimeRange(next);
-  };
+  const runtimeControlsEnabled = activeProjectId != null;
 
   const errors = [
     runtime.error ? { title: "Runtime data unavailable", message: runtime.error.message } : null,
@@ -61,13 +63,13 @@ export function DashboardPageContent() {
       </section>
 
       <section aria-label="Runtime overview" className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        <RuntimePanel projectId={projectId ?? null} runtime={runtime} />
+        <RuntimePanel projectId={activeProjectId ?? null} runtime={runtime} />
         <RunningPanel
           running={runtime.running}
           isLoading={runtime.isLoading}
-          onPauseRun={projectId != null ? runtime.pauseRun : undefined}
-          onResumeRun={projectId != null ? runtime.resumeRun : undefined}
-          onCancelRun={projectId != null ? runtime.cancelRun : undefined}
+          onPauseRun={runtimeControlsEnabled ? runtime.pauseRun : undefined}
+          onResumeRun={runtimeControlsEnabled ? runtime.resumeRun : undefined}
+          onCancelRun={runtimeControlsEnabled ? runtime.cancelRun : undefined}
           isControlling={runtime.isControlling}
         />
         <div className="min-w-0 lg:col-span-2 xl:col-span-1">
@@ -78,10 +80,13 @@ export function DashboardPageContent() {
       <section aria-label="Activity charts">
         <ActivityPanel
           timeRange={timeRange}
-          onTimeRangeChange={handleTimeRangeChange}
+          onTimeRangeChange={setTimeRange}
           agentBuckets={activity.agentActivity}
-          permissionBuckets={activity.permissionActivity}
           isLoading={activity.isLoading}
+          showProjectBreakdown={activityProjectFilter == null}
+          projects={projects}
+          projectFilter={activityProjectFilter}
+          onProjectFilterChange={setActivityProjectFilter}
         />
       </section>
 

@@ -1,15 +1,14 @@
 export const IPC_CHANNELS = {
-  // board reads
-  getBoardColumn: "opensymphony:get-board-column",
-  getBoardIssueCard: "opensymphony:get-board-issue-card",
   // issue reads
   getIssueHeader: "opensymphony:get-issue-header",
+  listProjectIssues: "opensymphony:list-project-issues",
   listIssueComments: "opensymphony:list-issue-comments",
   listIssueRunAttempts: "opensymphony:list-issue-run-attempts",
   listSessionEvents: "opensymphony:list-session-events",
   // issue writes
   createIssue: "opensymphony:create-issue",
   setIssueExecutor: "opensymphony:set-issue-executor",
+  setIssueAutoApprovePermissions: "opensymphony:set-issue-auto-approve-permissions",
   setIssueTags: "opensymphony:set-issue-tags",
   attachIssueFiles: "opensymphony:attach-issue-files",
   updateIssueTitle: "opensymphony:update-issue-title",
@@ -40,48 +39,22 @@ export const IPC_CHANNELS = {
   // project reads
   listProjectSummaries: "opensymphony:list-project-summaries",
   getProjectName: "opensymphony:get-project-name",
-  getProjectWorkflowSource: "opensymphony:get-project-workflow-source",
-  getProjectWorkflowFilePath: "opensymphony:get-project-workflow-file-path",
-  getProjectWorkflowVersion: "opensymphony:get-project-workflow-version",
   getProjectPromptTemplate: "opensymphony:get-project-prompt-template",
   getProjectPollInterval: "opensymphony:get-project-poll-interval",
   getProjectMaxConcurrency: "opensymphony:get-project-max-concurrency",
   getProjectRetryPolicy: "opensymphony:get-project-retry-policy",
-  getProjectPermissionMode: "opensymphony:get-project-permission-mode",
   getProjectOrchestratorStatus: "opensymphony:get-project-orchestrator-status",
   // project writes
   createProject: "opensymphony:create-project",
   deleteProject: "opensymphony:delete-project",
   setProjectName: "opensymphony:set-project-name",
-  setProjectWorkflowFile: "opensymphony:set-project-workflow-file",
-  importProjectWorkflowFile: "opensymphony:import-project-workflow-file",
   setProjectPromptTemplate: "opensymphony:set-project-prompt-template",
   setProjectPollInterval: "opensymphony:set-project-poll-interval",
   setProjectMaxConcurrency: "opensymphony:set-project-max-concurrency",
   setProjectRetryPolicy: "opensymphony:set-project-retry-policy",
-  setProjectPermissionMode: "opensymphony:set-project-permission-mode",
-  // agent reads
-  listAgentSummaries: "opensymphony:list-agent-summaries",
-  getAgent: "opensymphony:get-agent",
-  listProjectAgentIds: "opensymphony:list-project-agent-ids",
-  // agent writes
-  createAgent: "opensymphony:create-agent",
-  deleteAgent: "opensymphony:delete-agent",
-  setAgentName: "opensymphony:set-agent-name",
-  setAgentAcpCommand: "opensymphony:set-agent-acp-command",
-  assignAgentToProject: "opensymphony:assign-agent-to-project",
-  unassignAgentFromProject: "opensymphony:unassign-agent-from-project",
   // platform
-  listAgentPlatformStatuses: "opensymphony:list-agent-platform-statuses",
+  listPlatformStatuses: "opensymphony:list-platform-statuses",
   listProjectPlatforms: "opensymphony:list-project-platforms",
   // analytics reads
-  getProjectAgentActivityOverTime: "opensymphony:get-project-agent-activity-over-time",
-  getProjectPermissionActivityOverTime:
-    "opensymphony:get-project-permission-activity-over-time",
-  // app state reads
-  getActiveProjectId: "opensymphony:get-active-project-id",
-  // app state writes
-  setActiveProjectId: "opensymphony:set-active-project-id",
+  getAgentActivityOverTime: "opensymphony:get-agent-activity-over-time",
 } as const;
-
-export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

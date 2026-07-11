@@ -2,7 +2,7 @@
 
 import { useCallback, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 
-import { ChartBarIcon, ShieldCheckIcon } from "@/components/ui/hero-icons";
+import { ChartBarIcon } from "@/components/ui/hero-icons";
 import { BorderedTable, tableHeadClass, tableHeaderRowClass } from "@/components/dashboard/shared";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PanelSection } from "@/components/layout/panel-section";
@@ -38,12 +38,46 @@ import {
   toDatetimeLocalInputValue,
 } from "@/lib/datetime";
 import { isPendingLoad } from "@/lib/is-pending-load";
-import type {
-  ActivityTimeRange,
-  AgentActivityOverTimeBucket,
-  PermissionActivityOverTimeBucket,
-} from "@/lib/ipc/types";
+import type { ActivityTimeRange, AgentActivityOverTimeBucket, ProjectSummary } from "@/lib/ipc/types";
 import { cn } from "@/lib/utils";
+
+const ALL_PROJECTS_FILTER = "all";
+
+function ProjectFilterPicker({
+  projects,
+  value,
+  onChange,
+  className,
+}: {
+  projects?: ProjectSummary[];
+  value: string | null;
+  onChange: (projectId: string | null) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("space-y-1", className)}>
+      <Label htmlFor="activity-project-filter">Project</Label>
+      <Select
+        value={value ?? ALL_PROJECTS_FILTER}
+        onValueChange={(nextValue) => {
+          onChange(nextValue === ALL_PROJECTS_FILTER ? null : nextValue);
+        }}
+      >
+        <SelectTrigger id="activity-project-filter" className="h-8 w-[180px]">
+          <SelectValue placeholder="All projects" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL_PROJECTS_FILTER}>All projects</SelectItem>
+          {(projects ?? []).map((project) => (
+            <SelectItem key={project.id} value={project.id}>
+              {project.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 function TimeRangePicker({
   value,
@@ -85,35 +119,34 @@ function TimeRangePicker({
   );
 
   if (!value) {
-    return <Skeleton className="h-8 w-full max-w-xl rounded-md" aria-hidden />;
+    return null;
   }
 
   return (
-    <div className={cn("flex flex-wrap items-end gap-3", className)} aria-label="Activity time range">
+    <div className={cn("flex flex-wrap items-end gap-3", className)}>
       <div className="space-y-1">
-        <Label htmlFor="activity-range-preset" className="text-xs text-muted-foreground">
-          Period
-        </Label>
+        <Label htmlFor="activity-preset">Range</Label>
         <Select
           value={preset}
-          onValueChange={(next: ActivityTimeRangePresetId) => {
-            setPreset(next);
-            if (next === "custom") {
-              const fallback = defaultCustomRange();
-              setCustomStartInput(toDatetimeLocalInputValue(fallback.startAt));
-              setCustomEndInput(toDatetimeLocalInputValue(fallback.endAt));
+          onValueChange={(nextPreset) => {
+            const typed = nextPreset as ActivityTimeRangePresetId;
+            setPreset(typed);
+            if (typed === "custom") {
+              const defaults = defaultCustomRange();
+              setCustomStartInput(toDatetimeLocalInputValue(defaults.startAt));
+              setCustomEndInput(toDatetimeLocalInputValue(defaults.endAt));
               emitChange(
-                next,
+                typed,
                 bucketId,
-                toDatetimeLocalInputValue(fallback.startAt),
-                toDatetimeLocalInputValue(fallback.endAt),
+                toDatetimeLocalInputValue(defaults.startAt),
+                toDatetimeLocalInputValue(defaults.endAt),
               );
               return;
             }
-            emitChange(next, bucketId, customStartInput, customEndInput);
+            emitChange(typed, bucketId, customStartInput, customEndInput);
           }}
         >
-          <SelectTrigger id="activity-range-preset" className="h-8 w-[148px]">
+          <SelectTrigger id="activity-preset" className="h-8 w-[140px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -127,17 +160,16 @@ function TimeRangePicker({
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="activity-range-bucket" className="text-xs text-muted-foreground">
-          Bucket size
-        </Label>
+        <Label htmlFor="activity-bucket">Bucket</Label>
         <Select
           value={bucketId}
-          onValueChange={(next: ActivityTimeRangeBucketId) => {
-            setBucketId(next);
-            emitChange(preset, next, customStartInput, customEndInput);
+          onValueChange={(nextBucketId) => {
+            const typed = nextBucketId as ActivityTimeRangeBucketId;
+            setBucketId(typed);
+            emitChange(preset, typed, customStartInput, customEndInput);
           }}
         >
-          <SelectTrigger id="activity-range-bucket" className="h-8 w-[132px]">
+          <SelectTrigger id="activity-bucket" className="h-8 w-[120px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -153,11 +185,9 @@ function TimeRangePicker({
       {preset === "custom" ? (
         <>
           <div className="space-y-1">
-            <Label htmlFor="activity-range-start" className="text-xs text-muted-foreground">
-              Start
-            </Label>
+            <Label htmlFor="activity-start">Start</Label>
             <Input
-              id="activity-range-start"
+              id="activity-start"
               type="datetime-local"
               value={customStartInput}
               onChange={(event) => {
@@ -168,11 +198,9 @@ function TimeRangePicker({
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="activity-range-end" className="text-xs text-muted-foreground">
-              End
-            </Label>
+            <Label htmlFor="activity-end">End</Label>
             <Input
-              id="activity-range-end"
+              id="activity-end"
               type="datetime-local"
               value={customEndInput}
               onChange={(event) => {
@@ -226,100 +254,90 @@ type ActivityPanelProps = {
   timeRange: ActivityTimeRange | null;
   onTimeRangeChange: (timeRange: ActivityTimeRange) => void;
   agentBuckets?: AgentActivityOverTimeBucket[];
-  permissionBuckets?: PermissionActivityOverTimeBucket[];
   isLoading?: boolean;
+  showProjectBreakdown?: boolean;
+  projects?: ProjectSummary[];
+  projectFilter?: string | null;
+  onProjectFilterChange?: (projectId: string | null) => void;
 };
 
 export function ActivityPanel({
   timeRange,
   onTimeRangeChange,
   agentBuckets,
-  permissionBuckets,
   isLoading = false,
+  showProjectBreakdown = false,
+  projects,
+  projectFilter = null,
+  onProjectFilterChange,
 }: ActivityPanelProps) {
   const pending = isPendingLoad(isLoading, agentBuckets) || timeRange == null;
   const agentData = agentBuckets?.filter((bucket) => bucket.totalEvents > 0) ?? [];
-  const permissionData =
-    permissionBuckets?.filter(
-      (bucket) => bucket.activePending > 0 || bucket.requestsOpened > 0 || bucket.requestsResolved > 0,
-    ) ?? [];
+  const showProjectColumn =
+    showProjectBreakdown && agentData.some((bucket) => bucket.projectName != null);
 
   if (!timeRange) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-full max-w-xl rounded-md" />
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Skeleton className="h-[240px] w-full rounded-lg" />
-          <Skeleton className="h-[240px] w-full rounded-lg" />
-        </div>
+        <Skeleton className="h-[240px] w-full rounded-lg" />
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <TimeRangePicker value={timeRange} onChange={onTimeRangeChange} />
-      <div className="grid gap-4 xl:grid-cols-2">
-        <BucketPanel
-          title="Agent activity"
-          description="Session events per bucket (excludes stream chunks)"
-          emptyTitle="No agent activity for this period"
-          emptyIcon={ChartBarIcon}
-          isLoading={pending}
-          hasData={agentData.length > 0}
-        >
-          <BorderedTable>
-            <Table>
-              <TableHeader>
-                <TableRow className={tableHeaderRowClass}>
-                  <TableHead className={tableHeadClass}>Bucket</TableHead>
-                  <TableHead className={tableHeadClass}>Events</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {agentData.map((bucket) => (
-                  <TableRow key={bucket.bucketStart}>
-                    <TableCell className="text-muted-foreground">{formatDateTime(bucket.bucketStart)}</TableCell>
-                    <TableCell className="font-mono tabular-nums">{bucket.totalEvents}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </BorderedTable>
-        </BucketPanel>
-
-        <BucketPanel
-          title="Permission requests"
-          description="Opened, resolved, and pending per bucket"
-          emptyTitle="No permission activity for this period"
-          emptyIcon={ShieldCheckIcon}
-          isLoading={pending}
-          hasData={permissionData.length > 0}
-        >
-          <BorderedTable>
-            <Table>
-              <TableHeader>
-                <TableRow className={tableHeaderRowClass}>
-                  <TableHead className={tableHeadClass}>Bucket</TableHead>
-                  <TableHead className={tableHeadClass}>Opened</TableHead>
-                  <TableHead className={tableHeadClass}>Resolved</TableHead>
-                  <TableHead className={tableHeadClass}>Pending</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {permissionData.map((bucket) => (
-                  <TableRow key={bucket.bucketStart}>
-                    <TableCell className="text-muted-foreground">{formatDateTime(bucket.bucketStart)}</TableCell>
-                    <TableCell className="font-mono tabular-nums">{bucket.requestsOpened}</TableCell>
-                    <TableCell className="font-mono tabular-nums">{bucket.requestsResolved}</TableCell>
-                    <TableCell className="font-mono tabular-nums">{bucket.activePending}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </BorderedTable>
-        </BucketPanel>
+      <div className="flex flex-wrap items-end gap-3">
+        <TimeRangePicker value={timeRange} onChange={onTimeRangeChange} />
+        {onProjectFilterChange ? (
+          <ProjectFilterPicker
+            projects={projects}
+            value={projectFilter}
+            onChange={onProjectFilterChange}
+          />
+        ) : null}
       </div>
+      <BucketPanel
+        title="Agent activity"
+        description={
+          showProjectColumn
+            ? "Session events per bucket, grouped by project (excludes stream chunks)"
+            : "Session events per bucket (excludes stream chunks)"
+        }
+        emptyTitle="No agent activity for this period"
+        emptyIcon={ChartBarIcon}
+        isLoading={pending}
+        hasData={agentData.length > 0}
+      >
+        <BorderedTable>
+          <Table>
+            <TableHeader>
+              <TableRow className={tableHeaderRowClass}>
+                <TableHead className={tableHeadClass}>Bucket</TableHead>
+                {showProjectColumn ? (
+                  <TableHead className={tableHeadClass}>Project</TableHead>
+                ) : null}
+                <TableHead className={tableHeadClass}>Events</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {agentData.map((bucket) => (
+                <TableRow
+                  key={`${bucket.bucketStart}:${bucket.projectId ?? "all"}`}
+                >
+                  <TableCell className="text-muted-foreground">
+                    {formatDateTime(bucket.bucketStart)}
+                  </TableCell>
+                  {showProjectColumn ? (
+                    <TableCell>{bucket.projectName ?? "—"}</TableCell>
+                  ) : null}
+                  <TableCell className="font-mono tabular-nums">{bucket.totalEvents}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </BorderedTable>
+      </BucketPanel>
     </div>
   );
 }

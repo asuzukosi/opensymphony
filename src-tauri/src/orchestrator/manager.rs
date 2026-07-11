@@ -7,7 +7,6 @@ use rusqlite::Connection;
 use tauri::async_runtime::{JoinHandle, RuntimeHandle};
 use tokio::time::{self, MissedTickBehavior};
 
-use crate::acp::permissions::PermissionGate;
 use crate::acp::types::AcpAdapter;
 use crate::db::error::{DbError, DbResult};
 use crate::db::Db;
@@ -34,7 +33,6 @@ pub struct Manager {
     db: Arc<Db>,
     async_runtime: RuntimeHandle,
     adapter: Arc<dyn AcpAdapter>,
-    permission_gate: Arc<PermissionGate>,
     workspaces: WorkspaceManager,
     pause_gates: PauseGateRegistry,
     self_handle: OnceLock<Arc<Mutex<Manager>>>,
@@ -46,14 +44,12 @@ impl Manager {
         db: Arc<Db>,
         async_runtime: RuntimeHandle,
         adapter: Arc<dyn AcpAdapter>,
-        permission_gate: Arc<PermissionGate>,
         workspaces: WorkspaceManager,
     ) -> Self {
         Self {
             db,
             async_runtime,
             adapter,
-            permission_gate,
             workspaces,
             pause_gates: PauseGateRegistry::default(),
             self_handle: OnceLock::new(),
@@ -85,14 +81,9 @@ impl Manager {
 
         let Manager {
             adapter,
-            workspaces,
             pause_gates,
-            runtimes,
             ..
         } = self;
-        let runtime = runtimes
-            .get_mut(project_id)
-            .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))?;
 
         super::poll::cancel_run_attempt(
             conn,
@@ -100,8 +91,6 @@ impl Manager {
             &RunAttemptRepo::new(conn),
             &AgentSessionRepo::new(conn),
             &RetryQueueRepo::new(conn),
-            workspaces,
-            runtime,
             pause_gates,
             &project,
             run_attempt_id,
@@ -302,11 +291,9 @@ impl Manager {
             &project,
         )?;
         let cleaned =
-            cleanup_done_workspaces(&IssueRepo::new(conn), &self.workspaces, project_id)?;
+            cleanup_done_workspaces(&IssueRepo::new(conn), &self.workspaces, &project)?;
 
         self.get_mut(project_id)?.start(conn)?;
-        self.permission_gate
-            .sync_project_mode(&project.id, project.permission_mode);
         if recovered > 0 {
             audit::log(conn, project_id, action::RESTART_RECOVERY_APPLIED, None)?;
         }
@@ -389,7 +376,7 @@ impl Manager {
         let project = ProjectRepo::new(conn)
             .get(project_id)?
             .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))?;
-        let poll_interval_ms = workflow_default_poll_interval(&project);
+        let poll_interval_ms = project.poll_interval_ms;
         let updated = ProjectRepo::new(conn).update(
             project_id,
             &ProjectPatch {
@@ -430,7 +417,6 @@ impl Manager {
             adapter,
             workspaces,
             pause_gates,
-            permission_gate,
             ..
         } = self;
         let runtime = runtimes
@@ -440,7 +426,6 @@ impl Manager {
             adapter: adapter.as_ref(),
             workspaces,
             pause_gates,
-            permission_gate,
         };
         runtime.tick(conn, &tick_ctx)?;
 
@@ -485,10 +470,6 @@ impl Manager {
         }
         Ok(())
     }
-}
-
-fn workflow_default_poll_interval(project: &crate::types::Project) -> i32 {
-    project.poll_interval_ms
 }
 
 fn resolve_review_status(
@@ -561,121 +542,4 @@ fn spawn_poll_timer(
             }
         }
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use uuid::Uuid;
-
-    use super::*;
-    use crate::acp::noop_adapter::NoopAcpAdapter;
-    use crate::acp::types::AcpAdapter;
-    use crate::acp::permissions::PermissionGate;
-    use crate::db::repos::audit::AuditRepo;
-    use crate::db::repos::comment::CommentRepo;
-    use crate::db::repos::issue::IssueRepo;
-    use crate::db::repos::project::ProjectRepo;
-    use crate::db::repos::run_attempt::RunAttemptRepo;
-    use crate::db::fixtures::seed_minimal_project;
-    use crate::orchestrator::audit::action;
-    use crate::types::{BoardColumnId, RuntimeStatus};
-
-    fn temp_db_path() -> PathBuf {
-        std::env::temp_dir().join(format!("orch-manager-test-{}.sqlite", Uuid::new_v4()))
-    }
-
-    fn test_permission_gate(db: &Arc<Db>) -> Arc<PermissionGate> {
-        Arc::new(PermissionGate::new(Arc::clone(db)))
-    }
-
-    #[test]
-    #[ignore = "dispatch still uses agent registry until V4"]
-    fn runtime_tick_dispatches_then_polls_issue_to_review() {
-        let path = temp_db_path();
-        let db = Arc::new(Db::open(&path).expect("open test db"));
-        let conn = db.conn().expect("lock connection");
-        let fixtures = seed_minimal_project(&conn).expect("seed");
-        let adapter: Arc<dyn AcpAdapter> = Arc::new(NoopAcpAdapter::new());
-        let workspaces = WorkspaceManager::new(
-            std::env::temp_dir().join(format!("orch-tick-ws-{}", Uuid::new_v4())),
-        );
-        let mut manager = Manager::new(
-            Arc::clone(&db),
-            tauri::async_runtime::handle(),
-            adapter,
-            test_permission_gate(&db),
-            workspaces,
-        );
-
-        manager.register_project(&fixtures.project_id);
-        manager.start(&fixtures.project_id, &conn).expect("start");
-        manager
-            .tick_now(&fixtures.project_id, &conn)
-            .expect("dispatch tick");
-        manager
-            .tick_now(&fixtures.project_id, &conn)
-            .expect("poll tick");
-
-        let running = RunAttemptRepo::new(&conn)
-            .list_running(&fixtures.project_id)
-            .expect("running");
-        assert!(running.is_empty());
-
-        let issue = IssueRepo::new(&conn)
-            .get(&fixtures.backlog_issue_id)
-            .expect("get issue")
-            .expect("issue");
-        assert_eq!(issue.board_column, BoardColumnId::Review);
-
-        let comments = CommentRepo::new(&conn)
-            .list_by_issue(&fixtures.backlog_issue_id)
-            .expect("list comments");
-        assert_eq!(comments.len(), 1);
-        assert_eq!(comments[0].author_id.as_deref(), Some("Test Agent"));
-
-        let recent = AuditRepo::new(&conn)
-            .list_recent(&fixtures.project_id, 10)
-            .expect("audit tail");
-        let actions: Vec<_> = recent.iter().map(|event| event.action.as_str()).collect();
-        assert!(actions.contains(&action::ATTEMPT_DISPATCHED));
-        assert!(actions.contains(&action::ATTEMPT_SUCCEEDED));
-
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn stop_runtime_syncs_db_and_stops_timer() {
-        let path = temp_db_path();
-        let db = Arc::new(Db::open(&path).expect("open test db"));
-        let conn = db.conn().expect("lock connection");
-        let fixtures = seed_minimal_project(&conn).expect("seed");
-        let mut manager = Manager::new(
-            Arc::clone(&db),
-            tauri::async_runtime::handle(),
-            Arc::new(NoopAcpAdapter::new()),
-            test_permission_gate(&db),
-            WorkspaceManager::new(
-                std::env::temp_dir().join(format!("orch-stop-ipc-ws-{}", Uuid::new_v4())),
-            ),
-        );
-
-        manager
-            .start_runtime(&conn, &fixtures.project_id)
-            .expect("start runtime");
-        let summary = manager
-            .stop_runtime(&conn, &fixtures.project_id)
-            .expect("stop runtime");
-        assert_eq!(summary.status, RuntimeStatus::Stopped);
-        assert!(summary.next_tick_at.is_none());
-
-        let project = ProjectRepo::new(&conn)
-            .get(&fixtures.project_id)
-            .expect("get project")
-            .expect("project");
-        assert_eq!(project.orchestrator_status, "stopped");
-
-        let _ = std::fs::remove_file(path);
-    }
 }

@@ -1,10 +1,9 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import { PermissionModeField } from "@/components/project/permission-mode-field";
 import { PlatformAssignField } from "@/components/project/platform-assign-field";
 import { RuntimeFields } from "@/components/project/runtime-fields";
-import { WorkflowFolderField } from "@/components/project/workflow-folder-field";
+import { WorkspaceFolderField } from "@/components/project/workspace-folder-field";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -203,8 +202,8 @@ export function ProjectFormDialog({
             <DialogTitle>{isEdit ? "Edit project" : "New project"}</DialogTitle>
             <DialogDescription>
               {isEdit
-                ? "Rename the project or remove it from the local registry."
-                : "Configure workflow folder, platforms, prompt, runtime, and permissions for a new project."}
+                ? "Rename the project or delete it permanently."
+                : "Configure workspace folder, platforms, prompt, and runtime for a new project."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -250,10 +249,18 @@ export function ProjectFormDialog({
                   <FieldError message={visibleFieldErrors.platformIds} />
                 </div>
                 <div className="grid gap-2">
-                  <WorkflowFolderField
-                    value={createForm.workflowFolderPath}
-                    onChange={(workflowFolderPath) =>
-                      setCreateForm((current) => ({ ...current, workflowFolderPath }))
+                  <WorkspaceFolderField
+                    value={createForm.workspaceRoot}
+                    onChange={(workspaceRoot) =>
+                      setCreateForm((current) => ({ ...current, workspaceRoot }))
+                    }
+                    usePerIssueWorkspaces={createForm.usePerIssueWorkspaces}
+                    onUsePerIssueWorkspacesChange={(usePerIssueWorkspaces) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        usePerIssueWorkspaces,
+                        useWorktrees: usePerIssueWorkspaces ? current.useWorktrees : false,
+                      }))
                     }
                     useWorktrees={createForm.useWorktrees}
                     onUseWorktreesChange={(useWorktrees) =>
@@ -261,7 +268,7 @@ export function ProjectFormDialog({
                     }
                     disabled={isPending}
                   />
-                  <FieldError message={visibleFieldErrors.workflowFolderPath} />
+                  <FieldError message={visibleFieldErrors.workspaceRoot} />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="project-prompt-template">Prompt template</Label>
@@ -313,13 +320,6 @@ export function ProjectFormDialog({
                     <FieldError message={visibleFieldErrors.retryBackoffMs} />
                   </div>
                 ) : null}
-                <PermissionModeField
-                  value={createForm.permissionMode}
-                  onChange={(permissionMode) =>
-                    setCreateForm((current) => ({ ...current, permissionMode }))
-                  }
-                  disabled={isPending}
-                />
               </>
             )}
             {submitError ? (

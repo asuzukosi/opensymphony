@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { PermissionMode } from "@/lib/ipc/types";
 import type { PlatformId } from "@/lib/platforms";
 import { DEFAULT_PLATFORM, PLATFORMS } from "@/lib/platforms";
 
@@ -12,7 +11,8 @@ export type ProjectRuntimeFields = {
 
 export type CreateProjectFormState = {
   name: string;
-  workflowFolderPath: string;
+  workspaceRoot: string;
+  usePerIssueWorkspaces: boolean;
   useWorktrees: boolean;
   promptTemplate: string;
   platformIds: PlatformId[];
@@ -20,12 +20,12 @@ export type CreateProjectFormState = {
   maxConcurrency: number;
   retryMaxAttempts: number;
   retryBackoffMs: number;
-  permissionMode: PermissionMode;
 };
 
 export type CreateProjectInput = {
   name: string;
   workspaceRoot: string;
+  usePerIssueWorkspaces: boolean;
   useWorktrees: boolean;
   promptTemplate: string;
   platforms: PlatformId[];
@@ -33,7 +33,6 @@ export type CreateProjectInput = {
   maxConcurrency: number;
   retryMaxAttempts: number;
   retryBackoffMs: number;
-  permissionMode: PermissionMode;
 };
 
 export type CreateProjectFormField = keyof CreateProjectFormState;
@@ -69,12 +68,11 @@ export function formatMissingPromptTemplateTags(tags: readonly string[]): string
   return tags.map((tag) => `{{${tag}}}`).join(", ");
 }
 
-const permissionModeSchema = z.enum(["autoApprove", "requiresApproval"]);
-
 const createProjectFormSchema = z
   .object({
     name: z.string().trim().min(1, "Project name is required"),
-    workflowFolderPath: z.string().trim().min(1, "Workspace folder is required"),
+    workspaceRoot: z.string().trim().min(1, "Workspace folder is required"),
+    usePerIssueWorkspaces: z.boolean(),
     useWorktrees: z.boolean(),
     promptTemplate: z
       .string()
@@ -110,22 +108,21 @@ const createProjectFormSchema = z
       .finite("Backoff must be a number")
       .int("Backoff must be a whole number")
       .min(0, "Backoff must be at least 0"),
-    permissionMode: permissionModeSchema,
   })
   .strict();
 
 function toCreateProjectInput(form: CreateProjectFormState): CreateProjectInput {
   return {
     name: form.name.trim(),
-    workspaceRoot: form.workflowFolderPath.trim(),
-    useWorktrees: form.useWorktrees,
+    workspaceRoot: form.workspaceRoot.trim(),
+    usePerIssueWorkspaces: form.usePerIssueWorkspaces,
+    useWorktrees: form.usePerIssueWorkspaces ? form.useWorktrees : false,
     promptTemplate: form.promptTemplate.trim(),
     platforms: form.platformIds,
     pollIntervalMs: form.pollIntervalMs,
     maxConcurrency: form.maxConcurrency,
     retryMaxAttempts: form.retryMaxAttempts,
     retryBackoffMs: form.retryBackoffMs,
-    permissionMode: form.permissionMode,
   };
 }
 
@@ -173,12 +170,12 @@ export function validateCreateProjectForm(
 export function createInitialProjectFormState(): CreateProjectFormState {
   return {
     name: "",
-    workflowFolderPath: "",
+    workspaceRoot: "",
+    usePerIssueWorkspaces: true,
     useWorktrees: false,
     promptTemplate: DEFAULT_PROJECT_PROMPT_TEMPLATE,
     platformIds: [DEFAULT_PLATFORM],
     ...DEFAULT_PROJECT_RUNTIME,
-    permissionMode: "requiresApproval",
   };
 }
 

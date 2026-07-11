@@ -1,18 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PermissionMode {
-    AutoApprove,
-    RequiresApproval,
-}
-
 /// payload from the create project form (ipc).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateProjectRequest {
     pub name: String,
     pub workspace_root: String,
+    pub use_per_issue_workspaces: bool,
     pub use_worktrees: bool,
     pub prompt_template: String,
     pub platforms: Vec<String>,
@@ -20,7 +14,6 @@ pub struct CreateProjectRequest {
     pub max_concurrency: i32,
     pub retry_max_attempts: i32,
     pub retry_backoff_ms: i32,
-    pub permission_mode: PermissionMode,
 }
 
 /// full project row from the database.
@@ -36,7 +29,7 @@ pub struct Project {
     pub max_concurrency: i32,
     pub retry_max_attempts: i32,
     pub retry_backoff_ms: i32,
-    pub permission_mode: PermissionMode,
+    pub use_per_issue_workspaces: bool,
     pub use_worktrees: bool,
     pub orchestrator_status: String,
     pub created_at: String,
@@ -64,12 +57,12 @@ pub struct CreateProjectParams {
     pub name: String,
     pub workspace_root: String,
     pub prompt_template: String,
+    pub use_per_issue_workspaces: bool,
     pub use_worktrees: bool,
     pub poll_interval_ms: i32,
     pub max_concurrency: i32,
     pub retry_max_attempts: i32,
     pub retry_backoff_ms: i32,
-    pub permission_mode: PermissionMode,
     pub platforms: Vec<String>,
 }
 
@@ -82,7 +75,7 @@ pub struct ProjectPatch {
     pub max_concurrency: Option<i32>,
     pub retry_max_attempts: Option<i32>,
     pub retry_backoff_ms: Option<i32>,
-    pub permission_mode: Option<PermissionMode>,
+    pub use_per_issue_workspaces: Option<bool>,
     pub use_worktrees: Option<bool>,
     pub orchestrator_status: Option<String>,
 }

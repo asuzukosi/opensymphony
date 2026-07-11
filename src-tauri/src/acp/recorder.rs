@@ -149,17 +149,6 @@ impl Recorder {
         self.messages.completed.last().cloned()
     }
 
-    pub fn should_persist(update: &SessionUpdate) -> bool {
-        match update {
-            SessionUpdate::AgentThoughtChunk(_)
-            | SessionUpdate::AgentMessageChunk(_)
-            | SessionUpdate::UserMessageChunk(_) => false,
-            SessionUpdate::ToolCall(_) => true,
-            SessionUpdate::ToolCallUpdate(update) => tool_update_is_terminal(update),
-            _ => true,
-        }
-    }
-
     fn flush_streams(&mut self, persist: &mut dyn FnMut(SessionEventKind, Value)) {
         self.thoughts.commit("agent_thought", persist);
         self.messages.commit("agent_message", persist);

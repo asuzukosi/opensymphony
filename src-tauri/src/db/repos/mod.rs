@@ -1,15 +1,11 @@
-pub mod agent;
 pub mod agent_session;
 pub mod analytics;
-pub mod app_state;
 pub mod audit;
 pub mod comment;
 pub mod issue;
 pub mod issue_files;
 pub mod issue_tags;
-pub mod pending_permission;
 pub mod project;
-pub mod project_agents;
 pub mod platforms;
 pub mod retry_queue;
 pub mod run_attempt;

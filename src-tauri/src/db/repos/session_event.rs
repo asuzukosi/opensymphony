@@ -72,21 +72,6 @@ impl<'a> SessionEventRepo<'a> {
         Ok(None)
     }
 
-    pub fn list_by_session(&self, session_id: &str) -> DbResult<Vec<SessionEvent>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, session_id, kind, payload_json, created_at
-             FROM session_events
-             WHERE session_id = ?1
-             ORDER BY created_at ASC, rowid ASC",
-        )?;
-        let mut rows = stmt.query([session_id])?;
-        let mut events = Vec::new();
-        while let Some(row) = rows.next()? {
-            events.push(map_session_event(row)?);
-        }
-        Ok(events)
-    }
-
     pub fn list_by_issue(&self, issue_id: &str) -> DbResult<Vec<SessionEvent>> {
         let mut stmt = self.conn.prepare(
             "SELECT se.id, se.session_id, se.kind, se.payload_json, se.created_at

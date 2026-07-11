@@ -37,4 +37,4 @@ pnpm-debug.log*
 .vscode/
 .idea/
 
-.symphony-workspaces/*.tsbuildinfo
+.opensymphony-workspaces/*.tsbuildinfo

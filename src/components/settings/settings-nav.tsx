@@ -1,11 +1,10 @@
 import { cn } from "@/lib/utils";
 
 export const SETTINGS_SECTIONS = [
+  { id: "platforms", label: "Platforms" },
   { id: "general", label: "General" },
-  { id: "workflow", label: "Workflow" },
   { id: "prompt", label: "Prompt" },
   { id: "runtime", label: "Runtime" },
-  { id: "permissions", label: "Permissions" },
 ] as const;
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]["id"];

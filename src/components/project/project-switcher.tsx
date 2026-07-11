@@ -29,7 +29,6 @@ export function ProjectSwitcher() {
     createProject,
     renameProject,
     deleteProject,
-    isSettingActive,
     isMutatingProject,
     projectMutationError,
     resetProjectMutation,
@@ -40,7 +39,7 @@ export function ProjectSwitcher() {
   const activeProject = projects?.find((project) => project.id === projectId);
   const label = isLoading ? "Loading projects..." : (activeProject?.name ?? "Select project");
   const dialogOpen = dialogMode != null;
-  const isPending = isSettingActive || isMutatingProject;
+  const isPending = isMutatingProject;
 
   const closeDialog = (): void => {
     setDialogMode(null);

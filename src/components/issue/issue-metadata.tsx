@@ -8,6 +8,8 @@ import { IssueTagsField } from "@/components/issue/issue-tags-field";
 import { MetadataField } from "@/components/layout/metadata-field";
 import { SurfaceCard } from "@/components/layout/surface-card";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { useIssuePlatformPicker } from "@/hooks/use-issue-platform-picker";
 import type { IssueDetail } from "@/hooks/use-issue";
 import type { PlatformId } from "@/lib/platforms";
@@ -15,6 +17,7 @@ import type { PlatformId } from "@/lib/platforms";
 type IssueMetadataProps = {
   issue: IssueDetail;
   onExecutorChange: (executor: PlatformId | null) => Promise<void>;
+  onAutoApprovePermissionsChange: (autoApprovePermissions: boolean) => Promise<void>;
   onPriorityChange: (priority: number | null) => Promise<void>;
   onTagsChange: (tags: string[]) => Promise<void>;
   onAttachFiles: (filePaths: string[]) => Promise<void>;
@@ -25,6 +28,7 @@ type IssueMetadataProps = {
 export function IssueMetadata({
   issue,
   onExecutorChange,
+  onAutoApprovePermissionsChange,
   onPriorityChange,
   onTagsChange,
   onAttachFiles,
@@ -79,6 +83,24 @@ export function IssueMetadata({
           isPlatformInstalled={isPlatformInstalled}
           statusesLoading={platformPickerLoading}
         />
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="issue-detail-auto-approve-permissions"
+            checked={issue.autoApprovePermissions}
+            disabled={isMutating}
+            onCheckedChange={(checked) =>
+              void onAutoApprovePermissionsChange(checked === true)
+            }
+          />
+          <div className="space-y-1">
+            <Label htmlFor="issue-detail-auto-approve-permissions" className="text-sm font-medium">
+              Auto-approve agent permissions
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              When enabled, permission requests for this issue are approved automatically.
+            </p>
+          </div>
+        </div>
         {mutationError ? (
           <p className="text-sm text-destructive">{mutationError.message}</p>
         ) : null}

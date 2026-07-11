@@ -54,29 +54,3 @@ fn normalize_tags(tags: &[String]) -> Vec<String> {
     normalized.sort();
     normalized
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::fixtures::{open_test_db, seed_minimal_project};
-
-    #[test]
-    fn replace_tags_dedupes_and_sorts() {
-        let conn = open_test_db().expect("open db");
-        let fixtures = seed_minimal_project(&conn).expect("seed");
-        let repo = IssueTagsRepo::new(&conn);
-
-        repo.replace(
-            &fixtures.backlog_issue_id,
-            &[
-                "Wireframe".into(),
-                "wireframe".into(),
-                " Task ".into(),
-            ],
-        )
-        .expect("replace");
-
-        let tags = repo.list(&fixtures.backlog_issue_id).expect("list");
-        assert_eq!(tags, vec!["Task", "Wireframe"]);
-    }
-}

@@ -14,7 +14,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { BoardColumns, type BoardColumnMeta } from "@/components/board/board-columns";
 import { CreateIssueDialog } from "@/components/board/create-issue-dialog";
-import { BOARD_COLUMN_LABELS } from "@/components/board/board-states";
 import { IssueCard } from "@/components/board/issue-card";
 import { IssueDetailSheet } from "@/components/board/issue-detail-sheet";
 import { BoardIcon } from "@/components/ui/hero-icons";
@@ -247,7 +246,6 @@ function BoardDnDContent() {
         <CreateIssueDialog
           open={createDialogOpen}
           onOpenChange={setCreateDialogOpen}
-          columnLabel={BOARD_COLUMN_LABELS.backlog}
           onCreate={handleCreateIssue}
           isPending={board.isCreating}
           submitError={failedCreate ? board.createError : null}
@@ -289,13 +287,13 @@ export default function BoardPage() {
   return (
     <PageShell width="full" className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <PageHeader
-        eyebrow="Workflow"
+        eyebrow="Board"
         icon={BoardIcon}
         title={projectName}
         description={
           projectId == null
             ? "Select a project to view its task board."
-            : "Drag tasks between columns to update workflow state."
+            : "Drag tasks between columns to update their status."
         }
         isLoading={isHeaderLoading}
         actions={

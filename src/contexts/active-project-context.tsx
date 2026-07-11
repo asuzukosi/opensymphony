@@ -14,7 +14,6 @@ type ActiveProjectContextValue = {
   deleteProject: (projectId: string) => Promise<void>;
   isLoading: boolean;
   projects: ProjectSummary[] | undefined;
-  isSettingActive: boolean;
   isMutatingProject: boolean;
   projectMutationError: Error | null;
   resetProjectMutation: () => void;
@@ -35,7 +34,6 @@ export function ActiveProjectProvider({ children }: ActiveProjectProviderProps) 
     renameProject,
     deleteProject,
     isLoading,
-    isSettingActive,
     isMutatingProject,
     projectMutationError,
     resetProjectMutation,
@@ -50,7 +48,6 @@ export function ActiveProjectProvider({ children }: ActiveProjectProviderProps) 
       deleteProject,
       isLoading,
       projects,
-      isSettingActive,
       isMutatingProject,
       projectMutationError,
       resetProjectMutation,
@@ -61,7 +58,6 @@ export function ActiveProjectProvider({ children }: ActiveProjectProviderProps) 
       deleteProject,
       isLoading,
       isMutatingProject,
-      isSettingActive,
       projectMutationError,
       projects,
       renameProject,

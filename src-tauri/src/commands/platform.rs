@@ -5,8 +5,8 @@ use std::sync::Arc;
 use tauri::State;
 use crate::db::Db;
 
-#[tauri::command(rename = "opensymphony:list-agent-platform-statuses")]
-pub fn list_agent_platform_statuses() -> Result<Vec<PlatformInstallStatus>, String> {
+#[tauri::command(rename = "opensymphony:list-platform-statuses")]
+pub fn list_platform_statuses() -> Result<Vec<PlatformInstallStatus>, String> {
     Ok(list_install_statuses())
 }
 

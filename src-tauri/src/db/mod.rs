@@ -1,7 +1,6 @@
 pub mod error;
 pub mod migrate;
 pub mod repos;
-pub mod workflow;
 
 #[cfg(test)]
 pub mod fixtures;
@@ -22,10 +21,6 @@ impl Db {
         app.path()
             .app_data_dir()
             .map_err(|err| DbError::Internal(err.to_string()))
-    }
-
-    pub fn db_path(app: &AppHandle) -> DbResult<PathBuf> {
-        Ok(Self::app_data_dir(app)?.join(DB_FILE_NAME))
     }
 
     pub fn open(path: &Path) -> DbResult<Self> {

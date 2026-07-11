@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/datetime";
-import type { IssueDetailRunAttempt, IssueDetailSession, SessionEvent } from "@/lib/ipc/types";
+import type { IssueDetailRunAttempt, SessionEvent } from "@/lib/ipc/types";
 import { IssueSessionTimeline } from "@/components/issue/issue-session-timeline";
 
 type IssueRunHistoryTableProps = {
@@ -76,68 +76,6 @@ function RunHistoryTableSkeleton() {
   );
 }
 
-function SessionRow({ session }: { session: IssueDetailSession }) {
-  const latestEvent = session.events.at(-1);
-
-  return (
-    <TableRow className="bg-muted/20 hover:bg-muted/30">
-      <TableCell className="pl-8 font-mono text-xs text-muted-foreground">
-        Session {session.sessionId.slice(0, 8)}
-      </TableCell>
-      <TableCell>
-        <Badge variant={statusBadgeVariant(session.status)} className="font-normal capitalize">
-          {session.status}
-        </Badge>
-      </TableCell>
-      <TableCell className="text-muted-foreground">{formatTimestamp(session.startedAt)}</TableCell>
-      <TableCell className="text-muted-foreground">{formatTimestamp(session.finishedAt)}</TableCell>
-      <TableCell className="max-w-[320px]">
-        <div className="space-y-1 text-xs text-muted-foreground">
-          {latestEvent ? <p>Last event: {latestEvent.kind}</p> : null}
-          {session.sessionRef ? (
-            <p className="truncate font-mono" title={session.sessionRef}>
-              {session.sessionRef}
-            </p>
-          ) : null}
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-}
-
-function AttemptRows({ attempt }: { attempt: IssueDetailRunAttempt }) {
-  return (
-    <>
-      <TableRow className="hover:bg-muted/20">
-        <TableCell className="font-medium tabular-nums">#{attempt.attemptNumber}</TableCell>
-        <TableCell>
-          <Badge variant={statusBadgeVariant(attempt.status)} className="font-normal capitalize">
-            {attempt.status}
-          </Badge>
-        </TableCell>
-        <TableCell className="text-muted-foreground">{formatTimestamp(attempt.startedAt)}</TableCell>
-        <TableCell className="text-muted-foreground">{formatTimestamp(attempt.finishedAt)}</TableCell>
-        <TableCell className="max-w-[320px]">
-          {attempt.errorMessage ? (
-            <p className="truncate text-sm text-destructive" title={attempt.errorMessage}>
-              {attempt.errorMessage}
-            </p>
-          ) : attempt.sessions.length > 0 ? (
-            <span className="text-sm text-muted-foreground">
-              {attempt.sessions.length} session{attempt.sessions.length === 1 ? "" : "s"}
-            </span>
-          ) : (
-            <span className="text-sm text-muted-foreground">No sessions</span>
-          )}
-        </TableCell>
-      </TableRow>
-      {attempt.sessions.map((session) => (
-        <SessionRow key={session.sessionId} session={session} />
-      ))}
-    </>
-  );
-}
-
 export function IssueRunHistoryTable({
   attempts,
   sessionEvents = [],
@@ -149,7 +87,7 @@ export function IssueRunHistoryTable({
     <SurfaceCard>
       <CardHeader className="pb-4">
         <CardTitle className="text-base">Run history</CardTitle>
-        <CardDescription>Run attempts and agent sessions for this issue.</CardDescription>
+        <CardDescription>Run attempts for this issue.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {isLoading ? (
@@ -168,7 +106,25 @@ export function IssueRunHistoryTable({
               </TableHeader>
               <TableBody>
                 {attempts.map((attempt) => (
-                  <AttemptRows key={attempt.runAttemptId} attempt={attempt} />
+                  <TableRow key={attempt.runAttemptId} className="hover:bg-muted/20">
+                    <TableCell className="font-medium tabular-nums">#{attempt.attemptNumber}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusBadgeVariant(attempt.status)} className="font-normal capitalize">
+                        {attempt.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{formatTimestamp(attempt.startedAt)}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatTimestamp(attempt.finishedAt)}</TableCell>
+                    <TableCell className="max-w-[320px]">
+                      {attempt.errorMessage ? (
+                        <p className="truncate text-sm text-destructive" title={attempt.errorMessage}>
+                          {attempt.errorMessage}
+                        </p>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
                 ))}
               </TableBody>
             </Table>

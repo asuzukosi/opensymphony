@@ -5,12 +5,11 @@ use std::str::FromStr;
 
 use tauri::{AppHandle, Manager, State};
 
-use crate::acp::AcpState;
 use crate::db::error::DbError;
 use crate::db::repos::project::ProjectRepo;
 use crate::db::Db;
 use crate::types::{
-    CreateProjectParams, CreateProjectRequest, PermissionMode, Project, ProjectPatch, ProjectSummary,
+    CreateProjectParams, CreateProjectRequest, Project, ProjectPatch, ProjectSummary,
     Platform, RetryPolicy,
 };
 use crate::utils::{install_status, project_data_dir};
@@ -28,30 +27,6 @@ pub fn list_project_summaries(db: State<Arc<Db>>) -> Result<Vec<ProjectSummary>,
 #[tauri::command(rename = "opensymphony:get-project-name")]
 pub fn get_project_name(db: State<Arc<Db>>, project_id: String) -> Result<String, String> {
     Ok(require_project(db, &project_id)?.name)
-}
-
-#[tauri::command(rename = "opensymphony:get-project-workflow-source")]
-pub fn get_project_workflow_source(
-    _db: State<Arc<Db>>,
-    _project_id: String,
-) -> Result<Option<String>, String> {
-    Ok(None)
-}
-
-#[tauri::command(rename = "opensymphony:get-project-workflow-file-path")]
-pub fn get_project_workflow_file_path(
-    _db: State<Arc<Db>>,
-    _project_id: String,
-) -> Result<Option<String>, String> {
-    Ok(None)
-}
-
-#[tauri::command(rename = "opensymphony:get-project-workflow-version")]
-pub fn get_project_workflow_version(
-    _db: State<Arc<Db>>,
-    _project_id: String,
-) -> Result<Option<String>, String> {
-    Ok(None)
 }
 
 #[tauri::command(rename = "opensymphony:get-project-prompt-template")]
@@ -78,14 +53,6 @@ pub fn get_project_retry_policy(db: State<Arc<Db>>, project_id: String) -> Resul
     })
 }
 
-#[tauri::command(rename = "opensymphony:get-project-permission-mode")]
-pub fn get_project_permission_mode(
-    db: State<Arc<Db>>,
-    project_id: String,
-) -> Result<PermissionMode, String> {
-    Ok(require_project(db, &project_id)?.permission_mode)
-}
-
 #[tauri::command(rename = "opensymphony:get-project-orchestrator-status")]
 pub fn get_project_orchestrator_status(db: State<Arc<Db>>, project_id: String) -> Result<String, String> {
     Ok(require_project(db, &project_id)?.orchestrator_status)
@@ -96,7 +63,6 @@ pub fn get_project_orchestrator_status(db: State<Arc<Db>>, project_id: String) -
 #[tauri::command(rename = "opensymphony:create-project")]
 pub fn create_project(
     db: State<Arc<Db>>,
-    acp: State<AcpState>,
     input: CreateProjectRequest,
 ) -> Result<ProjectSummary, String> {
     let params = validate_create_project_request(input)?;
@@ -104,8 +70,6 @@ pub fn create_project(
     let project = ProjectRepo::new(&conn)
         .create(&params)
         .map_err(|err| err.to_string())?;
-    acp.permission_gate
-        .sync_project_mode(&project.id, project.permission_mode);
     project_summary(&conn, &project.id)
 }
 
@@ -139,28 +103,6 @@ pub fn set_project_name(
         )
         .map_err(|err| err.to_string())?;
     Ok(project.name)
-}
-
-#[tauri::command(rename = "opensymphony:set-project-workflow-file")]
-pub fn set_project_workflow_file(
-    _app: AppHandle,
-    _db: State<Arc<crate::db::Db>>,
-    _acp: State<AcpState>,
-    _project_id: String,
-    _source_path: String,
-) -> Result<Option<String>, String> {
-    Err("workflow yaml is no longer supported".into())
-}
-
-#[tauri::command(rename = "opensymphony:import-project-workflow-file")]
-pub fn import_project_workflow_file(
-    _app: AppHandle,
-    _db: State<Arc<crate::db::Db>>,
-    _acp: State<AcpState>,
-    _project_id: String,
-    _source_path: String,
-) -> Result<Option<String>, String> {
-    Err("workflow yaml is no longer supported".into())
 }
 
 #[tauri::command(rename = "opensymphony:set-project-prompt-template")]
@@ -244,28 +186,6 @@ pub fn set_project_retry_policy(
     })
 }
 
-#[tauri::command(rename = "opensymphony:set-project-permission-mode")]
-pub fn set_project_permission_mode(
-    db: State<Arc<Db>>,
-    acp: State<AcpState>,
-    project_id: String,
-    permission_mode: PermissionMode,
-) -> Result<PermissionMode, String> {
-    let conn = db.conn().map_err(|err| err.to_string())?;
-    let project = ProjectRepo::new(&conn)
-        .update(
-            &project_id,
-            &ProjectPatch {
-                permission_mode: Some(permission_mode),
-                ..ProjectPatch::default()
-            },
-        )
-        .map_err(|err| err.to_string())?;
-    acp.permission_gate
-        .sync_project_mode(&project_id, project.permission_mode);
-    Ok(project.permission_mode)
-}
-
 fn require_project(db: State<Arc<Db>>, project_id: &str) -> Result<Project, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     ProjectRepo::new(&conn)
@@ -304,13 +224,7 @@ fn validate_create_project_request(request: CreateProjectRequest) -> Result<Crea
         return Err("project name is required".into());
     }
 
-    let workspace_root = request.workspace_root.trim();
-    if workspace_root.is_empty() {
-        return Err("workspace folder is required".into());
-    }
-    if !Path::new(workspace_root).is_dir() {
-        return Err(format!("workspace folder does not exist: {workspace_root}"));
-    }
+    let workspace_root = validate_workspace_root(&request.workspace_root)?;
 
     let prompt_template = request.prompt_template.trim();
     if prompt_template.is_empty() {
@@ -344,16 +258,38 @@ fn validate_create_project_request(request: CreateProjectRequest) -> Result<Crea
         return Err("backoff must be at least 0".into());
     }
 
+    let use_worktrees =
+        resolve_use_worktrees(request.use_per_issue_workspaces, request.use_worktrees);
+
     Ok(CreateProjectParams {
         name: name.to_string(),
-        workspace_root: workspace_root.to_string(),
+        workspace_root,
         prompt_template: prompt_template.to_string(),
-        use_worktrees: request.use_worktrees,
+        use_per_issue_workspaces: request.use_per_issue_workspaces,
+        use_worktrees,
         poll_interval_ms: request.poll_interval_ms,
         max_concurrency: request.max_concurrency,
         retry_max_attempts: request.retry_max_attempts,
         retry_backoff_ms: request.retry_backoff_ms,
-        permission_mode: request.permission_mode,
         platforms: request.platforms,
     })
+}
+
+fn validate_workspace_root(workspace_root: &str) -> Result<String, String> {
+    let workspace_root = workspace_root.trim();
+    if workspace_root.is_empty() {
+        return Err("workspace folder is required".into());
+    }
+    if !Path::new(workspace_root).is_dir() {
+        return Err(format!("workspace folder does not exist: {workspace_root}"));
+    }
+    Ok(workspace_root.to_string())
+}
+
+fn resolve_use_worktrees(use_per_issue_workspaces: bool, use_worktrees: bool) -> bool {
+    if use_per_issue_workspaces {
+        use_worktrees
+    } else {
+        false
+    }
 }
