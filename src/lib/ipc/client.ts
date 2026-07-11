@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import type { CreateProjectInput } from "@/lib/create-project-form";
 import { IPC_CHANNELS } from "@/lib/ipc/channels";
 import type {
   ActivityTimeRange,
@@ -14,11 +15,14 @@ import type {
   CreateProjectResponse,
   IssueComment,
   IssueDetailRunAttempt,
+  IssueFile,
   IssueHeader,
   PendingPermission,
   PermissionActivityOverTimeResponse,
   PermissionDecision,
   PermissionMode,
+  PlatformId,
+  PlatformInstallStatus,
   ProjectBoardIssue,
   ProjectSummary,
   RetryPolicy,
@@ -40,6 +44,9 @@ import type {
   SetProjectRetryPolicyResponse,
   SetProjectWorkflowFileResponse,
   SetRuntimePollIntervalResponse,
+  AttachIssueFilesResponse,
+  SetIssueExecutorResponse,
+  SetIssueTagsResponse,
   StartRuntimeResponse,
   StopRuntimeResponse,
   TickRuntimeResponse,
@@ -74,7 +81,16 @@ export interface OpenSymphonyDesktopApi {
     projectId: string,
     title: string,
     description?: string | null,
+    executor?: PlatformId | null,
+    priority?: number | null,
+    tags?: string[],
   ): Promise<CreateIssueResponse>;
+  setIssueExecutor(
+    issueId: string,
+    executor?: PlatformId | null,
+  ): Promise<SetIssueExecutorResponse>;
+  setIssueTags(issueId: string, tags: string[]): Promise<SetIssueTagsResponse>;
+  attachIssueFiles(issueId: string, sourcePaths: string[]): Promise<AttachIssueFilesResponse>;
   updateIssueTitle(issueId: string, title: string): Promise<UpdateIssueTitleResponse>;
   updateIssueDescription(
     issueId: string,
@@ -135,7 +151,7 @@ export interface OpenSymphonyDesktopApi {
   getProjectPermissionMode(projectId: string): Promise<PermissionMode>;
   getProjectOrchestratorStatus(projectId: string): Promise<string>;
   // project writes
-  createProject(name: string): Promise<CreateProjectResponse>;
+  createProject(input: CreateProjectInput): Promise<CreateProjectResponse>;
   deleteProject(projectId: string): Promise<void>;
   setProjectName(projectId: string, name: string): Promise<SetProjectNameResponse>;
   setProjectWorkflowFile(
@@ -181,6 +197,9 @@ export interface OpenSymphonyDesktopApi {
   ): Promise<SetAgentAcpCommandResponse>;
   assignAgentToProject(projectId: string, agentId: string): Promise<void>;
   unassignAgentFromProject(projectId: string, agentId: string): Promise<void>;
+  // platform
+  listAgentPlatformStatuses(): Promise<PlatformInstallStatus[]>;
+  listProjectPlatforms(projectId: string): Promise<PlatformId[]>;
   // analytics reads
   getProjectAgentActivityOverTime(
     projectId: string,
@@ -213,11 +232,26 @@ function createIpcClient(): OpenSymphonyDesktopApi {
     listSessionEvents: (issueId) =>
       invoke<SessionEvent[]>(IPC_CHANNELS.listSessionEvents, { issueId }),
     // issue writes
-    createIssue: (projectId, title, description) =>
+    createIssue: (projectId, title, description, executor, priority, tags) =>
       invoke<CreateIssueResponse>(IPC_CHANNELS.createIssue, {
         projectId,
         title,
         description: description ?? null,
+        executor: executor ?? null,
+        priority: priority ?? null,
+        tags: tags ?? [],
+      }),
+    setIssueExecutor: (issueId, executor) =>
+      invoke<SetIssueExecutorResponse>(IPC_CHANNELS.setIssueExecutor, {
+        issueId,
+        executor: executor ?? null,
+      }),
+    setIssueTags: (issueId, tags) =>
+      invoke<SetIssueTagsResponse>(IPC_CHANNELS.setIssueTags, { issueId, tags }),
+    attachIssueFiles: (issueId, sourcePaths) =>
+      invoke<AttachIssueFilesResponse>(IPC_CHANNELS.attachIssueFiles, {
+        issueId,
+        sourcePaths,
       }),
     updateIssueTitle: (issueId, title) =>
       invoke<UpdateIssueTitleResponse>(IPC_CHANNELS.updateIssueTitle, { issueId, title }),
@@ -311,8 +345,8 @@ function createIpcClient(): OpenSymphonyDesktopApi {
     getProjectOrchestratorStatus: (projectId) =>
       invoke<string>(IPC_CHANNELS.getProjectOrchestratorStatus, { projectId }),
     // project writes
-    createProject: (name) =>
-      invoke<CreateProjectResponse>(IPC_CHANNELS.createProject, { name }),
+    createProject: (input) =>
+      invoke<CreateProjectResponse>(IPC_CHANNELS.createProject, { input }),
     deleteProject: (projectId) => invoke<void>(IPC_CHANNELS.deleteProject, { projectId }),
     setProjectName: (projectId, name) =>
       invoke<SetProjectNameResponse>(IPC_CHANNELS.setProjectName, { projectId, name }),
@@ -375,6 +409,11 @@ function createIpcClient(): OpenSymphonyDesktopApi {
       invoke<void>(IPC_CHANNELS.assignAgentToProject, { projectId, agentId }),
     unassignAgentFromProject: (projectId, agentId) =>
       invoke<void>(IPC_CHANNELS.unassignAgentFromProject, { projectId, agentId }),
+    // platform
+    listAgentPlatformStatuses: () =>
+      invoke<PlatformInstallStatus[]>(IPC_CHANNELS.listAgentPlatformStatuses),
+    listProjectPlatforms: (projectId) =>
+      invoke<PlatformId[]>(IPC_CHANNELS.listProjectPlatforms, { projectId }),
     // analytics reads
     getProjectAgentActivityOverTime: (projectId, timeRange) =>
       invoke<AgentActivityOverTimeResponse>(IPC_CHANNELS.getProjectAgentActivityOverTime, {

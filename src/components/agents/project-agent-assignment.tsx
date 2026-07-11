@@ -2,6 +2,7 @@
 
 import { LinkIcon } from "@/components/ui/hero-icons";
 
+import { EmptyState } from "@/components/layout/empty-state";
 import { SurfaceCard } from "@/components/layout/surface-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -31,17 +32,6 @@ function AssignmentSkeleton() {
           <Skeleton className="h-8 w-20" />
         </div>
       ))}
-    </div>
-  );
-}
-
-function AssignmentEmptyState() {
-  return (
-    <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 px-6 py-8 text-center">
-      <p className="text-sm font-medium">No agents to assign</p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Add agents to the registry before linking them to a project.
-      </p>
     </div>
   );
 }
@@ -90,7 +80,11 @@ export function ProjectAgentAssignment({
         {isLoading && agents === undefined ? (
           <AssignmentSkeleton />
         ) : !agents || agents.length === 0 ? (
-          <AssignmentEmptyState />
+          <EmptyState
+            title="No agents to assign"
+            description="Add agents to the registry before linking them to a project."
+            className="py-8"
+          />
         ) : (
           <ul className="space-y-2">
             {agents.map((agent) => {

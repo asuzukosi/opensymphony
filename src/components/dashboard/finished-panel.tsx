@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircleIcon } from "@/components/dashboard/dashboard-icons";
+import { CheckCircleIcon } from "@/components/ui/hero-icons";
 import { BorderedTable, tableHeadClass, tableHeaderRowClass } from "@/components/dashboard/shared";
 import { EmptyState } from "@/components/layout/empty-state";
 import { IssueLink } from "@/components/layout/issue-link";
@@ -15,10 +15,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDateTime } from "@/lib/format-date-time";
+import { formatDateTime } from "@/lib/datetime";
 import { isPendingLoad } from "@/lib/is-pending-load";
 import type { RunAttemptStatus, RuntimeRecentFinishedEntry } from "@/lib/ipc/types";
-import { cn } from "@/lib/utils";
 
 function attemptStatusVariant(status: RunAttemptStatus): "default" | "secondary" | "destructive" | "outline" {
   if (status === "failed") return "destructive";
@@ -68,13 +67,8 @@ export function FinishedPanel({
                   <TableCell>
                     {entry.reviewStatus ? (
                       <Badge
-                        variant="outline"
-                        className={cn(
-                          "font-normal",
-                          entry.reviewStatus === "approved"
-                            ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
-                            : "border-amber-500/40 text-amber-700 dark:text-amber-300",
-                        )}
+                        variant={entry.reviewStatus === "approved" ? "success" : "warning"}
+                        className="font-normal"
                       >
                         {entry.reviewStatus === "approved" ? "Approved" : "Pending review"}
                       </Badge>

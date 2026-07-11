@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 
-import { formatIssuePriority } from "@/components/board/issue-card";
 import { BOARD_COLUMN_LABELS } from "@/components/board/board-states";
 import { IssueColumnSelect } from "@/components/issue/issue-column-select";
+import { IssuePriorityBadge } from "@/components/issue/issue-priority";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeftIcon, DocumentTextIcon } from "@/components/ui/hero-icons";
@@ -24,7 +24,6 @@ export function IssueDetailHeader({
   isTransitionPending = false,
   transitionError = null,
 }: IssueDetailHeaderProps) {
-  const priority = formatIssuePriority(issue.priority);
   const columnLabel = BOARD_COLUMN_LABELS[issue.boardColumn];
   const canChangeColumn = onColumnChange != null;
 
@@ -61,11 +60,7 @@ export function IssueDetailHeader({
             ) : (
               <Badge variant="secondary">{columnLabel}</Badge>
             )}
-            {priority ? (
-              <Badge variant="outline" className="font-normal">
-                {priority}
-              </Badge>
-            ) : null}
+            <IssuePriorityBadge priority={issue.priority} />
           </div>
         }
       />

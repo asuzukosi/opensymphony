@@ -9,7 +9,9 @@ export type PermissionMode = "autoApprove" | "requiresApproval";
 
 export type PermissionDecision = "approve" | "deny";
 
-export type { PlatformId } from "@/lib/platforms";
+import type { PlatformId } from "@/lib/platforms";
+
+export type { PlatformId };
 
 // --- board reads ---
 
@@ -51,6 +53,18 @@ export interface IssueHeader {
   description: string | null;
   priority: number | null;
   boardColumn: BoardColumnId;
+  executor: PlatformId | null;
+  tags: string[];
+  files: IssueFile[];
+}
+
+export interface IssueFile {
+  fileId: string;
+  issueId: string;
+  fileName: string;
+  mimeType: string | null;
+  sizeBytes: number;
+  createdAt: string;
 }
 
 export interface IssueComment {
@@ -104,6 +118,24 @@ export interface CreateIssueRequest {
   projectId: string;
   title: string;
   description?: string | null;
+  executor?: PlatformId | null;
+  priority?: number | null;
+  tags?: string[];
+}
+
+export interface SetIssueTagsRequest {
+  issueId: string;
+  tags: string[];
+}
+
+export interface AttachIssueFilesRequest {
+  issueId: string;
+  sourcePaths: string[];
+}
+
+export interface SetIssueExecutorRequest {
+  issueId: string;
+  executor?: PlatformId | null;
 }
 
 export interface TransitionIssueColumnRequest {
@@ -123,6 +155,9 @@ export type UpdateIssueTitleResponse = IssueHeader;
 export type UpdateIssueDescriptionResponse = IssueHeader;
 export type UpdateIssuePriorityResponse = IssueHeader;
 export type TransitionIssueColumnResponse = IssueHeader;
+export type SetIssueExecutorResponse = IssueHeader;
+export type SetIssueTagsResponse = IssueHeader;
+export type AttachIssueFilesResponse = IssueFile[];
 export type AddIssueCommentResponse = IssueComment;
 
 // --- permissions reads ---
@@ -350,6 +385,15 @@ export interface AssignAgentToProjectRequest {
 export type CreateAgentResponse = Agent;
 export type SetAgentNameResponse = string;
 export type SetAgentAcpCommandResponse = string | null;
+
+// --- platform ---
+
+export interface PlatformInstallStatus {
+  platform: PlatformId;
+  label: string;
+  installed: boolean;
+  missingBinaries: string[];
+}
 
 // --- app state reads ---
 

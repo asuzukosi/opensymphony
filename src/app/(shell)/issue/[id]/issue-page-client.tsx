@@ -16,7 +16,7 @@ import {
 } from "@/components/issue/issue-states";
 import { PageShell } from "@/components/layout/page-shell";
 import { useIssue } from "@/hooks/use-issue";
-import type { BoardColumnId } from "@/lib/ipc/types";
+import type { BoardColumnId, PlatformId } from "@/lib/ipc/types";
 
 export function IssuePageClient() {
   const params = useParams<{ id: string }>();
@@ -26,6 +26,10 @@ export function IssuePageClient() {
     error,
     isLoading,
     transitionColumn,
+    updatePriority,
+    setExecutor,
+    setTags,
+    attachFiles,
     addComment,
     isMutating,
     mutationError,
@@ -33,6 +37,8 @@ export function IssuePageClient() {
   } = useIssue({ issueId });
   const [failedTransition, setFailedTransition] = useState(false);
   const [failedComment, setFailedComment] = useState(false);
+  const [failedExecutor, setFailedExecutor] = useState(false);
+  const [failedMetadata, setFailedMetadata] = useState(false);
   const isInitialLoading = isLoading && issue === undefined;
 
   const handleColumnChange = async (column: BoardColumnId): Promise<void> => {
@@ -59,6 +65,28 @@ export function IssuePageClient() {
     } catch (error) {
       setFailedComment(true);
       throw error;
+    }
+  };
+
+  const handleExecutorChange = async (executor: PlatformId | null): Promise<void> => {
+    resetMutation();
+    setFailedExecutor(false);
+
+    try {
+      await setExecutor(executor);
+    } catch {
+      setFailedExecutor(true);
+    }
+  };
+
+  const handleMetadataChange = async (action: () => Promise<void>): Promise<void> => {
+    resetMutation();
+    setFailedMetadata(false);
+
+    try {
+      await action();
+    } catch {
+      setFailedMetadata(true);
     }
   };
 
@@ -99,7 +127,17 @@ export function IssuePageClient() {
       <IssuePermissionsPanel issueId={issueId} attempts={issue.attempts} />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <IssueMetadata issue={issue} />
+          <IssueMetadata
+            issue={issue}
+            onExecutorChange={handleExecutorChange}
+            onPriorityChange={(priority) => handleMetadataChange(() => updatePriority(priority))}
+            onTagsChange={(tags) => handleMetadataChange(() => setTags(tags))}
+            onAttachFiles={(filePaths) => handleMetadataChange(() => attachFiles(filePaths))}
+            isMutating={isMutating}
+            mutationError={
+              failedExecutor || failedMetadata ? mutationError : null
+            }
+          />
           <IssueCommentsSection
             comments={issue.comments}
             onAddComment={handleAddComment}

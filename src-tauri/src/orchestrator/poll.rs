@@ -13,6 +13,7 @@ use crate::db::repos::run_attempt::RunAttemptRepo;
 use crate::acp::dispatch::resolve_dispatch_agent;
 use crate::acp::PauseGate;
 use crate::types::{BoardColumnId, Issue, Project, RetryQueueEntry};
+use crate::utils::retry_delay_ms;
 
 use super::audit::{self, action};
 use super::pause::PauseGateRegistry;
@@ -26,12 +27,6 @@ pub(crate) struct DispatchedRun {
     pub run_attempt_id: String,
     pub attempt_number: i32,
     pub session_id: String,
-}
-
-fn retry_delay_ms(backoff_ms: i32, attempt_number: i32) -> i64 {
-    let exp = attempt_number.saturating_sub(1).max(0) as u32;
-    let factor = 1i64.checked_shl(exp).unwrap_or(i64::MAX);
-    (backoff_ms as i64).saturating_mul(factor)
 }
 
 pub(crate) fn schedule_retry(

@@ -14,6 +14,7 @@ pub struct Issue {
     pub description: Option<String>,
     pub priority: Option<i32>,
     pub board_column: BoardColumnId,
+    pub executor: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -36,6 +37,20 @@ pub struct IssueHeader {
     pub description: Option<String>,
     pub priority: Option<i32>,
     pub board_column: BoardColumnId,
+    pub executor: Option<String>,
+    pub tags: Vec<String>,
+    pub files: Vec<IssueFile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueFile {
+    pub file_id: String,
+    pub issue_id: String,
+    pub file_name: String,
+    pub mime_type: Option<String>,
+    pub size_bytes: i64,
+    pub created_at: String,
 }
 
 impl From<Issue> for IssueHeader {
@@ -48,6 +63,9 @@ impl From<Issue> for IssueHeader {
             description: issue.description,
             priority: issue.priority,
             board_column: issue.board_column,
+            executor: issue.executor,
+            tags: Vec::new(),
+            files: Vec::new(),
         }
     }
 }

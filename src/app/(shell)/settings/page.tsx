@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
-import { SettingsIcon } from "@/components/layout/nav-icons";
+import { SettingsIcon } from "@/components/ui/hero-icons";
 import { PageShell } from "@/components/layout/page-shell";
 import { SurfaceCard } from "@/components/layout/surface-card";
 import { SettingsGeneralSection } from "@/components/settings/settings-general-section";

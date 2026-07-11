@@ -18,7 +18,10 @@ import type {
   UpdateIssueDescriptionResponse,
   UpdateIssuePriorityResponse,
   UpdateIssueTitleResponse,
+  SetIssueExecutorResponse,
+  SetIssueTagsResponse,
 } from "@/lib/ipc/types";
+import type { PlatformId } from "@/lib/platforms";
 
 export type IssueDetail = IssueHeader & {
   comments: IssueComment[];
@@ -31,6 +34,9 @@ type IssueWriteInput =
   | { action: "updateDescription"; description: string | null }
   | { action: "updatePriority"; priority: number | null }
   | { action: "transitionColumn"; column: BoardColumnId; actor?: string | null }
+  | { action: "setExecutor"; executor: PlatformId | null }
+  | { action: "setTags"; tags: string[] }
+  | { action: "attachFiles"; filePaths: string[] }
   | { action: "addComment"; body: string; author?: string | null };
 
 type IssueWriteMutationInput = IssueWriteInput & {
@@ -53,6 +59,9 @@ export type UseIssueResult = {
   updateDescription: (description: string | null) => Promise<void>;
   updatePriority: (priority: number | null) => Promise<void>;
   transitionColumn: (column: BoardColumnId, actor?: string | null) => Promise<void>;
+  setExecutor: (executor: PlatformId | null) => Promise<void>;
+  setTags: (tags: string[]) => Promise<void>;
+  attachFiles: (filePaths: string[]) => Promise<void>;
   addComment: (body: string, author?: string | null) => Promise<void>;
   isMutating: boolean;
   mutationError: Error | null;
@@ -107,6 +116,8 @@ export function useIssue(options: UseIssueOptions): UseIssueResult {
     | UpdateIssueDescriptionResponse
     | UpdateIssuePriorityResponse
     | TransitionIssueColumnResponse
+    | SetIssueExecutorResponse
+    | SetIssueTagsResponse
     | AddIssueCommentResponse
   >(async (client, input) => {
     switch (input.action) {
@@ -118,6 +129,13 @@ export function useIssue(options: UseIssueOptions): UseIssueResult {
         return client.updateIssuePriority(input.issueId, input.priority);
       case "transitionColumn":
         return client.transitionIssueColumn(input.issueId, input.column, input.actor ?? null);
+      case "setExecutor":
+        return client.setIssueExecutor(input.issueId, input.executor);
+      case "setTags":
+        return client.setIssueTags(input.issueId, input.tags);
+      case "attachFiles":
+        await client.attachIssueFiles(input.issueId, input.filePaths);
+        return client.getIssueHeader(input.issueId);
       case "addComment":
         return client.addIssueComment(input.issueId, input.body, input.author ?? null);
     }
@@ -160,6 +178,27 @@ export function useIssue(options: UseIssueOptions): UseIssueResult {
     [mutateAndRefetch],
   );
 
+  const setExecutor = useCallback(
+    async (executor: PlatformId | null): Promise<void> => {
+      await mutateAndRefetch({ action: "setExecutor", executor });
+    },
+    [mutateAndRefetch],
+  );
+
+  const setTags = useCallback(
+    async (tags: string[]): Promise<void> => {
+      await mutateAndRefetch({ action: "setTags", tags });
+    },
+    [mutateAndRefetch],
+  );
+
+  const attachFiles = useCallback(
+    async (filePaths: string[]): Promise<void> => {
+      await mutateAndRefetch({ action: "attachFiles", filePaths });
+    },
+    [mutateAndRefetch],
+  );
+
   const addComment = useCallback(
     async (body: string, author?: string | null): Promise<void> => {
       await mutateAndRefetch({ action: "addComment", body, author });
@@ -177,6 +216,9 @@ export function useIssue(options: UseIssueOptions): UseIssueResult {
     updateDescription,
     updatePriority,
     transitionColumn,
+    setExecutor,
+    setTags,
+    attachFiles,
     addComment,
     isMutating,
     mutationError,

@@ -4,7 +4,7 @@ export type PlatformId =
   | "claude_code"
   | "codex"
   | "pi"
-  | "gemini_cli";
+  | "antigravity";
 
 export interface PlatformDefinition {
   id: PlatformId;
@@ -57,12 +57,12 @@ const PI: PlatformDefinition = {
   installBinaries: ["npx", "pi"],
 };
 
-const GEMINI_CLI: PlatformDefinition = {
-  id: "gemini_cli",
-  label: "Gemini CLI",
-  logoPath: "/images/agents/gemini-logo.png",
-  acpCommand: "gemini --acp",
-  installBinaries: ["gemini"],
+const ANTIGRAVITY: PlatformDefinition = {
+  id: "antigravity",
+  label: "Antigravity",
+  logoPath: "/images/agents/antigravity-logo.png",
+  acpCommand: 'sh -c \'export AGY_BIN="$(which agy)" && exec npx antigravity-acp\'',
+  installBinaries: ["npx", "agy"],
 };
 
 /** fixed catalog — hermes first for default selection and e2e paths */
@@ -72,7 +72,7 @@ export const PLATFORMS: readonly PlatformDefinition[] = [
   CLAUDE_CODE,
   CODEX,
   PI,
-  GEMINI_CLI,
+  ANTIGRAVITY,
 ] as const;
 
 export function getPlatform(id: PlatformId): PlatformDefinition {
@@ -85,4 +85,15 @@ export function getPlatform(id: PlatformId): PlatformDefinition {
 
 export function isPlatformId(value: string): value is PlatformId {
   return PLATFORMS.some((entry) => entry.id === value);
+}
+
+export function resolvePlatformInstalled(
+  platformId: PlatformId,
+  isPlatformInstalled: ((id: PlatformId) => boolean) | undefined,
+  statusesLoading: boolean,
+): boolean {
+  if (statusesLoading || isPlatformInstalled == null) {
+    return true;
+  }
+  return isPlatformInstalled(platformId);
 }

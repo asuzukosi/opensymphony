@@ -5,6 +5,15 @@ use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_PLATFORM: Platform = Platform::Hermes;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformInstallStatus {
+    pub platform: String,
+    pub label: String,
+    pub installed: bool,
+    pub missing_binaries: Vec<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Platform {
@@ -13,7 +22,7 @@ pub enum Platform {
     ClaudeCode,
     Codex,
     Pi,
-    GeminiCli,
+    Antigravity,
 }
 
 impl Platform {
@@ -23,7 +32,7 @@ impl Platform {
         Self::ClaudeCode,
         Self::Codex,
         Self::Pi,
-        Self::GeminiCli,
+        Self::Antigravity,
     ];
 
     pub fn display_name(self) -> &'static str {
@@ -33,7 +42,7 @@ impl Platform {
             Self::ClaudeCode => "Claude Code",
             Self::Codex => "Codex",
             Self::Pi => "Pi",
-            Self::GeminiCli => "Gemini CLI",
+            Self::Antigravity => "Antigravity",
         }
     }
 
@@ -44,7 +53,7 @@ impl Platform {
             Self::ClaudeCode => "npx claude-code-acp",
             Self::Codex => "npx -y @agentclientprotocol/codex-acp",
             Self::Pi => "npx pi-acp",
-            Self::GeminiCli => "gemini --acp",
+            Self::Antigravity => "sh -c 'export AGY_BIN=\"$(which agy)\" && exec npx antigravity-acp'",
         }
     }
 
@@ -55,7 +64,7 @@ impl Platform {
             Self::ClaudeCode => &["npx", "claude"],
             Self::Codex => &["npx", "codex"],
             Self::Pi => &["npx", "pi"],
-            Self::GeminiCli => &["gemini"],
+            Self::Antigravity => &["npx", "agy"],
         }
     }
 
@@ -66,7 +75,7 @@ impl Platform {
             Self::ClaudeCode => "claude_code",
             Self::Codex => "codex",
             Self::Pi => "pi",
-            Self::GeminiCli => "gemini_cli",
+            Self::Antigravity => "antigravity",
         }
     }
 }
@@ -87,7 +96,7 @@ impl FromStr for Platform {
             "claude_code" => Ok(Self::ClaudeCode),
             "codex" => Ok(Self::Codex),
             "pi" => Ok(Self::Pi),
-            "gemini_cli" => Ok(Self::GeminiCli),
+            "antigravity" => Ok(Self::Antigravity),
             other => Err(format!("unknown platform: {other}")),
         }
     }

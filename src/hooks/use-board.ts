@@ -13,6 +13,7 @@ import type {
   BoardColumn,
   BoardColumnId,
   CreateIssueResponse,
+  PlatformId,
   ProjectBoardIssue,
 } from "@/lib/ipc/types";
 
@@ -23,6 +24,9 @@ export type CreateIssueInput = {
   title: string;
   description?: string | null;
   priority?: number | null;
+  executor?: PlatformId | null;
+  tags?: string[];
+  filePaths?: string[];
 };
 
 type BoardData = Record<BoardColumnId, BoardColumn>;
@@ -102,10 +106,13 @@ export function useBoard(): UseBoardResult {
       input.resolvedProjectId,
       input.title,
       input.description ?? null,
+      input.executor ?? null,
+      input.priority ?? null,
+      input.tags ?? [],
     );
 
-    if (input.priority !== undefined) {
-      return client.updateIssuePriority(issue.issueId, input.priority);
+    if (input.filePaths != null && input.filePaths.length > 0) {
+      await client.attachIssueFiles(issue.issueId, input.filePaths);
     }
 
     return issue;

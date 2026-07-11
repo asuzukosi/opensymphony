@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { pickWorkflowFolder } from "@/lib/pick-workflow-folder";
 import { cn } from "@/lib/utils";
@@ -73,16 +74,17 @@ export function WorkflowFolderField({
           {isPicking ? "Opening..." : value ? "Change" : "Browse"}
         </Button>
       </div>
-      <label className="flex cursor-pointer items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id={`${id}-worktrees`}
           checked={useWorktrees}
-          onChange={(event) => onUseWorktreesChange(event.target.checked)}
+          onCheckedChange={(checked) => onUseWorktreesChange(checked === true)}
           disabled={disabled}
-          className="h-4 w-4 rounded border border-input accent-primary"
         />
-        Use worktrees
-      </label>
+        <Label htmlFor={`${id}-worktrees`} className="cursor-pointer text-sm font-normal">
+          Use worktrees
+        </Label>
+      </div>
       {pickError ? <p className="text-sm text-destructive">{pickError}</p> : null}
     </div>
   );

@@ -1,7 +1,9 @@
 "use client";
-
 import { useState } from "react";
-
+import { IssueExecutorField } from "@/components/issue/issue-executor-field";
+import { IssueFilesField, type StagedIssueFile } from "@/components/issue/issue-files-field";
+import { IssuePriorityField } from "@/components/issue/issue-priority";
+import { IssueTagsField } from "@/components/issue/issue-tags-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,8 +16,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useActiveProject } from "@/contexts/active-project-context";
+import { useIssuePlatformPicker } from "@/hooks/use-issue-platform-picker";
 import type { CreateIssueInput } from "@/hooks/use-board";
 import { validateCreateIssueForm } from "@/lib/create-issue-form";
+import { fileNameFromPath } from "@/lib/pick-issue-files";
+import type { PlatformId } from "@/lib/platforms";
 
 type CreateIssueDialogProps = {
   open: boolean;
@@ -34,15 +40,29 @@ export function CreateIssueDialog({
   isPending = false,
   submitError = null,
 }: CreateIssueDialogProps) {
+  const { projectId } = useActiveProject();
+  const { platformIds, isPlatformInstalled, isLoading: platformPickerLoading } =
+    useIssuePlatformPicker(projectId ?? null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [priorityInput, setPriorityInput] = useState("");
+  const [priority, setPriority] = useState<number | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
+  const [stagedFilePaths, setStagedFilePaths] = useState<string[]>([]);
+  const [executor, setExecutor] = useState<PlatformId | null>(null);
   const [inputError, setInputError] = useState<string | null>(null);
+
+  const stagedFiles: StagedIssueFile[] = stagedFilePaths.map((path) => ({
+    path,
+    fileName: fileNameFromPath(path),
+  }));
 
   const resetForm = (): void => {
     setTitle("");
     setDescription("");
-    setPriorityInput("");
+    setPriority(null);
+    setTags([]);
+    setStagedFilePaths([]);
+    setExecutor(null);
     setInputError(null);
   };
 
@@ -57,9 +77,14 @@ export function CreateIssueDialog({
     event.preventDefault();
     setInputError(null);
 
-    const validation = validateCreateIssueForm({ title, description, priorityInput });
+    const validation = validateCreateIssueForm({ title, description });
     if (!validation.valid) {
       setInputError(validation.error);
+      return;
+    }
+
+    if (executor == null) {
+      setInputError("Select an executor for this issue.");
       return;
     }
 
@@ -67,9 +92,10 @@ export function CreateIssueDialog({
       await onCreate({
         title: validation.value.title,
         description: validation.value.description ?? null,
-        ...(validation.value.priority !== undefined
-          ? { priority: validation.value.priority }
-          : {}),
+        executor,
+        priority,
+        tags,
+        filePaths: stagedFilePaths,
       });
       resetForm();
       onOpenChange(false);
@@ -80,7 +106,7 @@ export function CreateIssueDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
         <form onSubmit={(event) => void handleSubmit(event)}>
           <DialogHeader>
             <DialogTitle>Create task</DialogTitle>
@@ -109,19 +135,42 @@ export function CreateIssueDialog({
                 rows={4}
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="issue-priority">Priority</Label>
-              <Input
-                id="issue-priority"
-                type="number"
-                min={0}
-                step={1}
-                value={priorityInput}
-                onChange={(event) => setPriorityInput(event.target.value)}
-                placeholder="Optional, e.g. 1"
-                disabled={isPending}
-              />
-            </div>
+            <IssuePriorityField
+              value={priority}
+              onChange={setPriority}
+              disabled={isPending}
+              id="create-issue-priority"
+            />
+            <IssueTagsField
+              value={tags}
+              onChange={setTags}
+              disabled={isPending}
+              id="create-issue-tags"
+            />
+            <IssueFilesField
+              stagedFiles={stagedFiles}
+              onAddStagedFiles={(paths) =>
+                setStagedFilePaths((current) => [...new Set([...current, ...paths])])
+              }
+              onRemoveStagedFile={(path) =>
+                setStagedFilePaths((current) => current.filter((entry) => entry !== path))
+              }
+              disabled={isPending}
+            />
+            <IssueExecutorField
+              id="create-issue-executor"
+              value={executor}
+              onChange={(nextExecutor) => {
+                setExecutor(nextExecutor);
+                if (nextExecutor != null && inputError === "Select an executor for this issue.") {
+                  setInputError(null);
+                }
+              }}
+              platformIds={platformIds}
+              disabled={isPending || platformPickerLoading}
+              isPlatformInstalled={isPlatformInstalled}
+              statusesLoading={platformPickerLoading}
+            />
             {inputError ? <p className="text-sm text-destructive">{inputError}</p> : null}
             {submitError ? <p className="text-sm text-destructive">{submitError.message}</p> : null}
           </div>

@@ -11,7 +11,7 @@ import {
   ACTIVE_PERMISSION_POLL_INTERVAL_MS,
   useIssuePermissions,
 } from "@/hooks/use-issue-permissions";
-import { formatDateTime } from "@/lib/format-date-time";
+import { formatDateTime } from "@/lib/datetime";
 import { DEFAULT_IPC_POLL_INTERVAL_MS } from "@/lib/ipc/hooks";
 import type { IssueDetailRunAttempt, PendingPermission, PermissionDecision } from "@/lib/ipc/types";
 

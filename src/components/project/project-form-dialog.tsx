@@ -7,6 +7,7 @@ import { RuntimeFields } from "@/components/project/runtime-fields";
 import { WorkflowFolderField } from "@/components/project/workflow-folder-field";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ import {
   type CreateProjectFormState,
   type CreateProjectInput,
 } from "@/lib/create-project-form";
+import { usePlatformStatuses } from "@/hooks/use-platform-statuses";
 
 const MonacoEditorField = dynamic(
   () =>
@@ -75,9 +77,22 @@ export function ProjectFormDialog({
   const [showRuntimeFields, setShowRuntimeFields] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
+  const {
+    isPlatformInstalled,
+    isLoading: platformStatusesLoading,
+  } = usePlatformStatuses();
+
+  const installValidationOptions = useMemo(
+    () =>
+      platformStatusesLoading
+        ? undefined
+        : { isPlatformInstalled },
+    [isPlatformInstalled, platformStatusesLoading],
+  );
+
   const createValidation = useMemo(
-    () => validateCreateProjectForm(createForm),
-    [createForm],
+    () => validateCreateProjectForm(createForm, installValidationOptions),
+    [createForm, installValidationOptions],
   );
   const fieldErrors = createValidation.success ? {} : createValidation.errors;
   const visibleFieldErrors = submitAttempted ? fieldErrors : {};
@@ -98,6 +113,20 @@ export function ProjectFormDialog({
     }
   }, [initialName, mode, open]);
 
+  useEffect(() => {
+    if (!open || mode !== "create" || platformStatusesLoading) {
+      return;
+    }
+
+    setCreateForm((current) => {
+      const nextPlatformIds = current.platformIds.filter((id) => isPlatformInstalled(id));
+      if (nextPlatformIds.length === current.platformIds.length) {
+        return current;
+      }
+      return { ...current, platformIds: nextPlatformIds };
+    });
+  }, [open, mode, platformStatusesLoading, isPlatformInstalled]);
+
   const handleOpenChange = (nextOpen: boolean): void => {
     if (!nextOpen) {
       if (mode === "create") {
@@ -116,7 +145,7 @@ export function ProjectFormDialog({
     event.preventDefault();
 
     if (mode === "create") {
-      const validation = validateCreateProjectForm(createForm);
+      const validation = validateCreateProjectForm(createForm, installValidationOptions);
       if (!validation.success) {
         setSubmitAttempted(true);
         return;
@@ -215,6 +244,8 @@ export function ProjectFormDialog({
                       setCreateForm((current) => ({ ...current, platformIds }))
                     }
                     disabled={isPending}
+                    isPlatformInstalled={isPlatformInstalled}
+                    statusesLoading={platformStatusesLoading}
                   />
                   <FieldError message={visibleFieldErrors.platformIds} />
                 </div>
@@ -248,16 +279,20 @@ export function ProjectFormDialog({
                   />
                   <FieldError message={visibleFieldErrors.promptTemplate} />
                 </div>
-                <label className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="project-configure-runtime"
                     checked={showRuntimeFields}
-                    onChange={(event) => setShowRuntimeFields(event.target.checked)}
+                    onCheckedChange={(checked) => setShowRuntimeFields(checked === true)}
                     disabled={isPending}
-                    className="h-4 w-4 rounded border border-input accent-primary"
                   />
-                  Configure runtime settings
-                </label>
+                  <Label
+                    htmlFor="project-configure-runtime"
+                    className="cursor-pointer text-sm font-normal"
+                  >
+                    Configure runtime settings
+                  </Label>
+                </div>
                 {showRuntimeFields ? (
                   <div className="grid gap-2">
                     <RuntimeFields

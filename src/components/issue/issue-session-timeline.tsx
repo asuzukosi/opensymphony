@@ -3,6 +3,7 @@
 import type { ComponentType, SVGProps } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/layout/empty-state";
 import {
   BoltIcon,
   ChatBubbleLeftIcon,
@@ -12,7 +13,7 @@ import {
   WrenchScrewdriverIcon,
 } from "@/components/ui/hero-icons";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDateTime } from "@/lib/format-date-time";
+import { formatDateTime } from "@/lib/datetime";
 import type { SessionEvent, SessionEventKind } from "@/lib/ipc/types";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +27,7 @@ type IssueSessionTimelineProps = {
 type TimelineKindConfig = {
   label: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  badgeClassName?: string;
+  badgeVariant?: "outline" | "warning" | "destructive";
 };
 
 const timelineKindConfig: Record<Exclude<SessionEventKind, "StreamChunk">, TimelineKindConfig> = {
@@ -45,7 +46,7 @@ const timelineKindConfig: Record<Exclude<SessionEventKind, "StreamChunk">, Timel
   PermissionRequest: {
     label: "Permission",
     icon: ShieldExclamationIcon,
-    badgeClassName: "border-amber-500/40 text-amber-700 dark:text-amber-300",
+    badgeVariant: "warning",
   },
   SessionUpdate: {
     label: "Update",
@@ -54,7 +55,7 @@ const timelineKindConfig: Record<Exclude<SessionEventKind, "StreamChunk">, Timel
   Error: {
     label: "Error",
     icon: ExclamationCircleIcon,
-    badgeClassName: "border-destructive/40 text-destructive",
+    badgeVariant: "destructive",
   },
   Terminal: {
     label: "Terminal",
@@ -162,11 +163,7 @@ function TimelineSkeleton() {
 }
 
 function TimelineEmptyState({ message }: { message: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 px-6 py-8 text-center">
-      <p className="text-sm text-muted-foreground">{message}</p>
-    </div>
-  );
+  return <EmptyState title={message} className="py-8" />;
 }
 
 function TimelineItem({ event }: { event: SessionEvent }) {
@@ -185,7 +182,10 @@ function TimelineItem({ event }: { event: SessionEvent }) {
       </span>
       <div className="min-w-0 space-y-1 overflow-hidden rounded-lg border border-border/60 bg-muted/20 p-3">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-          <Badge variant="outline" className={cn("text-[10px] uppercase", config.badgeClassName)}>
+          <Badge
+            variant={config.badgeVariant ?? "outline"}
+            className="text-[10px] uppercase"
+          >
             {config.label}
           </Badge>
           <time className="shrink-0 text-xs text-muted-foreground" dateTime={event.createdAt}>

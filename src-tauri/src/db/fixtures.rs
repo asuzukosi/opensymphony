@@ -6,7 +6,7 @@ use crate::db::migrate;
 
 pub struct MinimalFixtures {
     pub project_id: String,
-    pub agent_id: String,
+    pub platform: String,
     pub backlog_issue_id: String,
     pub in_progress_issue_id: String,
     pub review_issue_id: String,
@@ -20,6 +20,8 @@ pub struct SessionFixtures {
     pub session_id: String,
 }
 
+const TEST_WORKSPACE_ROOT: &str = "/tmp/opensymphony-test-workspace";
+
 pub fn open_test_db() -> DbResult<Connection> {
     let conn = Connection::open_in_memory()?;
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
@@ -29,23 +31,19 @@ pub fn open_test_db() -> DbResult<Connection> {
 
 pub fn seed_minimal_project(conn: &Connection) -> DbResult<MinimalFixtures> {
     let project_id = "test-project".into();
-    let agent_id = "test-agent".into();
+    let platform = "hermes".into();
     let backlog_issue_id = "test-issue-backlog".into();
     let in_progress_issue_id = "test-issue-in-progress".into();
     let review_issue_id = "test-issue-review".into();
     let done_issue_id = "test-issue-done".into();
 
     conn.execute(
-        "INSERT INTO projects (id, name, slug) VALUES (?1, ?2, ?3)",
-        (&project_id, "Test Project", "test-project"),
+        "INSERT INTO projects (id, name, slug, workspace_root) VALUES (?1, ?2, ?3, ?4)",
+        (&project_id, "Test Project", "test-project", TEST_WORKSPACE_ROOT),
     )?;
     conn.execute(
-        "INSERT INTO agents (id, name, acp_command) VALUES (?1, ?2, ?3)",
-        (&agent_id, "Test Agent", "echo"),
-    )?;
-    conn.execute(
-        "INSERT INTO project_agents (project_id, agent_id) VALUES (?1, ?2)",
-        (&project_id, &agent_id),
+        "INSERT INTO platforms (project_id, platform) VALUES (?1, ?2)",
+        (&project_id, &platform),
     )?;
 
     let issues = [
@@ -65,7 +63,7 @@ pub fn seed_minimal_project(conn: &Connection) -> DbResult<MinimalFixtures> {
 
     Ok(MinimalFixtures {
         project_id,
-        agent_id,
+        platform,
         backlog_issue_id,
         in_progress_issue_id,
         review_issue_id,
@@ -80,8 +78,8 @@ pub fn seed_issue_with_session(conn: &Connection) -> DbResult<SessionFixtures> {
     let session_id = Uuid::new_v4().to_string();
 
     conn.execute(
-        "INSERT INTO projects (id, name, slug) VALUES (?1, ?2, ?3)",
-        (&project_id, "Session Project", "session-project"),
+        "INSERT INTO projects (id, name, slug, workspace_root) VALUES (?1, ?2, ?3, ?4)",
+        (&project_id, "Session Project", "session-project", TEST_WORKSPACE_ROOT),
     )?;
     conn.execute(
         "INSERT INTO issues (id, project_id, identifier, title, board_column)

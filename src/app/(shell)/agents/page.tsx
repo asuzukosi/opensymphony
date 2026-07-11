@@ -9,7 +9,7 @@ import {
 } from "@/components/agents/agent-form-dialog";
 import { AgentsTable } from "@/components/agents/agents-table";
 import { ProjectAgentAssignment } from "@/components/agents/project-agent-assignment";
-import { AgentsIcon } from "@/components/layout/nav-icons";
+import { AgentsIcon } from "@/components/ui/hero-icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageShell } from "@/components/layout/page-shell";
 import { SurfaceCard } from "@/components/layout/surface-card";

@@ -1,11 +1,11 @@
 "use client";
 
-import { ClockIcon } from "@/components/dashboard/dashboard-icons";
+import { ClockIcon } from "@/components/ui/hero-icons";
 import { EmptyState } from "@/components/layout/empty-state";
 import { IssueLink } from "@/components/layout/issue-link";
 import { PanelSection } from "@/components/layout/panel-section";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDateTime } from "@/lib/format-date-time";
+import { formatDateTime } from "@/lib/datetime";
 import { isPendingLoad } from "@/lib/is-pending-load";
 import type { RuntimeAuditEvent } from "@/lib/ipc/types";
 

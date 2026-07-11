@@ -17,7 +17,7 @@ import { CreateIssueDialog } from "@/components/board/create-issue-dialog";
 import { BOARD_COLUMN_LABELS } from "@/components/board/board-states";
 import { IssueCard } from "@/components/board/issue-card";
 import { IssueDetailSheet } from "@/components/board/issue-detail-sheet";
-import { BoardIcon } from "@/components/layout/nav-icons";
+import { BoardIcon } from "@/components/ui/hero-icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageShell } from "@/components/layout/page-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";

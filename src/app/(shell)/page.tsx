@@ -1,5 +1,5 @@
 import { DashboardPageContent } from "@/components/dashboard/dashboard-page-content";
-import { DashboardIcon } from "@/components/layout/nav-icons";
+import { DashboardIcon } from "@/components/ui/hero-icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageShell } from "@/components/layout/page-shell";
 

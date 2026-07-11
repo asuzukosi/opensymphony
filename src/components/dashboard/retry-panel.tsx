@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowPathIcon } from "@/components/dashboard/dashboard-icons";
+import { ArrowPathIcon } from "@/components/ui/hero-icons";
 import { BorderedTable, tableHeadClass, tableHeaderRowClass } from "@/components/dashboard/shared";
 import { EmptyState } from "@/components/layout/empty-state";
 import { IssueLink } from "@/components/layout/issue-link";
@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDateTime } from "@/lib/format-date-time";
+import { formatDateTime } from "@/lib/datetime";
 import { isPendingLoad } from "@/lib/is-pending-load";
 import type { RuntimeRetryEntry } from "@/lib/ipc/types";
 

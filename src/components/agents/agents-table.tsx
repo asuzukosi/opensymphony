@@ -1,8 +1,8 @@
 "use client";
 
-import { AgentsIcon } from "@/components/ui/hero-icons";
-
+import { EmptyState } from "@/components/layout/empty-state";
 import { SurfaceCard } from "@/components/layout/surface-card";
+import { AgentsIcon } from "@/components/ui/hero-icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -66,25 +66,6 @@ function AgentsTableSkeleton({ showActions = false }: { showActions?: boolean })
   );
 }
 
-function AgentsTableEmptyState({ onAddAgent }: { onAddAgent?: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/20 px-6 py-12 text-center">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-border/40 bg-background">
-        <AgentsIcon className="h-5 w-5 text-muted-foreground" />
-      </div>
-      <p className="text-sm font-medium">No agents registered</p>
-      <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-        Agent definitions will appear here once you add them to the registry.
-      </p>
-      {onAddAgent ? (
-        <Button type="button" size="sm" className="mt-4" onClick={onAddAgent}>
-          Add agent
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
 export function AgentsTable({
   agents,
   projectAgentIds = [],
@@ -103,7 +84,19 @@ export function AgentsTable({
   if (!agents || agents.length === 0) {
     return (
       <SurfaceCard>
-        <AgentsTableEmptyState onAddAgent={onAddAgent} />
+        <EmptyState
+          icon={AgentsIcon}
+          title="No agents registered"
+          description="Agent definitions will appear here once you add them to the registry."
+          className="py-12"
+          action={
+            onAddAgent ? (
+              <Button type="button" size="sm" onClick={onAddAgent}>
+                Add agent
+              </Button>
+            ) : undefined
+          }
+        />
       </SurfaceCard>
     );
   }

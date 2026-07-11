@@ -2,6 +2,7 @@
 
 import { ExclamationCircleIcon } from "@/components/ui/hero-icons";
 
+import { EmptyState } from "@/components/layout/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ColumnTrack, ColumnsScroller } from "@/components/layout/columns-scroller";
@@ -73,16 +74,15 @@ type BoardColumnEmptyStateProps = {
 
 export function BoardColumnEmptyState({ showCreateHint = false }: BoardColumnEmptyStateProps) {
   return (
-    <div className="flex min-h-[10rem] flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-card/40 px-4 py-10 text-center">
-      <p className="text-sm text-muted-foreground">No tasks</p>
-      {showCreateHint ? (
-        <p className="mt-1 text-xs text-muted-foreground">
-          Drop a task here or use Add below
-        </p>
-      ) : (
-        <p className="mt-1 text-xs text-muted-foreground">Drop a task here to move it</p>
-      )}
-    </div>
+    <EmptyState
+      className="min-h-[10rem] rounded-xl border-border/70 bg-card/40 px-4 py-10"
+      title="No tasks"
+      description={
+        showCreateHint
+          ? "Drop a task here or use Add below"
+          : "Drop a task here to move it"
+      }
+    />
   );
 }
 

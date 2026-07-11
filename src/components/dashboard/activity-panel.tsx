@@ -2,7 +2,7 @@
 
 import { useCallback, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 
-import { ChartBarIcon, ShieldCheckIcon } from "@/components/dashboard/dashboard-icons";
+import { ChartBarIcon, ShieldCheckIcon } from "@/components/ui/hero-icons";
 import { BorderedTable, tableHeadClass, tableHeaderRowClass } from "@/components/dashboard/shared";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PanelSection } from "@/components/layout/panel-section";
@@ -29,12 +29,14 @@ import {
   ACTIVITY_TIME_RANGE_PRESET_OPTIONS,
   buildActivityTimeRange,
   defaultCustomRange,
-  fromDatetimeLocalInputValue,
-  toDatetimeLocalInputValue,
   type ActivityTimeRangeBucketId,
   type ActivityTimeRangePresetId,
 } from "@/lib/activity-time-range";
-import { formatDateTime } from "@/lib/format-date-time";
+import {
+  formatDateTime,
+  fromDatetimeLocalInputValue,
+  toDatetimeLocalInputValue,
+} from "@/lib/datetime";
 import { isPendingLoad } from "@/lib/is-pending-load";
 import type {
   ActivityTimeRange,

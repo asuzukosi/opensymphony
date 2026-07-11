@@ -69,7 +69,7 @@ export function useProject(): UseProjectResult {
     ) => {
       switch (input.action) {
         case "create": {
-          const project = await client.createProject(input.input.name);
+          const project = await client.createProject(input.input);
           await client.setActiveProjectId(project.id);
           return;
         }

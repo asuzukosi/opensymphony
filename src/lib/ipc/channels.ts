@@ -9,6 +9,9 @@ export const IPC_CHANNELS = {
   listSessionEvents: "opensymphony:list-session-events",
   // issue writes
   createIssue: "opensymphony:create-issue",
+  setIssueExecutor: "opensymphony:set-issue-executor",
+  setIssueTags: "opensymphony:set-issue-tags",
+  attachIssueFiles: "opensymphony:attach-issue-files",
   updateIssueTitle: "opensymphony:update-issue-title",
   updateIssueDescription: "opensymphony:update-issue-description",
   updateIssuePriority: "opensymphony:update-issue-priority",
@@ -68,6 +71,9 @@ export const IPC_CHANNELS = {
   setAgentAcpCommand: "opensymphony:set-agent-acp-command",
   assignAgentToProject: "opensymphony:assign-agent-to-project",
   unassignAgentFromProject: "opensymphony:unassign-agent-from-project",
+  // platform
+  listAgentPlatformStatuses: "opensymphony:list-agent-platform-statuses",
+  listProjectPlatforms: "opensymphony:list-project-platforms",
   // analytics reads
   getProjectAgentActivityOverTime: "opensymphony:get-project-agent-activity-over-time",
   getProjectPermissionActivityOverTime:

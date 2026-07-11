@@ -38,9 +38,9 @@ export function PageHeader({
             </>
           ) : (
             <>
-              <h1 className="text-lg font-medium tracking-tight">{title}</h1>
+              <h1 className="text-base font-medium tracking-tight">{title}</h1>
               {description ? (
-                <p className="max-w-lg text-sm text-muted-foreground">{description}</p>
+                <p className="max-w-lg text-xs text-muted-foreground">{description}</p>
               ) : null}
             </>
           )}

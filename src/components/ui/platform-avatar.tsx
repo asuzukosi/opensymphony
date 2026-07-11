@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import {
   Tooltip,
   TooltipContent,
@@ -29,6 +30,8 @@ type PlatformAvatarProps = {
   /** defaults to platform label; pass false to hide tooltip */
   tooltip?: string | false;
   disabled?: boolean;
+  /** cli not on path — grayed appearance */
+  uninstalled?: boolean;
   onClick?: () => void;
 };
 
@@ -38,56 +41,52 @@ export function PlatformAvatar({
   className,
   tooltip,
   disabled = false,
+  uninstalled = false,
   onClick,
 }: PlatformAvatarProps) {
   const platform = getPlatform(platformId);
-  const isInteractive = onClick != null;
   const tooltipText = tooltip === false ? null : (tooltip ?? platform.label);
 
-  const avatar = isInteractive ? (
-    <button
-      type="button"
+  const avatar = (
+    <Avatar
       className={cn(
-        "flex items-center justify-center overflow-hidden rounded-full border border-border bg-background",
+        "border border-border bg-background",
         sizeClassName[size],
-        !disabled && "transition-shadow hover:ring-2 hover:ring-ring hover:ring-offset-2",
+        uninstalled && "opacity-50 grayscale",
+        onClick && !disabled && "transition-shadow hover:ring-2 hover:ring-ring hover:ring-offset-2",
         disabled && "cursor-not-allowed opacity-70",
         className,
       )}
+    >
+      <AvatarImage
+        src={platform.logoPath}
+        alt=""
+        className={cn("object-contain", imagePaddingClassName[size])}
+      />
+    </Avatar>
+  );
+
+  const trigger = onClick ? (
+    <button
+      type="button"
+      className="rounded-full"
       disabled={disabled}
       onClick={onClick}
       aria-label={tooltipText ?? platform.label}
     >
-      <img
-        src={platform.logoPath}
-        alt=""
-        className={cn("h-full w-full object-contain", imagePaddingClassName[size])}
-      />
+      {avatar}
     </button>
   ) : (
-    <span
-      className={cn(
-        "flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-background",
-        sizeClassName[size],
-        className,
-      )}
-      aria-hidden={tooltipText == null}
-    >
-      <img
-        src={platform.logoPath}
-        alt=""
-        className={cn("h-full w-full object-contain", imagePaddingClassName[size])}
-      />
-    </span>
+    avatar
   );
 
   if (tooltipText == null) {
-    return avatar;
+    return trigger;
   }
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{avatar}</TooltipTrigger>
+      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
       <TooltipContent side="bottom">{tooltipText}</TooltipContent>
     </Tooltip>
   );

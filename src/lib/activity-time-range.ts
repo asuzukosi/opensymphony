@@ -87,20 +87,6 @@ export function resolveBucketMs(
   return BUCKET_MS_BY_ID[bucketId];
 }
 
-export function toDatetimeLocalInputValue(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const pad = (value: number): string => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-export function fromDatetimeLocalInputValue(value: string): string {
-  return new Date(value).toISOString();
-}
-
 export function defaultCustomRange(now = new Date()): { startAt: string; endAt: string } {
   const endAt = now.toISOString();
   const startAt = new Date(now.getTime() - DAY_MS).toISOString();

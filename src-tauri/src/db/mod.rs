@@ -4,7 +4,7 @@ pub mod repos;
 pub mod workflow;
 
 #[cfg(test)]
-pub mod test_helpers;
+pub mod fixtures;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 

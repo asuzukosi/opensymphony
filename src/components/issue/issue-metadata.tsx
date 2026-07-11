@@ -1,19 +1,38 @@
 "use client";
 
-import { formatIssuePriority } from "@/components/board/issue-card";
 import { BOARD_COLUMN_LABELS } from "@/components/board/board-states";
+import { IssueExecutorField } from "@/components/issue/issue-executor-field";
+import { IssueFilesField } from "@/components/issue/issue-files-field";
+import { IssuePriorityField } from "@/components/issue/issue-priority";
+import { IssueTagsField } from "@/components/issue/issue-tags-field";
 import { MetadataField } from "@/components/layout/metadata-field";
 import { SurfaceCard } from "@/components/layout/surface-card";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useIssuePlatformPicker } from "@/hooks/use-issue-platform-picker";
 import type { IssueDetail } from "@/hooks/use-issue";
+import type { PlatformId } from "@/lib/platforms";
 
 type IssueMetadataProps = {
   issue: IssueDetail;
+  onExecutorChange: (executor: PlatformId | null) => Promise<void>;
+  onPriorityChange: (priority: number | null) => Promise<void>;
+  onTagsChange: (tags: string[]) => Promise<void>;
+  onAttachFiles: (filePaths: string[]) => Promise<void>;
+  isMutating?: boolean;
+  mutationError?: Error | null;
 };
 
-export function IssueMetadata({ issue }: IssueMetadataProps) {
-  const priority = formatIssuePriority(issue.priority);
-  const columnLabel = BOARD_COLUMN_LABELS[issue.boardColumn];
+export function IssueMetadata({
+  issue,
+  onExecutorChange,
+  onPriorityChange,
+  onTagsChange,
+  onAttachFiles,
+  isMutating = false,
+  mutationError = null,
+}: IssueMetadataProps) {
+  const { platformIds, isPlatformInstalled, isLoading: platformPickerLoading } =
+    useIssuePlatformPicker(issue.projectId);
 
   return (
     <SurfaceCard>
@@ -34,9 +53,37 @@ export function IssueMetadata({ issue }: IssueMetadataProps) {
             <p className="text-sm text-muted-foreground">No description provided.</p>
           )}
         </div>
+        <IssuePriorityField
+          value={issue.priority}
+          onChange={(nextPriority) => void onPriorityChange(nextPriority)}
+          disabled={isMutating}
+          id="issue-detail-priority"
+        />
+        <IssueTagsField
+          value={issue.tags}
+          onChange={(nextTags) => void onTagsChange(nextTags)}
+          disabled={isMutating}
+          id="issue-detail-tags"
+        />
+        <IssueFilesField
+          attachedFiles={issue.files}
+          onAddStagedFiles={(paths) => void onAttachFiles(paths)}
+          disabled={isMutating}
+        />
+        <IssueExecutorField
+          id="issue-detail-executor"
+          value={issue.executor}
+          onChange={(executor) => void onExecutorChange(executor)}
+          platformIds={platformIds}
+          disabled={isMutating || platformPickerLoading}
+          isPlatformInstalled={isPlatformInstalled}
+          statusesLoading={platformPickerLoading}
+        />
+        {mutationError ? (
+          <p className="text-sm text-destructive">{mutationError.message}</p>
+        ) : null}
         <dl className="grid gap-3 sm:grid-cols-2">
-          <MetadataField label="Board column" value={columnLabel} />
-          <MetadataField label="Priority" value={priority ?? "None"} />
+          <MetadataField label="Board column" value={BOARD_COLUMN_LABELS[issue.boardColumn]} />
           <MetadataField
             label="Project"
             value={<span className="font-mono text-sm">{issue.projectId}</span>}

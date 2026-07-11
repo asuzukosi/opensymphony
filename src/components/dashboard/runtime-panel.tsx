@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { UseRuntimeResult } from "@/hooks/use-runtime";
-import { formatDateTime } from "@/lib/format-date-time";
+import { formatDateTime } from "@/lib/datetime";
 import { isPendingLoad } from "@/lib/is-pending-load";
 
 type RuntimePanelProps = {
@@ -22,7 +22,7 @@ function SnapshotField({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="space-y-1 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm font-medium">{value}</dd>
+      <dd className="text-xs font-normal">{value}</dd>
     </div>
   );
 }
@@ -78,7 +78,7 @@ export function RuntimePanel({ projectId, runtime }: RuntimePanelProps) {
           label="Poll interval"
           value={
             summary?.pollIntervalMs != null ? (
-              <span className="font-mono tabular-nums">{summary.pollIntervalMs} ms</span>
+              <span className="text-xs">{summary.pollIntervalMs} ms</span>
             ) : (
               "—"
             )
@@ -90,7 +90,7 @@ export function RuntimePanel({ projectId, runtime }: RuntimePanelProps) {
           label="Total ticks"
           value={
             summary?.tickCount != null ? (
-              <span className="font-mono tabular-nums">{summary.tickCount}</span>
+              <span className="text-xs">{summary.tickCount}</span>
             ) : (
               "—"
             )
@@ -100,7 +100,7 @@ export function RuntimePanel({ projectId, runtime }: RuntimePanelProps) {
           label="Last dispatched"
           value={
             summary?.lastDispatchedCount != null ? (
-              <span className="font-mono tabular-nums">{summary.lastDispatchedCount}</span>
+              <span className="text-xs">{summary.lastDispatchedCount}</span>
             ) : (
               "—"
             )
@@ -137,7 +137,7 @@ export function RuntimePanel({ projectId, runtime }: RuntimePanelProps) {
         <h4 className="text-sm font-normal">Poll interval override</h4>
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-2">
-            <Label htmlFor="runtime-poll-interval">Interval (ms)</Label>
+            <Label htmlFor="runtime-poll-interval" className="text-xs">Interval (ms)</Label>
             <Input
               id="runtime-poll-interval"
               type="number"
@@ -146,7 +146,7 @@ export function RuntimePanel({ projectId, runtime }: RuntimePanelProps) {
               value={pollIntervalInput}
               onChange={(event) => setPollIntervalInput(event.target.value)}
               disabled={controlsDisabled}
-              className="w-40"
+              className="w-40 text-xs"
             />
           </div>
           <Button

@@ -2,23 +2,11 @@
 
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  BoltIcon,
-  DocumentTextIcon,
-  ExclamationCircleIcon,
-} from "@/components/ui/hero-icons";
 import Link from "next/link";
-import type { ComponentType, SVGProps } from "react";
-
+import { IssuePriorityBadge } from "@/components/issue/issue-priority";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { ProjectBoardIssue } from "@/lib/ipc/types";
 import { cn } from "@/lib/utils";
-
-export function formatIssuePriority(priority: number | null): string | null {
-  if (priority === null) {
-    return null;
-  }
-  return `P${priority}`;
-}
 
 const AVATAR_COLORS = [
   "from-violet-400 to-fuchsia-500",
@@ -41,27 +29,6 @@ function avatarLetter(identifier: string): string {
   return (match?.[0] ?? "?").toUpperCase();
 }
 
-function IssueStatusIcon({
-  priority,
-  className,
-}: {
-  priority: number | null;
-  className?: string;
-}) {
-  let Icon: ComponentType<SVGProps<SVGSVGElement>> = DocumentTextIcon;
-  let tone = "text-muted-foreground/70";
-
-  if (priority === 0 || priority === 1) {
-    Icon = ExclamationCircleIcon;
-    tone = "text-destructive";
-  } else if (priority === 2) {
-    Icon = BoltIcon;
-    tone = "text-amber-500";
-  }
-
-  return <Icon className={cn("size-4 shrink-0", tone, className)} aria-hidden />;
-}
-
 type IssueCardContentProps = {
   issue: ProjectBoardIssue;
   disabled?: boolean;
@@ -73,8 +40,6 @@ export function IssueCardContent({
   disabled = false,
   onOpen,
 }: IssueCardContentProps) {
-  const priority = formatIssuePriority(issue.priority);
-
   return (
     <article
       className={cn(
@@ -96,23 +61,23 @@ export function IssueCardContent({
             {issue.title}
           </Link>
         </h3>
-        <IssueStatusIcon priority={issue.priority} />
+        <IssuePriorityBadge priority={issue.priority} />
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            className={cn(
-              "flex size-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[10px] font-medium text-white",
-              avatarColorClass(issue.identifier),
-            )}
-            aria-hidden
-          >
-            {avatarLetter(issue.identifier)}
-          </span>
+          <Avatar className="size-6">
+            <AvatarFallback
+              className={cn(
+                "bg-gradient-to-br text-[10px] font-medium text-white",
+                avatarColorClass(issue.identifier),
+              )}
+            >
+              {avatarLetter(issue.identifier)}
+            </AvatarFallback>
+          </Avatar>
           <span className="truncate font-mono">{issue.identifier}</span>
         </div>
-        {priority ? <span className="shrink-0 font-normal">{priority}</span> : null}
       </div>
     </article>
   );

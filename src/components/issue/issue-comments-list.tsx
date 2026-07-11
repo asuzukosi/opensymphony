@@ -1,4 +1,4 @@
-import { formatDateTime } from "@/lib/format-date-time";
+import { formatDateTime } from "@/lib/datetime";
 import type { IssueComment } from "@/lib/ipc/types";
 
 type IssueCommentsListProps = {

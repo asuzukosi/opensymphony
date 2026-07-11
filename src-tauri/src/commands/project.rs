@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use tauri::{AppHandle, Manager, State};
 
@@ -8,10 +9,11 @@ use crate::acp::AcpState;
 use crate::db::error::DbError;
 use crate::db::repos::project::ProjectRepo;
 use crate::db::Db;
-use crate::types::{PermissionMode, Project, ProjectPatch, ProjectSummary, RetryPolicy};
-use crate::db::workflow::{apply_workflow_file, project_workflow_path};
-
-const REFERENCE_WORKFLOW: &str = include_str!("../../resources/reference-workflow.yaml");
+use crate::types::{
+    CreateProjectParams, CreateProjectRequest, PermissionMode, Project, ProjectPatch, ProjectSummary,
+    Platform, RetryPolicy,
+};
+use crate::utils::{install_status, project_data_dir};
 
 // reads
 
@@ -30,26 +32,26 @@ pub fn get_project_name(db: State<Arc<Db>>, project_id: String) -> Result<String
 
 #[tauri::command(rename = "opensymphony:get-project-workflow-source")]
 pub fn get_project_workflow_source(
-    db: State<Arc<Db>>,
-    project_id: String,
+    _db: State<Arc<Db>>,
+    _project_id: String,
 ) -> Result<Option<String>, String> {
-    Ok(require_project(db, &project_id)?.workflow_source)
+    Ok(None)
 }
 
 #[tauri::command(rename = "opensymphony:get-project-workflow-file-path")]
 pub fn get_project_workflow_file_path(
-    db: State<Arc<Db>>,
-    project_id: String,
+    _db: State<Arc<Db>>,
+    _project_id: String,
 ) -> Result<Option<String>, String> {
-    Ok(require_project(db, &project_id)?.workflow_file_path)
+    Ok(None)
 }
 
 #[tauri::command(rename = "opensymphony:get-project-workflow-version")]
 pub fn get_project_workflow_version(
-    db: State<Arc<Db>>,
-    project_id: String,
+    _db: State<Arc<Db>>,
+    _project_id: String,
 ) -> Result<Option<String>, String> {
-    Ok(require_project(db, &project_id)?.workflow_version)
+    Ok(None)
 }
 
 #[tauri::command(rename = "opensymphony:get-project-prompt-template")]
@@ -93,23 +95,17 @@ pub fn get_project_orchestrator_status(db: State<Arc<Db>>, project_id: String) -
 
 #[tauri::command(rename = "opensymphony:create-project")]
 pub fn create_project(
-    app: AppHandle,
     db: State<Arc<Db>>,
     acp: State<AcpState>,
-    name: String,
+    input: CreateProjectRequest,
 ) -> Result<ProjectSummary, String> {
+    let params = validate_create_project_request(input)?;
     let conn = db.conn().map_err(|err| err.to_string())?;
     let project = ProjectRepo::new(&conn)
-        .create(&name)
+        .create(&params)
         .map_err(|err| err.to_string())?;
-    install_workflow_content(
-        &app,
-        &conn,
-        &acp,
-        &project.id,
-        REFERENCE_WORKFLOW,
-        "bundled",
-    )?;
+    acp.permission_gate
+        .sync_project_mode(&project.id, project.permission_mode);
     project_summary(&conn, &project.id)
 }
 
@@ -120,8 +116,8 @@ pub fn delete_project(app: AppHandle, db: State<Arc<Db>>, project_id: String) ->
         .delete(&project_id)
         .map_err(|err| err.to_string())?;
 
-    if let Ok(project_dir) = project_dir(&app, &project_id) {
-        let _ = fs::remove_dir_all(project_dir);
+    if let Ok(dir) = project_data_dir_for_delete(&app, &project_id) {
+        let _ = fs::remove_dir_all(dir);
     }
     Ok(())
 }
@@ -147,24 +143,24 @@ pub fn set_project_name(
 
 #[tauri::command(rename = "opensymphony:set-project-workflow-file")]
 pub fn set_project_workflow_file(
-    app: AppHandle,
-    db: State<Arc<crate::db::Db>>,
-    acp: State<AcpState>,
-    project_id: String,
-    source_path: String,
+    _app: AppHandle,
+    _db: State<Arc<crate::db::Db>>,
+    _acp: State<AcpState>,
+    _project_id: String,
+    _source_path: String,
 ) -> Result<Option<String>, String> {
-    install_workflow_from_path(&app, db, &acp, &project_id, &source_path, "file")
+    Err("workflow yaml is no longer supported".into())
 }
 
 #[tauri::command(rename = "opensymphony:import-project-workflow-file")]
 pub fn import_project_workflow_file(
-    app: AppHandle,
-    db: State<Arc<crate::db::Db>>,
-    acp: State<AcpState>,
-    project_id: String,
-    source_path: String,
+    _app: AppHandle,
+    _db: State<Arc<crate::db::Db>>,
+    _acp: State<AcpState>,
+    _project_id: String,
+    _source_path: String,
 ) -> Result<Option<String>, String> {
-    install_workflow_from_path(&app, db, &acp, &project_id, &source_path, "import")
+    Err("workflow yaml is no longer supported".into())
 }
 
 #[tauri::command(rename = "opensymphony:set-project-prompt-template")]
@@ -294,46 +290,70 @@ fn project_summary(
         .ok_or_else(|| DbError::NotFound(format!("project {project_id}")).to_string())
 }
 
-fn project_dir(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
+fn project_data_dir_for_delete(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
     let app_data = app
         .path()
         .app_data_dir()
         .map_err(|err| err.to_string())?;
-    Ok(crate::db::workflow::project_dir(&app_data, project_id))
+    Ok(project_data_dir(&app_data, project_id))
 }
 
-fn install_workflow_from_path(
-    app: &AppHandle,
-    db: State<Arc<Db>>,
-    acp: &AcpState,
-    project_id: &str,
-    source_path: &str,
-    workflow_source: &str,
-) -> Result<Option<String>, String> {
-    let content = fs::read_to_string(source_path).map_err(|err| err.to_string())?;
-    let conn = db.conn().map_err(|err| err.to_string())?;
-    install_workflow_content(app, &conn, acp, project_id, &content, workflow_source)
-}
-
-fn install_workflow_content(
-    app: &AppHandle,
-    conn: &rusqlite::Connection,
-    acp: &AcpState,
-    project_id: &str,
-    content: &str,
-    workflow_source: &str,
-) -> Result<Option<String>, String> {
-    let app_data = app.path().app_data_dir().map_err(|err| err.to_string())?;
-    let dest = project_workflow_path(&app_data, project_id);
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+fn validate_create_project_request(request: CreateProjectRequest) -> Result<CreateProjectParams, String> {
+    let name = request.name.trim();
+    if name.is_empty() {
+        return Err("project name is required".into());
     }
-    fs::write(&dest, content).map_err(|err| err.to_string())?;
 
-    let project = apply_workflow_file(conn, project_id, &dest, Some(workflow_source))
-        .map_err(|err| err.to_string())?;
-    acp.permission_gate
-        .sync_project_mode(&project.id, project.permission_mode);
+    let workspace_root = request.workspace_root.trim();
+    if workspace_root.is_empty() {
+        return Err("workspace folder is required".into());
+    }
+    if !Path::new(workspace_root).is_dir() {
+        return Err(format!("workspace folder does not exist: {workspace_root}"));
+    }
 
-    Ok(Some(dest.to_string_lossy().into_owned()))
+    let prompt_template = request.prompt_template.trim();
+    if prompt_template.is_empty() {
+        return Err("prompt template cannot be empty".into());
+    }
+
+    if request.platforms.is_empty() {
+        return Err("select at least one platform".into());
+    }
+    for platform_id in &request.platforms {
+        let platform = Platform::from_str(platform_id).map_err(|err| err.to_string())?;
+        let status = install_status(platform);
+        if !status.installed {
+            return Err(format!(
+                "platform {platform_id} is not installed (missing: {})",
+                status.missing_binaries.join(", ")
+            ));
+        }
+    }
+
+    if request.poll_interval_ms < 1000 {
+        return Err("poll interval must be at least 1000 ms".into());
+    }
+    if request.max_concurrency < 1 {
+        return Err("max concurrency must be at least 1".into());
+    }
+    if request.retry_max_attempts < 1 {
+        return Err("max attempts must be at least 1".into());
+    }
+    if request.retry_backoff_ms < 0 {
+        return Err("backoff must be at least 0".into());
+    }
+
+    Ok(CreateProjectParams {
+        name: name.to_string(),
+        workspace_root: workspace_root.to_string(),
+        prompt_template: prompt_template.to_string(),
+        use_worktrees: request.use_worktrees,
+        poll_interval_ms: request.poll_interval_ms,
+        max_concurrency: request.max_concurrency,
+        retry_max_attempts: request.retry_max_attempts,
+        retry_backoff_ms: request.retry_backoff_ms,
+        permission_mode: request.permission_mode,
+        platforms: request.platforms,
+    })
 }

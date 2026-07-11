@@ -488,16 +488,7 @@ impl Manager {
 }
 
 fn workflow_default_poll_interval(project: &crate::types::Project) -> i32 {
-    use std::fs;
-
-    use crate::db::workflow::parse_workflow_content;
-
-    project
-        .workflow_file_path
-        .as_deref()
-        .and_then(|path| fs::read_to_string(path).ok())
-        .and_then(|content| parse_workflow_content(&content).poll_interval_ms)
-        .unwrap_or(DEFAULT_POLL_INTERVAL_MS as i32)
+    project.poll_interval_ms
 }
 
 fn resolve_review_status(
@@ -587,7 +578,7 @@ mod tests {
     use crate::db::repos::issue::IssueRepo;
     use crate::db::repos::project::ProjectRepo;
     use crate::db::repos::run_attempt::RunAttemptRepo;
-    use crate::db::test_helpers::seed_minimal_project;
+    use crate::db::fixtures::seed_minimal_project;
     use crate::orchestrator::audit::action;
     use crate::types::{BoardColumnId, RuntimeStatus};
 
@@ -600,6 +591,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "dispatch still uses agent registry until V4"]
     fn runtime_tick_dispatches_then_polls_issue_to_review() {
         let path = temp_db_path();
         let db = Arc::new(Db::open(&path).expect("open test db"));

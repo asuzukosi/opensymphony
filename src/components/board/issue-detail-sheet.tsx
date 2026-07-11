@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 
-import { formatIssuePriority } from "@/components/board/issue-card";
 import { BOARD_COLUMN_LABELS } from "@/components/board/board-states";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { IssuePriorityBadge } from "@/components/issue/issue-priority";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -26,18 +26,13 @@ type IssueDetailSheetProps = {
 };
 
 function IssueSheetPreview({ issue }: { issue: IssueHeader }) {
-  const priority = formatIssuePriority(issue.priority);
   const columnLabel = BOARD_COLUMN_LABELS[issue.boardColumn];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{columnLabel}</Badge>
-        {priority ? (
-          <Badge variant="outline" className="font-normal">
-            {priority}
-          </Badge>
-        ) : null}
+        <IssuePriorityBadge priority={issue.priority} />
       </div>
       {issue.description ? (
         <p className="whitespace-pre-wrap text-sm">{issue.description}</p>

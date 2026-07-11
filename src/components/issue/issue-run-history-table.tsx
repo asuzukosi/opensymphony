@@ -1,6 +1,7 @@
 "use client";
 
 import { SurfaceCard } from "@/components/layout/surface-card";
+import { EmptyState } from "@/components/layout/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDateTime } from "@/lib/format-date-time";
+import { formatDateTime } from "@/lib/datetime";
 import type { IssueDetailRunAttempt, IssueDetailSession, SessionEvent } from "@/lib/ipc/types";
 import { IssueSessionTimeline } from "@/components/issue/issue-session-timeline";
 
@@ -72,17 +73,6 @@ function RunHistoryTableSkeleton() {
         ))}
       </TableBody>
     </Table>
-  );
-}
-
-function RunHistoryEmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/20 px-6 py-12 text-center">
-      <p className="text-sm font-medium">No run history</p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Run attempts will appear here after the orchestrator dispatches this issue.
-      </p>
-    </div>
   );
 }
 
@@ -184,7 +174,11 @@ export function IssueRunHistoryTable({
             </Table>
           </div>
         ) : (
-          <RunHistoryEmptyState />
+          <EmptyState
+            title="No run history"
+            description="Run attempts will appear here after the orchestrator dispatches this issue."
+            className="py-12"
+          />
         )}
         <div className="space-y-3">
           <div>

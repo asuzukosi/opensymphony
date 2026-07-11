@@ -143,23 +143,31 @@ function zodErrorsToFormErrors(error: z.ZodError): CreateProjectFormErrors {
   return errors;
 }
 
-export function validateCreateProjectForm(form: CreateProjectFormState):
+export function validateCreateProjectForm(
+  form: CreateProjectFormState,
+  options?: { isPlatformInstalled?: (platformId: PlatformId) => boolean },
+):
   | { success: true; input: CreateProjectInput }
   | { success: false; errors: CreateProjectFormErrors } {
   const result = createProjectFormSchema.safeParse(form);
   if (!result.success) {
     return { success: false, errors: zodErrorsToFormErrors(result.error) };
   }
+
+  const isPlatformInstalled = options?.isPlatformInstalled;
+  if (isPlatformInstalled != null) {
+    const uninstalled = result.data.platformIds.filter((id) => !isPlatformInstalled(id));
+    if (uninstalled.length > 0) {
+      return {
+        success: false,
+        errors: {
+          platformIds: "One or more selected platforms are not installed",
+        },
+      };
+    }
+  }
+
   return { success: true, input: toCreateProjectInput(result.data) };
-}
-
-export function getCreateProjectFormErrors(form: CreateProjectFormState): CreateProjectFormErrors {
-  const result = validateCreateProjectForm(form);
-  return result.success ? {} : result.errors;
-}
-
-export function isCreateProjectFormValid(form: CreateProjectFormState): boolean {
-  return validateCreateProjectForm(form).success;
 }
 
 export function createInitialProjectFormState(): CreateProjectFormState {

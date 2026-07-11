@@ -3,23 +3,24 @@ use rusqlite::OptionalExtension;
 
 use crate::db::error::{DbError, DbResult};
 
-const MIGRATION_001: &str = include_str!("../../migrations/001_init.sql");
-const MIGRATION_001_VERSION: &str = "001_init";
+const MIGRATION: &str = include_str!("../../migrations/001_init.sql");
+const MIGRATION_VERSION: &str = "001_init";
 
 pub fn migrate(conn: &Connection) -> DbResult<()> {
     ensure_migration_table(conn)?;
 
-    if is_applied(conn, MIGRATION_001_VERSION)? {
+    if is_applied(conn, MIGRATION_VERSION)? {
         return Ok(());
     }
 
     let tx = conn.unchecked_transaction()?;
-    tx.execute_batch(MIGRATION_001)?;
+    tx.execute_batch(MIGRATION)?;
     tx.execute(
         "INSERT INTO schema_migrations (version) VALUES (?1)",
-        [MIGRATION_001_VERSION],
+        [MIGRATION_VERSION],
     )?;
     tx.commit()?;
+
     Ok(())
 }
 
@@ -67,11 +68,11 @@ mod tests {
 
         let version_count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM schema_migrations WHERE version = ?1",
-                [MIGRATION_001_VERSION],
+                "SELECT COUNT(*) FROM schema_migrations",
+                [],
                 |row| row.get(0),
             )
-            .expect("count migration row");
+            .expect("count migration rows");
         assert_eq!(version_count, 1);
 
         let table_count: i64 = conn
@@ -81,6 +82,6 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("count tables");
-        assert!(table_count >= 13);
+        assert!(table_count >= 12);
     }
 }

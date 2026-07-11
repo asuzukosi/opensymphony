@@ -4,7 +4,10 @@ use rusqlite::{params, Connection, Row};
 use uuid::Uuid;
 
 use crate::db::error::{DbError, DbResult};
-use crate::types::{BoardColumnId, Issue, IssuePatch, ProjectBoardIssue};
+use crate::db::repos::issue_files::IssueFilesRepo;
+use crate::db::repos::issue_tags::IssueTagsRepo;
+use crate::db::repos::platforms::PlatformsRepo;
+use crate::types::{BoardColumnId, Issue, IssueHeader, IssuePatch, Platform, ProjectBoardIssue};
 
 pub struct IssueRepo<'a> {
     conn: &'a Connection,
@@ -20,23 +23,52 @@ impl<'a> IssueRepo<'a> {
         project_id: &str,
         title: &str,
         description: Option<&str>,
+        executor: Option<&str>,
+        priority: Option<i32>,
+        tags: &[String],
     ) -> DbResult<Issue> {
+        validate_executor(&PlatformsRepo::new(self.conn), project_id, executor)?;
+
         let id = Uuid::new_v4().to_string();
         let identifier = self.next_identifier(project_id)?;
 
         self.conn.execute(
-            "INSERT INTO issues (id, project_id, identifier, title, description)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![id, project_id, identifier, title, description],
+            "INSERT INTO issues (id, project_id, identifier, title, description, priority, executor)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                id,
+                project_id,
+                identifier,
+                title,
+                description,
+                priority,
+                executor
+            ],
         )?;
 
+        IssueTagsRepo::new(self.conn).replace(&id, tags)?;
+
         self.get(&id)?.ok_or_else(|| DbError::Internal("issue missing after create".into()))
+    }
+
+    pub fn build_header(&self, issue: Issue) -> DbResult<IssueHeader> {
+        let mut header = IssueHeader::from(issue);
+        header.tags = IssueTagsRepo::new(self.conn).list(&header.issue_id)?;
+        header.files = IssueFilesRepo::new(self.conn).list(&header.issue_id)?;
+        Ok(header)
+    }
+
+    pub fn get_header(&self, id: &str) -> DbResult<Option<IssueHeader>> {
+        let Some(issue) = self.get(id)? else {
+            return Ok(None);
+        };
+        Ok(Some(self.build_header(issue)?))
     }
 
     pub fn get(&self, id: &str) -> DbResult<Option<Issue>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, project_id, identifier, title, description, priority,
-                    board_column, created_at, updated_at
+                    board_column, executor, created_at, updated_at
              FROM issues WHERE id = ?1",
         )?;
 
@@ -83,6 +115,27 @@ impl<'a> IssueRepo<'a> {
         let changed = self.conn.execute(
             "UPDATE issues SET board_column = ?1, updated_at = datetime('now') WHERE id = ?2",
             params![column.as_str(), id],
+        )?;
+        if changed == 0 {
+            return Err(DbError::NotFound(format!("issue {id}")));
+        }
+
+        self.get(id)?.ok_or_else(|| DbError::NotFound(format!("issue {id}")))
+    }
+
+    pub fn set_executor(&self, id: &str, executor: Option<&str>) -> DbResult<Issue> {
+        let issue = self
+            .get(id)?
+            .ok_or_else(|| DbError::NotFound(format!("issue {id}")))?;
+        validate_executor(
+            &PlatformsRepo::new(self.conn),
+            &issue.project_id,
+            executor,
+        )?;
+
+        let changed = self.conn.execute(
+            "UPDATE issues SET executor = ?1, updated_at = datetime('now') WHERE id = ?2",
+            params![executor, id],
         )?;
         if changed == 0 {
             return Err(DbError::NotFound(format!("issue {id}")));
@@ -161,6 +214,25 @@ impl<'a> IssueRepo<'a> {
     }
 }
 
+fn validate_executor(
+    platforms: &PlatformsRepo<'_>,
+    project_id: &str,
+    executor: Option<&str>,
+) -> DbResult<()> {
+    let Some(platform_id) = executor else {
+        return Ok(());
+    };
+
+    Platform::from_str(platform_id).map_err(DbError::Internal)?;
+    if platforms.is_connected(project_id, platform_id)? {
+        Ok(())
+    } else {
+        Err(DbError::Internal(format!(
+            "executor {platform_id} is not assigned to project"
+        )))
+    }
+}
+
 fn map_issue(row: &Row<'_>) -> rusqlite::Result<Issue> {
     let board_column: String = row.get(6)?;
     Ok(Issue {
@@ -172,8 +244,9 @@ fn map_issue(row: &Row<'_>) -> rusqlite::Result<Issue> {
         priority: row.get(5)?,
         board_column: parse_board_column(&board_column)
             .map_err(|err| rusqlite::Error::InvalidColumnType(6, err.to_string(), rusqlite::types::Type::Text))?,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
+        executor: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
     })
 }
 
@@ -191,3 +264,68 @@ fn parse_board_column(value: &str) -> DbResult<BoardColumnId> {
         .map_err(|()| DbError::Internal(format!("unknown board column: {value}")))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::fixtures::{open_test_db, seed_minimal_project};
+
+    #[test]
+    fn create_issue_with_valid_executor() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+
+        let issue = IssueRepo::new(&conn)
+            .create(&fixtures.project_id, "Executor issue", None, Some("hermes"), Some(2), &[])
+            .expect("create");
+
+        assert_eq!(issue.executor.as_deref(), Some("hermes"));
+    }
+
+    #[test]
+    fn create_issue_rejects_unassigned_executor() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+
+        let err = IssueRepo::new(&conn)
+            .create(&fixtures.project_id, "Bad executor", None, Some("codex"), None, &[])
+            .expect_err("reject");
+
+        assert!(err.to_string().contains("not assigned"));
+    }
+
+    #[test]
+    fn set_executor_updates_and_clears() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+        let repo = IssueRepo::new(&conn);
+
+        let issue = repo
+            .create(&fixtures.project_id, "Mutable executor", None, None, None, &[])
+            .expect("create");
+
+        let updated = repo
+            .set_executor(&issue.id, Some("hermes"))
+            .expect("set executor");
+        assert_eq!(updated.executor.as_deref(), Some("hermes"));
+
+        let cleared = repo.set_executor(&issue.id, None).expect("clear executor");
+        assert!(cleared.executor.is_none());
+    }
+
+    #[test]
+    fn set_executor_rejects_unknown_platform() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+        let repo = IssueRepo::new(&conn);
+
+        let issue = repo
+            .create(&fixtures.project_id, "No executor", None, None, None, &[])
+            .expect("create");
+
+        let err = repo
+            .set_executor(&issue.id, Some("not-a-platform"))
+            .expect_err("reject");
+
+        assert!(err.to_string().contains("unknown platform"));
+    }
+}

@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use rusqlite::Connection;
 use std::collections::HashMap;
-use std::path::Path;
 use tauri::async_runtime::JoinHandle;
 
 use crate::db::error::{DbError, DbResult};
@@ -11,7 +10,7 @@ use crate::db::repos::project::ProjectRepo;
 use crate::db::repos::retry_queue::RetryQueueRepo;
 use crate::db::repos::run_attempt::RunAttemptRepo;
 use crate::types::{Project, RuntimeStatus, RuntimeSummary};
-use crate::db::workflow::{apply_workflow_file, workflow_changed_on_disk};
+use crate::utils::iso_timestamp;
 
 use super::audit::{self, action};
 use super::pause::PauseGateRegistry;
@@ -223,24 +222,8 @@ impl Runtime {
         Ok(())
     }
 
-    fn reload_workflow_if_changed(&mut self, conn: &Connection) -> DbResult<bool> {
-        let Some(project) = self.config.as_ref() else {
-            return Ok(false);
-        };
-        if !workflow_changed_on_disk(project) {
-            return Ok(false);
-        }
-        let Some(path) = project.workflow_file_path.as_deref() else {
-            return Ok(false);
-        };
-
-        self.config = Some(apply_workflow_file(
-            conn,
-            &self.project_id,
-            Path::new(path),
-            project.workflow_source.as_deref(),
-        )?);
-        Ok(true)
+    fn reload_workflow_if_changed(&mut self, _conn: &Connection) -> DbResult<bool> {
+        Ok(false)
     }
 
     pub(crate) fn set_timer(&mut self, handle: JoinHandle<()>) {
@@ -253,9 +236,5 @@ impl Runtime {
             handle.abort();
         }
     }
-}
-
-fn iso_timestamp(value: Option<DateTime<Utc>>) -> Option<String> {
-    value.map(|timestamp| timestamp.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
 }
 

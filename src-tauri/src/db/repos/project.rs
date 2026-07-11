@@ -1,8 +1,12 @@
+use std::str::FromStr;
+
 use rusqlite::{params, Connection, Row};
 use uuid::Uuid;
 
 use crate::db::error::{DbError, DbResult};
-use crate::types::{PermissionMode, Project, ProjectPatch, ProjectSummary};
+use crate::db::repos::platforms::write_platforms;
+use crate::types::{CreateProjectParams, PermissionMode, Platform, Project, ProjectPatch, ProjectSummary};
+use crate::utils::{parse_permission_mode, permission_mode_as_str, slugify};
 
 pub struct ProjectRepo<'a> {
     conn: &'a Connection,
@@ -13,22 +17,43 @@ impl<'a> ProjectRepo<'a> {
         Self { conn }
     }
 
-    pub fn create(&self, name: &str) -> DbResult<Project> {
+    pub fn create(&self, params: &CreateProjectParams) -> DbResult<Project> {
         let id = Uuid::new_v4().to_string();
-        let slug = slugify(name);
-        self.conn.execute(
-            "INSERT INTO projects (id, name, slug) VALUES (?1, ?2, ?3)",
-            params![id, name, slug],
+        let slug = slugify(&params.name);
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "INSERT INTO projects (
+                id, name, slug, workspace_root, prompt_template, poll_interval_ms,
+                max_concurrency, retry_max_attempts, retry_backoff_ms, permission_mode,
+                use_worktrees
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                id,
+                params.name,
+                slug,
+                params.workspace_root,
+                params.prompt_template,
+                params.poll_interval_ms,
+                params.max_concurrency,
+                params.retry_max_attempts,
+                params.retry_backoff_ms,
+                permission_mode_as_str(params.permission_mode),
+                i32::from(params.use_worktrees),
+            ],
         )?;
+        for platform_id in &params.platforms {
+            Platform::from_str(platform_id).map_err(DbError::Internal)?;
+        }
+        write_platforms(&tx, &id, &params.platforms)?;
+        tx.commit()?;
         self.get(&id)?.ok_or_else(|| DbError::Internal("project missing after create".into()))
     }
 
     pub fn get(&self, id: &str) -> DbResult<Option<Project>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, slug, workspace_root, workflow_source, workflow_file_path,
-                    workflow_file_mtime, workflow_version, workflow_last_loaded_at,
-                    max_concurrency, retry_max_attempts, retry_backoff_ms, prompt_template,
-                    poll_interval_ms, permission_mode, orchestrator_status, created_at, updated_at
+            "SELECT id, name, slug, workspace_root, prompt_template, poll_interval_ms,
+                    max_concurrency, retry_max_attempts, retry_backoff_ms, permission_mode,
+                    use_worktrees, orchestrator_status, created_at, updated_at
              FROM projects WHERE id = ?1",
         )?;
 
@@ -67,10 +92,7 @@ impl<'a> ProjectRepo<'a> {
         while let Some(row) = rows.next()? {
             let id: String = row.get(0)?;
             let permission_mode: String = row.get(1)?;
-            modes.push((
-                id,
-                parse_permission_mode(&permission_mode)?,
-            ));
+            modes.push((id, parse_permission_mode(&permission_mode)?));
         }
         Ok(modes)
     }
@@ -83,24 +105,9 @@ impl<'a> ProjectRepo<'a> {
             sets.push("name = ?");
             values.push(Box::new(name.clone()));
         }
-        if let Some(workflow_source) = &patch.workflow_source {
-            sets.push("workflow_source = ?");
-            values.push(Box::new(workflow_source.clone()));
-        }
-        if let Some(path) = &patch.workflow_file_path {
-            sets.push("workflow_file_path = ?");
-            values.push(Box::new(path.clone()));
-        }
-        if let Some(mtime) = &patch.workflow_file_mtime {
-            sets.push("workflow_file_mtime = ?");
-            values.push(Box::new(mtime.clone()));
-        }
-        if patch.workflow_file_path.is_some() || patch.workflow_file_mtime.is_some() {
-            sets.push("workflow_last_loaded_at = datetime('now')");
-        }
-        if let Some(version) = &patch.workflow_version {
-            sets.push("workflow_version = ?");
-            values.push(Box::new(version.clone()));
+        if let Some(workspace_root) = &patch.workspace_root {
+            sets.push("workspace_root = ?");
+            values.push(Box::new(workspace_root.clone()));
         }
         if let Some(prompt_template) = &patch.prompt_template {
             sets.push("prompt_template = ?");
@@ -126,6 +133,10 @@ impl<'a> ProjectRepo<'a> {
             sets.push("permission_mode = ?");
             values.push(Box::new(permission_mode_as_str(permission_mode).to_string()));
         }
+        if let Some(use_worktrees) = patch.use_worktrees {
+            sets.push("use_worktrees = ?");
+            values.push(Box::new(i32::from(use_worktrees)));
+        }
         if let Some(orchestrator_status) = &patch.orchestrator_status {
             sets.push("orchestrator_status = ?");
             values.push(Box::new(orchestrator_status.clone()));
@@ -140,10 +151,7 @@ impl<'a> ProjectRepo<'a> {
         sets.push("updated_at = datetime('now')");
         values.push(Box::new(id.to_string()));
 
-        let sql = format!(
-            "UPDATE projects SET {} WHERE id = ?",
-            sets.join(", ")
-        );
+        let sql = format!("UPDATE projects SET {} WHERE id = ?", sets.join(", "));
         let params: Vec<&dyn rusqlite::types::ToSql> =
             values.iter().map(|value| value.as_ref()).collect();
 
@@ -165,67 +173,23 @@ impl<'a> ProjectRepo<'a> {
 }
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
-    let permission_mode: String = row.get(14)?;
+    let permission_mode: String = row.get(9)?;
+    let use_worktrees: i32 = row.get(10)?;
     Ok(Project {
         id: row.get(0)?,
         name: row.get(1)?,
         slug: row.get(2)?,
         workspace_root: row.get(3)?,
-        workflow_source: row.get(4)?,
-        workflow_file_path: row.get(5)?,
-        workflow_file_mtime: row.get(6)?,
-        workflow_version: row.get(7)?,
-        workflow_last_loaded_at: row.get(8)?,
-        max_concurrency: row.get(9)?,
-        retry_max_attempts: row.get(10)?,
-        retry_backoff_ms: row.get(11)?,
-        prompt_template: row.get(12)?,
-        poll_interval_ms: row.get(13)?,
+        prompt_template: row.get(4)?,
+        poll_interval_ms: row.get(5)?,
+        max_concurrency: row.get(6)?,
+        retry_max_attempts: row.get(7)?,
+        retry_backoff_ms: row.get(8)?,
         permission_mode: parse_permission_mode(&permission_mode)
-            .map_err(|err| rusqlite::Error::InvalidColumnType(14, err.to_string(), rusqlite::types::Type::Text))?,
-        orchestrator_status: row.get(15)?,
-        created_at: row.get(16)?,
-        updated_at: row.get(17)?,
+            .map_err(|err| rusqlite::Error::InvalidColumnType(9, err.to_string(), rusqlite::types::Type::Text))?,
+        use_worktrees: use_worktrees != 0,
+        orchestrator_status: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
     })
 }
-
-fn slugify(name: &str) -> String {
-    let mut slug = String::new();
-    let mut last_was_hyphen = true;
-
-    for ch in name.chars() {
-        if ch.is_ascii_alphanumeric() {
-            slug.push(ch.to_ascii_lowercase());
-            last_was_hyphen = false;
-        } else if !last_was_hyphen {
-            slug.push('-');
-            last_was_hyphen = true;
-        }
-    }
-
-    if slug.ends_with('-') {
-        slug.pop();
-    }
-
-    if slug.is_empty() {
-        "project".into()
-    } else {
-        slug
-    }
-}
-
-fn permission_mode_as_str(mode: PermissionMode) -> &'static str {
-    match mode {
-        PermissionMode::AutoApprove => "autoApprove",
-        PermissionMode::RequiresApproval => "requiresApproval",
-    }
-}
-
-fn parse_permission_mode(value: &str) -> DbResult<PermissionMode> {
-    match value {
-        "autoApprove" => Ok(PermissionMode::AutoApprove),
-        "requiresApproval" => Ok(PermissionMode::RequiresApproval),
-        _ => Err(DbError::Internal(format!("unknown permission mode: {value}"))),
-    }
-}
-

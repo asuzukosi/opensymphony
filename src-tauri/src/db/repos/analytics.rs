@@ -1,14 +1,18 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 
-use crate::db::error::{DbError, DbResult};
+use crate::db::error::DbResult;
 use crate::orchestrator::audit;
 use crate::types::{
     ActivityTimeRange, AgentActivityOverTimeBucket, AgentActivityOverTimeResponse,
     PermissionActivityOverTimeBucket, PermissionActivityOverTimeResponse, SessionEventKind,
+};
+use crate::utils::{
+    bucket_index, build_bucket_starts, format_bucket_start, format_timestamp, parse_activity_time_range,
+    parse_timestamp,
 };
 
 pub struct AnalyticsRepo<'a> {
@@ -25,12 +29,12 @@ impl<'a> AnalyticsRepo<'a> {
         project_id: &str,
         time_range: &ActivityTimeRange,
     ) -> DbResult<AgentActivityOverTimeResponse> {
-        let (start, end, bucket_ms) = parse_time_range(time_range)?;
+        let (start, end, bucket_ms) = parse_activity_time_range(time_range)?;
         let bucket_starts = build_bucket_starts(start, end, bucket_ms);
         let mut buckets: Vec<AgentActivityOverTimeBucket> = bucket_starts
             .iter()
             .map(|bucket_start| AgentActivityOverTimeBucket {
-                bucket_start: format_timestamp(*bucket_start),
+                bucket_start: format_bucket_start(*bucket_start),
                 total_events: 0,
                 by_kind: HashMap::new(),
             })
@@ -72,7 +76,7 @@ impl<'a> AnalyticsRepo<'a> {
             };
 
             let kind = SessionEventKind::from_str(&kind).map_err(|()| {
-                DbError::Internal(format!("unknown session event kind: {kind}"))
+                crate::db::error::DbError::Internal(format!("unknown session event kind: {kind}"))
             })?;
             bucket.total_events += 1;
             *bucket.by_kind.entry(kind).or_insert(0) += 1;
@@ -86,12 +90,12 @@ impl<'a> AnalyticsRepo<'a> {
         project_id: &str,
         time_range: &ActivityTimeRange,
     ) -> DbResult<PermissionActivityOverTimeResponse> {
-        let (start, end, bucket_ms) = parse_time_range(time_range)?;
+        let (start, end, bucket_ms) = parse_activity_time_range(time_range)?;
         let bucket_starts = build_bucket_starts(start, end, bucket_ms);
         let mut buckets: Vec<PermissionActivityOverTimeBucket> = bucket_starts
             .iter()
             .map(|bucket_start| PermissionActivityOverTimeBucket {
-                bucket_start: format_timestamp(*bucket_start),
+                bucket_start: format_bucket_start(*bucket_start),
                 active_pending: 0,
                 requests_opened: 0,
                 requests_resolved: 0,
@@ -203,60 +207,11 @@ impl<'a> AnalyticsRepo<'a> {
     }
 }
 
-fn parse_time_range(
-    time_range: &ActivityTimeRange,
-) -> DbResult<(DateTime<Utc>, DateTime<Utc>, u64)> {
-    if time_range.bucket_ms == 0 {
-        return Err(DbError::Internal("bucket_ms must be greater than zero".into()));
-    }
-
-    let start = parse_timestamp(&time_range.start_at)?;
-    let end = parse_timestamp(&time_range.end_at)?;
-    if start >= end {
-        return Err(DbError::Internal("start_at must be before end_at".into()));
-    }
-
-    Ok((start, end, time_range.bucket_ms))
-}
-
-fn build_bucket_starts(start: DateTime<Utc>, end: DateTime<Utc>, bucket_ms: u64) -> Vec<DateTime<Utc>> {
-    let bucket_duration = chrono::Duration::milliseconds(bucket_ms as i64);
-    let mut bucket_starts = Vec::new();
-    let mut cursor = start;
-
-    while cursor < end {
-        bucket_starts.push(cursor);
-        cursor += bucket_duration;
-    }
-
-    bucket_starts
-}
-
-fn bucket_index(start: DateTime<Utc>, event_time: DateTime<Utc>, bucket_ms: u64) -> usize {
-    let offset_ms = (event_time - start).num_milliseconds().max(0) as u64;
-    (offset_ms / bucket_ms) as usize
-}
-
-fn format_timestamp(value: DateTime<Utc>) -> String {
-    value.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
-}
-
-fn parse_timestamp(value: &str) -> DbResult<DateTime<Utc>> {
-    if let Ok(parsed) = DateTime::parse_from_rfc3339(value) {
-        return Ok(parsed.with_timezone(&Utc));
-    }
-
-    if let Ok(parsed) = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S") {
-        return Ok(Utc.from_utc_datetime(&parsed));
-    }
-
-    Err(DbError::Internal(format!("invalid timestamp: {value}")))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::test_helpers::{open_test_db, seed_issue_with_session};
+    use chrono::TimeZone;
+    use crate::db::fixtures::{open_test_db, seed_issue_with_session};
     use uuid::Uuid;
 
     #[test]
