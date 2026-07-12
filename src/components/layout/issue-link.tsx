@@ -1,22 +1,32 @@
-import Link from "next/link";
+"use client";
+
+import { useIssueSheet } from "@/contexts/issue-sheet-context";
+import { cn } from "@/lib/utils";
 
 type IssueLinkProps = {
   issueId: string;
   label: string;
   muted?: boolean;
+  className?: string;
 };
 
-export function IssueLink({ issueId, label, muted = false }: IssueLinkProps) {
+export function IssueLink({ issueId, label, muted = false, className }: IssueLinkProps) {
+  const { openIssueSheet } = useIssueSheet();
+
   return (
-    <Link
-      href={`/issue/${issueId}`}
-      className={
+    <button
+      type="button"
+      onClick={() => {
+        openIssueSheet(issueId);
+      }}
+      className={cn(
         muted
           ? "text-muted-foreground hover:text-foreground hover:underline"
-          : "font-medium text-foreground hover:underline"
-      }
+          : "font-medium text-foreground hover:underline",
+        className,
+      )}
     >
       {label}
-    </Link>
+    </button>
   );
 }

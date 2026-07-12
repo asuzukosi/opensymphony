@@ -2,6 +2,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use crate::acp::AcpState;
+use super::runtime::{ensure_runtime_for_backlog, SharedManager};
 use crate::db::error::DbError;
 use crate::db::repos::comment::CommentRepo;
 use crate::db::repos::issue::IssueRepo;
@@ -88,6 +89,7 @@ pub fn list_session_events(
 #[tauri::command(rename = "opensymphony:create-issue")]
 pub fn create_issue(
     db: State<Arc<Db>>,
+    manager: State<SharedManager>,
     project_id: String,
     title: String,
     description: Option<String>,
@@ -104,18 +106,25 @@ pub fn create_issue(
         priority,
         &tags.unwrap_or_default(),
     )?;
-    load_header(&conn, issue)
+    let header = load_header(&conn, issue)?;
+    ensure_runtime_for_backlog(&db, &manager, &project_id)?;
+    Ok(header)
 }
 
 #[tauri::command(rename = "opensymphony:set-issue-executor")]
 pub fn set_issue_executor(
     db: State<Arc<Db>>,
+    manager: State<SharedManager>,
     issue_id: String,
     executor: Option<String>,
 ) -> Result<IssueHeader, String> {
     let conn = db.conn().map_err(|err| err.to_string())?;
     let issue = IssueRepo::new(&conn).set_executor(&issue_id, executor.as_deref())?;
-    load_header(&conn, issue)
+    let header = load_header(&conn, issue.clone())?;
+    if issue.board_column == BoardColumnId::Backlog {
+        ensure_runtime_for_backlog(&db, &manager, &issue.project_id)?;
+    }
+    Ok(header)
 }
 
 #[tauri::command(rename = "opensymphony:set-issue-auto-approve-permissions")]
@@ -207,6 +216,7 @@ pub fn update_issue_priority(
 #[tauri::command(rename = "opensymphony:transition-issue-column")]
 pub fn transition_issue_column(
     db: State<Arc<Db>>,
+    manager: State<SharedManager>,
     issue_id: String,
     column: BoardColumnId,
     actor: Option<String>,
@@ -214,7 +224,11 @@ pub fn transition_issue_column(
     let _ = actor;
     let conn = db.conn().map_err(|err| err.to_string())?;
     let issue = IssueRepo::new(&conn).transition_column(&issue_id, column)?;
-    load_header(&conn, issue)
+    let header = load_header(&conn, issue.clone())?;
+    if column == BoardColumnId::Backlog {
+        ensure_runtime_for_backlog(&db, &manager, &issue.project_id)?;
+    }
+    Ok(header)
 }
 
 #[tauri::command(rename = "opensymphony:add-issue-comment")]

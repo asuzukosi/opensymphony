@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { ActiveProjectProvider } from "@/contexts/active-project-context";
+import { IssueSheetProvider } from "@/contexts/issue-sheet-context";
 
 export default function ShellLayout({
   children,
@@ -8,7 +9,9 @@ export default function ShellLayout({
 }>) {
   return (
     <ActiveProjectProvider>
-      <AppShell>{children}</AppShell>
+      <IssueSheetProvider>
+        <AppShell>{children}</AppShell>
+      </IssueSheetProvider>
     </ActiveProjectProvider>
   );
 }

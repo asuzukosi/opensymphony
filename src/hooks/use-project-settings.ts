@@ -11,25 +11,18 @@ import {
 import type {
   RetryPolicy,
   SetProjectMaxConcurrencyResponse,
-  SetProjectNameResponse,
   SetProjectPollIntervalResponse,
-  SetProjectPromptTemplateResponse,
   SetProjectRetryPolicyResponse,
 } from "@/lib/ipc/types";
 import { requireProjectId } from "@/lib/require-project-id";
 
 export type ProjectSettings = {
-  name: string;
-  promptTemplate: string;
   pollIntervalMs: number;
   maxConcurrency: number;
   retryPolicy: RetryPolicy;
-  orchestratorStatus: string;
 };
 
 type ProjectSettingsWriteInput =
-  | { action: "setName"; name: string }
-  | { action: "setPromptTemplate"; promptTemplate: string }
   | { action: "setPollInterval"; pollIntervalMs: number }
   | { action: "setMaxConcurrency"; maxConcurrency: number }
   | { action: "setRetryPolicy"; maxAttempts: number; backoffMs: number };
@@ -48,8 +41,6 @@ export type UseProjectSettingsResult = {
   settings: ProjectSettings | undefined;
   error: Error | null;
   isLoading: boolean;
-  setName: (name: string) => Promise<void>;
-  setPromptTemplate: (promptTemplate: string) => Promise<void>;
   setPollInterval: (pollIntervalMs: number) => Promise<void>;
   setMaxConcurrency: (maxConcurrency: number) => Promise<void>;
   setRetryPolicy: (maxAttempts: number, backoffMs: number) => Promise<void>;
@@ -74,23 +65,16 @@ export function useProjectSettings(
     `project-settings:${projectId ?? "none"}`,
     async (client) => {
       const id = projectId as string;
-      const [name, promptTemplate, pollIntervalMs, maxConcurrency, retryPolicy, orchestratorStatus] =
-        await Promise.all([
-          client.getProjectName(id),
-          client.getProjectPromptTemplate(id),
-          client.getProjectPollInterval(id),
-          client.getProjectMaxConcurrency(id),
-          client.getProjectRetryPolicy(id),
-          client.getProjectOrchestratorStatus(id),
-        ]);
+      const [pollIntervalMs, maxConcurrency, retryPolicy] = await Promise.all([
+        client.getProjectPollInterval(id),
+        client.getProjectMaxConcurrency(id),
+        client.getProjectRetryPolicy(id),
+      ]);
 
       return {
-        name,
-        promptTemplate,
         pollIntervalMs,
         maxConcurrency,
         retryPolicy,
-        orchestratorStatus,
       };
     },
     { pollIntervalMs, enabled },
@@ -103,17 +87,11 @@ export function useProjectSettings(
     reset: resetMutation,
   } = useIpcMutation<
     ProjectSettingsWriteMutationInput,
-    | SetProjectNameResponse
-    | SetProjectPromptTemplateResponse
     | SetProjectPollIntervalResponse
     | SetProjectMaxConcurrencyResponse
     | SetProjectRetryPolicyResponse
   >(async (client, input) => {
     switch (input.action) {
-      case "setName":
-        return client.setProjectName(input.projectId, input.name);
-      case "setPromptTemplate":
-        return client.setProjectPromptTemplate(input.projectId, input.promptTemplate);
       case "setPollInterval":
         return client.setProjectPollInterval(input.projectId, input.pollIntervalMs);
       case "setMaxConcurrency":
@@ -134,20 +112,6 @@ export function useProjectSettings(
       await refetch();
     },
     [projectId, refetch, writeSettings],
-  );
-
-  const setName = useCallback(
-    async (name: string): Promise<void> => {
-      await mutateAndRefetch({ action: "setName", name });
-    },
-    [mutateAndRefetch],
-  );
-
-  const setPromptTemplate = useCallback(
-    async (promptTemplate: string): Promise<void> => {
-      await mutateAndRefetch({ action: "setPromptTemplate", promptTemplate });
-    },
-    [mutateAndRefetch],
   );
 
   const setPollInterval = useCallback(
@@ -175,8 +139,6 @@ export function useProjectSettings(
     settings: data,
     error,
     isLoading,
-    setName,
-    setPromptTemplate,
     setPollInterval,
     setMaxConcurrency,
     setRetryPolicy,

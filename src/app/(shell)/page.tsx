@@ -10,7 +10,7 @@ export default function HomePage() {
         eyebrow="Overview"
         icon={DashboardIcon}
         title="Dashboard"
-        description="Cross-project activity and runtime for the selected project."
+        description="Cross-project activity for the selected project."
       />
       <DashboardPageContent />
     </PageShell>

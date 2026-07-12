@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// orchestrator lifecycle: not ticking, actively ticking, or explicitly stopped.
+/// orchestrator lifecycle: idle until backlog work starts the runtime loop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RuntimeStatus {
@@ -84,31 +84,4 @@ pub struct RuntimeRecentFinishedEntry {
     pub finished_at: String,
     pub error_message: Option<String>,
     pub review_status: Option<ReviewStatus>,
-}
-
-/// issue eligible for dispatch on the next orchestrator tick.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeCandidateEntry {
-    pub issue_id: String,
-    pub identifier: String,
-    pub title: String,
-    pub priority: Option<i32>,
-    pub state_category: String,
-}
-
-/// db-derived runtime summary for a project.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeSummary {
-    pub status: RuntimeStatus,
-    pub poll_interval_ms: u32,
-    pub started_at: Option<String>,
-    pub next_tick_at: Option<String>,
-    pub tick_count: u32,
-    pub last_tick_at: Option<String>,
-    pub last_dispatched_count: u32,
-    pub last_action: Option<String>,
-    pub last_error: Option<String>,
-    pub validation_error: Option<String>,
 }

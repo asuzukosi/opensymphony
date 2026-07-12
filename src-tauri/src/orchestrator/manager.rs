@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
-use chrono::{Duration as ChronoDuration, Utc};
+use chrono::Utc;
 use rusqlite::Connection;
 use tauri::async_runtime::{JoinHandle, RuntimeHandle};
 use tokio::time::{self, MissedTickBehavior};
@@ -17,17 +17,15 @@ use crate::db::repos::project::ProjectRepo;
 use crate::db::repos::retry_queue::RetryQueueRepo;
 use crate::db::repos::run_attempt::RunAttemptRepo;
 use crate::types::{
-    BoardColumnId, ProjectPatch, RuntimeAuditEvent, RuntimeCandidateEntry,
-    RuntimeRecentFinishedEntry, RuntimeRetryEntry, RuntimeRunningEntry, RuntimeStatus,
-    RuntimeSummary, ReviewStatus, RunAttemptStatus,
+    BoardColumnId, ProjectPatch, RuntimeAuditEvent, RuntimeRecentFinishedEntry,
+    RuntimeRetryEntry, RuntimeRunningEntry, RuntimeStatus, ReviewStatus, RunAttemptStatus,
 };
 
 use super::audit::{self, action};
 use super::pause::PauseGateRegistry;
 use super::recovery::recover_stale_runs;
-use super::runtime::{Runtime, TickContext};
+use super::runtime::{CycleContext, Runtime};
 use super::workspace::{cleanup_done_workspaces, WorkspaceManager};
-use super::DEFAULT_POLL_INTERVAL_MS;
 
 pub struct Manager {
     db: Arc<Db>,
@@ -118,10 +116,6 @@ impl Manager {
             .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))
     }
 
-    pub fn runtime_summary(&self, project_id: &str) -> DbResult<RuntimeSummary> {
-        self.get(project_id).map(Runtime::summary)
-    }
-
     pub fn runtime_running(
         &self,
         conn: &Connection,
@@ -200,24 +194,6 @@ impl Manager {
         Ok(entries)
     }
 
-    pub fn runtime_candidates(
-        &self,
-        conn: &Connection,
-        project_id: &str,
-    ) -> DbResult<Vec<RuntimeCandidateEntry>> {
-        let cards = IssueRepo::new(conn).list_candidates(project_id)?;
-        Ok(cards
-            .into_iter()
-            .map(|card| RuntimeCandidateEntry {
-                issue_id: card.issue_id,
-                identifier: card.identifier,
-                title: card.title,
-                priority: card.priority,
-                state_category: BoardColumnId::Backlog.as_str().into(),
-            })
-            .collect())
-    }
-
     pub fn runtime_recent_finished(
         &self,
         conn: &Connection,
@@ -275,8 +251,34 @@ impl Manager {
             let runtime = self.get_mut(&summary.id)?;
             runtime.reload_config(conn)?;
             runtime.apply_orchestrator_status(&summary.orchestrator_status);
+            self.ensure_runtime_for_backlog(conn, &summary.id)?;
         }
         Ok(())
+    }
+
+    pub fn ensure_runtime_for_backlog(
+        &mut self,
+        conn: &Connection,
+        project_id: &str,
+    ) -> DbResult<()> {
+        if !Self::project_has_backlog_issues(conn, project_id)? {
+            return Ok(());
+        }
+
+        self.register_project(project_id);
+        if self.get(project_id)?.status != RuntimeStatus::Running {
+            self.start_runtime(conn, project_id)?;
+        }
+        Ok(())
+    }
+
+    fn project_has_backlog_issues(conn: &Connection, project_id: &str) -> DbResult<bool> {
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM issues WHERE project_id = ?1 AND board_column = ?2",
+            rusqlite::params![project_id, BoardColumnId::Backlog.as_str()],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
     }
 
     pub fn start(&mut self, project_id: &str, conn: &Connection) -> DbResult<()> {
@@ -301,24 +303,11 @@ impl Manager {
             audit::log(conn, project_id, action::WORKSPACE_CLEANUP_STARTUP, None)?;
         }
         audit::log(conn, project_id, action::RUNTIME_STARTED, None)?;
-        let poll_ms = self
-            .get(project_id)?
-            .effective_poll_interval_ms()
-            .unwrap_or(DEFAULT_POLL_INTERVAL_MS);
+        let poll_ms = self.get(project_id)?.poll_interval_ms();
         self.spawn_poll_timer(project_id, poll_ms)
     }
 
-    pub fn stop(&mut self, project_id: &str, conn: &Connection) -> DbResult<()> {
-        self.get_mut(project_id)?.stop();
-        audit::log(conn, project_id, action::RUNTIME_STOPPED, None)?;
-        Ok(())
-    }
-
-    pub fn tick_now(&mut self, project_id: &str, conn: &Connection) -> DbResult<()> {
-        self.tick_project(project_id, conn)
-    }
-
-    pub fn start_runtime(&mut self, conn: &Connection, project_id: &str) -> DbResult<RuntimeSummary> {
+    pub fn start_runtime(&mut self, conn: &Connection, project_id: &str) -> DbResult<()> {
         self.register_project(project_id);
         ProjectRepo::new(conn).update(
             project_id,
@@ -328,90 +317,10 @@ impl Manager {
             },
         )?;
         self.start(project_id, conn)?;
-        self.runtime_summary(project_id)
+        self.run_project_cycle(project_id, conn)
     }
 
-    pub fn stop_runtime(&mut self, conn: &Connection, project_id: &str) -> DbResult<RuntimeSummary> {
-        self.register_project(project_id);
-        ProjectRepo::new(conn).update(
-            project_id,
-            &ProjectPatch {
-                orchestrator_status: Some("stopped".into()),
-                ..ProjectPatch::default()
-            },
-        )?;
-        self.stop(project_id, conn)?;
-        self.runtime_summary(project_id)
-    }
-
-    pub fn tick_runtime(&mut self, conn: &Connection, project_id: &str) -> DbResult<RuntimeSummary> {
-        self.register_project(project_id);
-        self.tick_now(project_id, conn)?;
-        self.runtime_summary(project_id)
-    }
-
-    pub fn set_runtime_poll_interval(
-        &mut self,
-        conn: &Connection,
-        project_id: &str,
-        poll_interval_ms: i32,
-    ) -> DbResult<u32> {
-        let project = ProjectRepo::new(conn).update(
-            project_id,
-            &ProjectPatch {
-                poll_interval_ms: Some(poll_interval_ms),
-                ..ProjectPatch::default()
-            },
-        )?;
-        let poll_ms = project.poll_interval_ms as u32;
-        self.set_poll_interval_override(project_id, poll_ms)?;
-        Ok(poll_ms)
-    }
-
-    pub fn clear_runtime_poll_interval_override(
-        &mut self,
-        conn: &Connection,
-        project_id: &str,
-    ) -> DbResult<u32> {
-        let project = ProjectRepo::new(conn)
-            .get(project_id)?
-            .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))?;
-        let poll_interval_ms = project.poll_interval_ms;
-        let updated = ProjectRepo::new(conn).update(
-            project_id,
-            &ProjectPatch {
-                poll_interval_ms: Some(poll_interval_ms),
-                ..ProjectPatch::default()
-            },
-        )?;
-        let poll_ms = updated.poll_interval_ms as u32;
-        self.clear_poll_interval_override(project_id, poll_ms)?;
-        Ok(poll_ms)
-    }
-
-    pub fn set_poll_interval_override(&mut self, project_id: &str, poll_ms: u32) -> DbResult<()> {
-        let status = self.get(project_id)?.status;
-        self.get_mut(project_id)?.poll_interval_override = Some(poll_ms);
-        if status == RuntimeStatus::Running {
-            self.spawn_poll_timer(project_id, poll_ms)?;
-        }
-        Ok(())
-    }
-
-    pub fn clear_poll_interval_override(&mut self, project_id: &str, poll_ms: u32) -> DbResult<()> {
-        let status = self.get(project_id)?.status;
-        self.get_mut(project_id)?.poll_interval_override = None;
-        if status == RuntimeStatus::Running {
-            self.spawn_poll_timer(project_id, poll_ms)?;
-        }
-        Ok(())
-    }
-
-    pub(crate) fn tick_project(&mut self, project_id: &str, conn: &Connection) -> DbResult<()> {
-        let old_poll_ms = self.get(project_id)?.effective_poll_interval_ms();
-        let status = self.get(project_id)?.status;
-        let has_override = self.get(project_id)?.poll_interval_override.is_some();
-
+    pub(crate) fn run_project_cycle(&mut self, project_id: &str, conn: &Connection) -> DbResult<()> {
         let Manager {
             runtimes,
             adapter,
@@ -422,26 +331,12 @@ impl Manager {
         let runtime = runtimes
             .get_mut(project_id)
             .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))?;
-        let tick_ctx = TickContext {
+        let cycle_ctx = CycleContext {
             adapter: adapter.as_ref(),
             workspaces,
             pause_gates,
         };
-        runtime.tick(conn, &tick_ctx)?;
-
-        if has_override || status != RuntimeStatus::Running {
-            return Ok(());
-        }
-
-        let new_poll_ms = self
-            .get(project_id)?
-            .effective_poll_interval_ms()
-            .unwrap_or(DEFAULT_POLL_INTERVAL_MS);
-        if old_poll_ms == Some(new_poll_ms) {
-            return Ok(());
-        }
-
-        self.spawn_poll_timer(project_id, new_poll_ms)
+        runtime.run_cycle(conn, &cycle_ctx)
     }
 
     pub(crate) fn get_mut(&mut self, project_id: &str) -> DbResult<&mut Runtime> {
@@ -457,8 +352,6 @@ impl Manager {
         let project_id = project_id.to_string();
 
         let runtime = self.get_mut(&project_id)?;
-        runtime.next_tick_at = Some(Utc::now() + ChronoDuration::milliseconds(poll_ms as i64));
-
         if let Some(manager) = manager {
             runtime.set_timer(spawn_poll_timer(
                 async_runtime,
@@ -532,12 +425,7 @@ fn spawn_poll_timer(
                 break;
             }
 
-            if let Some(poll_ms) = project_runtime.effective_poll_interval_ms() {
-                project_runtime.next_tick_at =
-                    Some(Utc::now() + ChronoDuration::milliseconds(poll_ms as i64));
-            }
-
-            if guard.tick_project(&project_id, &conn).is_err() {
+            if guard.run_project_cycle(&project_id, &conn).is_err() {
                 break;
             }
         }

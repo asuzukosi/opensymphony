@@ -8,29 +8,20 @@ import {
 } from "@/lib/ipc/hooks";
 import type {
   RuntimeAuditEvent,
-  RuntimeCandidateEntry,
   RuntimeRecentFinishedEntry,
   RuntimeRetryEntry,
   RuntimeRunningEntry,
-  RuntimeSummary,
 } from "@/lib/ipc/types";
 import { requireProjectId } from "@/lib/require-project-id";
 
-type RuntimeData = {
-  summary: RuntimeSummary;
+type RuntimeActivityData = {
   running: RuntimeRunningEntry[];
   retrying: RuntimeRetryEntry[];
-  candidates: RuntimeCandidateEntry[];
   recentFinished: RuntimeRecentFinishedEntry[];
   recentEvents: RuntimeAuditEvent[];
 };
 
 type RuntimeControlInput =
-  | { action: "start"; projectId: string }
-  | { action: "stop"; projectId: string }
-  | { action: "tick"; projectId: string }
-  | { action: "setPollInterval"; projectId: string; pollIntervalMs: number }
-  | { action: "clearPollIntervalOverride"; projectId: string }
   | { action: "pause"; projectId: string; runAttemptId: string }
   | { action: "resume"; projectId: string; runAttemptId: string }
   | { action: "cancel"; projectId: string; runAttemptId: string };
@@ -42,19 +33,12 @@ export type UseRuntimeOptions = {
 };
 
 export type UseRuntimeResult = {
-  summary: RuntimeSummary | undefined;
   running: RuntimeRunningEntry[] | undefined;
   retrying: RuntimeRetryEntry[] | undefined;
-  candidates: RuntimeCandidateEntry[] | undefined;
   recentFinished: RuntimeRecentFinishedEntry[] | undefined;
   recentEvents: RuntimeAuditEvent[] | undefined;
   error: Error | null;
   isLoading: boolean;
-  startRuntime: () => Promise<void>;
-  stopRuntime: () => Promise<void>;
-  tickRuntime: () => Promise<void>;
-  setRuntimePollInterval: (pollIntervalMs: number) => Promise<void>;
-  clearRuntimePollIntervalOverride: () => Promise<void>;
   pauseRun: (runAttemptId: string) => Promise<void>;
   resumeRun: (runAttemptId: string) => Promise<void>;
   cancelRun: (runAttemptId: string) => Promise<void>;
@@ -71,25 +55,20 @@ export function useRuntime(options?: UseRuntimeOptions): UseRuntimeResult {
   } = options ?? {};
   const enabled = enabledOption && projectId != null;
 
-  const { data, error, isLoading, refetch } = useIpcQuery<RuntimeData>(
-    `runtime:${projectId ?? "none"}`,
+  const { data, error, isLoading, refetch } = useIpcQuery<RuntimeActivityData>(
+    `runtime-activity:${projectId ?? "none"}`,
     async (client) => {
       const id = projectId as string;
-      const [summary, running, retrying, candidates, recentFinished, recentEvents] =
-        await Promise.all([
-          client.getRuntimeSummary(id),
-          client.getRuntimeRunning(id),
-          client.getRuntimeRetrying(id),
-          client.getRuntimeCandidates(id),
-          client.getRuntimeRecentFinished(id),
-          client.getRuntimeRecentEvents(id),
-        ]);
+      const [running, retrying, recentFinished, recentEvents] = await Promise.all([
+        client.getRuntimeRunning(id),
+        client.getRuntimeRetrying(id),
+        client.getRuntimeRecentFinished(id),
+        client.getRuntimeRecentEvents(id),
+      ]);
 
       return {
-        summary,
         running,
         retrying,
-        candidates,
         recentFinished,
         recentEvents,
       };
@@ -104,16 +83,6 @@ export function useRuntime(options?: UseRuntimeOptions): UseRuntimeResult {
     reset: resetControl,
   } = useIpcMutation(async (client, input: RuntimeControlInput) => {
     switch (input.action) {
-      case "start":
-        return client.startRuntime(input.projectId);
-      case "stop":
-        return client.stopRuntime(input.projectId);
-      case "tick":
-        return client.tickRuntime(input.projectId);
-      case "setPollInterval":
-        return client.setRuntimePollInterval(input.projectId, input.pollIntervalMs);
-      case "clearPollIntervalOverride":
-        return client.clearRuntimePollIntervalOverride(input.projectId);
       case "pause":
         return client.pauseRun(input.projectId, input.runAttemptId);
       case "resume":
@@ -122,41 +91,6 @@ export function useRuntime(options?: UseRuntimeOptions): UseRuntimeResult {
         return client.cancelRun(input.projectId, input.runAttemptId);
     }
   });
-
-  const startRuntime = useCallback(async (): Promise<void> => {
-    await runControl({ action: "start", projectId: requireProjectId(projectId) });
-    await refetch();
-  }, [projectId, refetch, runControl]);
-
-  const stopRuntime = useCallback(async (): Promise<void> => {
-    await runControl({ action: "stop", projectId: requireProjectId(projectId) });
-    await refetch();
-  }, [projectId, refetch, runControl]);
-
-  const tickRuntime = useCallback(async (): Promise<void> => {
-    await runControl({ action: "tick", projectId: requireProjectId(projectId) });
-    await refetch();
-  }, [projectId, refetch, runControl]);
-
-  const setRuntimePollInterval = useCallback(
-    async (pollIntervalMs: number): Promise<void> => {
-      await runControl({
-        action: "setPollInterval",
-        projectId: requireProjectId(projectId),
-        pollIntervalMs,
-      });
-      await refetch();
-    },
-    [projectId, refetch, runControl],
-  );
-
-  const clearRuntimePollIntervalOverride = useCallback(async (): Promise<void> => {
-    await runControl({
-      action: "clearPollIntervalOverride",
-      projectId: requireProjectId(projectId),
-    });
-    await refetch();
-  }, [projectId, refetch, runControl]);
 
   const pauseRun = useCallback(
     async (runAttemptId: string): Promise<void> => {
@@ -195,19 +129,12 @@ export function useRuntime(options?: UseRuntimeOptions): UseRuntimeResult {
   );
 
   return {
-    summary: data?.summary,
     running: data?.running,
     retrying: data?.retrying,
-    candidates: data?.candidates,
     recentFinished: data?.recentFinished,
     recentEvents: data?.recentEvents,
     error,
     isLoading,
-    startRuntime,
-    stopRuntime,
-    tickRuntime,
-    setRuntimePollInterval,
-    clearRuntimePollIntervalOverride,
     pauseRun,
     resumeRun,
     cancelRun,

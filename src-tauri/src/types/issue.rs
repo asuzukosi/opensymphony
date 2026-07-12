@@ -27,7 +27,7 @@ pub struct IssuePatch {
     pub priority: Option<i32>,
 }
 
-/// slim issue slice for the issue detail header.
+/// slim issue slice for the issue detail sheet.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueHeader {

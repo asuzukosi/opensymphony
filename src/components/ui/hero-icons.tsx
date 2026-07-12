@@ -82,18 +82,6 @@ export function PlusIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-export function ArrowLeftIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <HeroIcon {...props}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
-      />
-    </HeroIcon>
-  );
-}
-
 export function DocumentTextIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <HeroIcon {...props}>
@@ -238,6 +226,30 @@ export function BoardIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function AgentsIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <HeroIcon {...props}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m21 7.5-2.25-1.313M21 7.5v2.25m0-2.25-2.25 1.313M3 7.5l2.25-1.313M3 7.5l2.25 1.313M3 7.5v2.25m9 3 2.25-1.313M12 12.75l-2.25-1.313M12 12.75V15m0 6.75 2.25-1.313M12 21.75V19.5m0 2.25-2.25-1.313m0-16.875L12 2.25l2.25 1.313M21 14.25v2.25l-2.25 1.313m-13.5 0L3 16.5v-2.25"
+      />
+    </HeroIcon>
+  );
+}
+
+export function CodeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <HeroIcon {...props}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"
+      />
+    </HeroIcon>
+  );
+}
+
 export function SettingsIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <HeroIcon {...props}>
@@ -263,6 +275,19 @@ export function PlayCircleIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function StopCircleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <HeroIcon {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 9.563C9 9.252 9.252 9 9.563 9h4.874c.311 0 .563.252.563.563v4.874c0 .311-.252.563-.563.563H9.564A.562.562 0 0 1 9 14.437V9.564Z"
+      />
+    </HeroIcon>
+  );
+}
+
 export function ArrowPathIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <HeroIcon {...props}>
@@ -282,6 +307,18 @@ export function ChartBarIcon(props: SVGProps<SVGSVGElement>) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z"
+      />
+    </HeroIcon>
+  );
+}
+
+export function BadgeCheckIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <HeroIcon {...props}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.745 3.745 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z"
       />
     </HeroIcon>
   );

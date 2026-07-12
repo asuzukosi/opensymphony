@@ -12,4 +12,4 @@ pub use platform_install::{install_status, list_install_statuses};
 pub use retry::retry_delay_ms;
 pub use slug::slugify;
 pub use time_buckets::{bucket_index, build_bucket_starts, format_bucket_start, parse_activity_time_range};
-pub use timestamp::{format_timestamp, iso_timestamp, parse_timestamp};
+pub use timestamp::{format_timestamp, parse_timestamp};

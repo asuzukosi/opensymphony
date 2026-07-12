@@ -48,9 +48,6 @@ const pageTitles: Record<string, string> = {
 };
 
 function resolvePageTitle(pathname: string): string {
-  if (pathname.startsWith("/issue/")) {
-    return "Issue detail";
-  }
   return pageTitles[pathname] ?? "Open Symphony";
 }
 

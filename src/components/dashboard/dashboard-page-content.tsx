@@ -8,8 +8,6 @@ import { AuditPanel } from "@/components/dashboard/audit-panel";
 import { FinishedPanel } from "@/components/dashboard/finished-panel";
 import { RetryPanel } from "@/components/dashboard/retry-panel";
 import { RunningPanel } from "@/components/dashboard/running-panel";
-import { RuntimePanel } from "@/components/dashboard/runtime-panel";
-import { StatCards } from "@/components/stat-cards/stat-cards";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useActiveProject } from "@/contexts/active-project-context";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
@@ -34,7 +32,7 @@ export function DashboardPageContent() {
   const runtimeControlsEnabled = activeProjectId != null;
 
   const errors = [
-    runtime.error ? { title: "Runtime data unavailable", message: runtime.error.message } : null,
+    runtime.error ? { title: "Session data unavailable", message: runtime.error.message } : null,
     activity.error ? { title: "Activity data unavailable", message: activity.error.message } : null,
   ].filter((item): item is { title: string; message: string } => item != null);
 
@@ -52,18 +50,7 @@ export function DashboardPageContent() {
         </div>
       ) : null}
 
-      <section aria-label="Key metrics">
-        <StatCards
-          summary={runtime.summary}
-          running={runtime.running}
-          retrying={runtime.retrying}
-          candidates={runtime.candidates}
-          isLoading={runtime.isLoading}
-        />
-      </section>
-
-      <section aria-label="Runtime overview" className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        <RuntimePanel projectId={activeProjectId ?? null} runtime={runtime} />
+      <section aria-label="Active work" className="grid gap-4 lg:grid-cols-2">
         <RunningPanel
           running={runtime.running}
           isLoading={runtime.isLoading}
@@ -72,9 +59,7 @@ export function DashboardPageContent() {
           onCancelRun={runtimeControlsEnabled ? runtime.cancelRun : undefined}
           isControlling={runtime.isControlling}
         />
-        <div className="min-w-0 lg:col-span-2 xl:col-span-1">
-          <RetryPanel retrying={runtime.retrying} isLoading={runtime.isLoading} />
-        </div>
+        <RetryPanel retrying={runtime.retrying} isLoading={runtime.isLoading} />
       </section>
 
       <section aria-label="Activity charts">

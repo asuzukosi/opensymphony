@@ -27,6 +27,7 @@ export interface ProjectBoardIssue {
   identifier: string;
   title: string;
   priority: number | null;
+  executor: PlatformId | null;
 }
 
 export interface ProjectIssueListItem extends ProjectBoardIssue {
@@ -180,33 +181,6 @@ export interface RuntimeRecentFinishedEntry {
   reviewStatus: ReviewStatus | null;
 }
 
-export interface RuntimeCandidateEntry {
-  issueId: string;
-  identifier: string;
-  title: string;
-  priority: number | null;
-  stateCategory: string;
-}
-
-export interface RuntimeSummary {
-  status: RuntimeStatus;
-  pollIntervalMs: number;
-  startedAt: string | null;
-  nextTickAt: string | null;
-  tickCount: number;
-  lastTickAt: string | null;
-  lastDispatchedCount: number;
-  lastAction: string | null;
-  lastError: string | null;
-  validationError: string | null;
-}
-
-export type StartRuntimeResponse = RuntimeSummary;
-export type StopRuntimeResponse = RuntimeSummary;
-export type TickRuntimeResponse = RuntimeSummary;
-export type SetRuntimePollIntervalResponse = number;
-export type ClearRuntimePollIntervalOverrideResponse = number;
-
 // --- analytics reads ---
 
 export interface ActivityTimeRange {
@@ -254,7 +228,6 @@ export interface RetryPolicy {
 
 export type CreateProjectResponse = ProjectSummary;
 export type SetProjectNameResponse = string;
-export type SetProjectPromptTemplateResponse = string;
 export type SetProjectPollIntervalResponse = number;
 export type SetProjectMaxConcurrencyResponse = number;
 export type SetProjectRetryPolicyResponse = RetryPolicy;

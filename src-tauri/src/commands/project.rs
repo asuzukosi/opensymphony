@@ -24,16 +24,6 @@ pub fn list_project_summaries(db: State<Arc<Db>>) -> Result<Vec<ProjectSummary>,
         .map_err(|err| err.to_string())
 }
 
-#[tauri::command(rename = "opensymphony:get-project-name")]
-pub fn get_project_name(db: State<Arc<Db>>, project_id: String) -> Result<String, String> {
-    Ok(require_project(db, &project_id)?.name)
-}
-
-#[tauri::command(rename = "opensymphony:get-project-prompt-template")]
-pub fn get_project_prompt_template(db: State<Arc<Db>>, project_id: String) -> Result<String, String> {
-    Ok(require_project(db, &project_id)?.prompt_template)
-}
-
 #[tauri::command(rename = "opensymphony:get-project-poll-interval")]
 pub fn get_project_poll_interval(db: State<Arc<Db>>, project_id: String) -> Result<u32, String> {
     Ok(require_project(db, &project_id)?.poll_interval_ms as u32)
@@ -103,25 +93,6 @@ pub fn set_project_name(
         )
         .map_err(|err| err.to_string())?;
     Ok(project.name)
-}
-
-#[tauri::command(rename = "opensymphony:set-project-prompt-template")]
-pub fn set_project_prompt_template(
-    db: State<Arc<Db>>,
-    project_id: String,
-    prompt_template: String,
-) -> Result<String, String> {
-    let conn = db.conn().map_err(|err| err.to_string())?;
-    let project = ProjectRepo::new(&conn)
-        .update(
-            &project_id,
-            &ProjectPatch {
-                prompt_template: Some(prompt_template),
-                ..ProjectPatch::default()
-            },
-        )
-        .map_err(|err| err.to_string())?;
-    Ok(project.prompt_template)
 }
 
 #[tauri::command(rename = "opensymphony:set-project-poll-interval")]

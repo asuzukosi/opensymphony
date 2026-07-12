@@ -9,15 +9,11 @@ import {
 } from "@/lib/ipc/hooks";
 import type {
   AddIssueCommentResponse,
-  BoardColumnId,
   IssueComment,
   IssueDetailRunAttempt,
   IssueHeader,
   SessionEvent,
-  TransitionIssueColumnResponse,
-  UpdateIssueDescriptionResponse,
   UpdateIssuePriorityResponse,
-  UpdateIssueTitleResponse,
   SetIssueExecutorResponse,
   SetIssueTagsResponse,
 } from "@/lib/ipc/types";
@@ -30,10 +26,7 @@ export type IssueDetail = IssueHeader & {
 };
 
 type IssueWriteInput =
-  | { action: "updateTitle"; title: string }
-  | { action: "updateDescription"; description: string | null }
   | { action: "updatePriority"; priority: number | null }
-  | { action: "transitionColumn"; column: BoardColumnId; actor?: string | null }
   | { action: "setExecutor"; executor: PlatformId | null }
   | { action: "setAutoApprovePermissions"; autoApprovePermissions: boolean }
   | { action: "setTags"; tags: string[] }
@@ -54,10 +47,7 @@ export type UseIssueResult = {
   issue: IssueDetail | undefined;
   error: Error | null;
   isLoading: boolean;
-  updateTitle: (title: string) => Promise<void>;
-  updateDescription: (description: string | null) => Promise<void>;
   updatePriority: (priority: number | null) => Promise<void>;
-  transitionColumn: (column: BoardColumnId, actor?: string | null) => Promise<void>;
   setExecutor: (executor: PlatformId | null) => Promise<void>;
   setAutoApprovePermissions: (autoApprovePermissions: boolean) => Promise<void>;
   setTags: (tags: string[]) => Promise<void>;
@@ -112,23 +102,14 @@ export function useIssue(options: UseIssueOptions): UseIssueResult {
   } = useIpcMutation<
     IssueWriteMutationInput,
     | IssueHeader
-    | UpdateIssueTitleResponse
-    | UpdateIssueDescriptionResponse
     | UpdateIssuePriorityResponse
-    | TransitionIssueColumnResponse
     | SetIssueExecutorResponse
     | SetIssueTagsResponse
     | AddIssueCommentResponse
   >(async (client, input) => {
     switch (input.action) {
-      case "updateTitle":
-        return client.updateIssueTitle(input.issueId, input.title);
-      case "updateDescription":
-        return client.updateIssueDescription(input.issueId, input.description);
       case "updatePriority":
         return client.updateIssuePriority(input.issueId, input.priority);
-      case "transitionColumn":
-        return client.transitionIssueColumn(input.issueId, input.column, input.actor ?? null);
       case "setExecutor":
         return client.setIssueExecutor(input.issueId, input.executor);
       case "setAutoApprovePermissions":
@@ -155,30 +136,9 @@ export function useIssue(options: UseIssueOptions): UseIssueResult {
     [issueId, refetch, writeIssue],
   );
 
-  const updateTitle = useCallback(
-    async (title: string): Promise<void> => {
-      await mutateAndRefetch({ action: "updateTitle", title });
-    },
-    [mutateAndRefetch],
-  );
-
-  const updateDescription = useCallback(
-    async (description: string | null): Promise<void> => {
-      await mutateAndRefetch({ action: "updateDescription", description });
-    },
-    [mutateAndRefetch],
-  );
-
   const updatePriority = useCallback(
     async (priority: number | null): Promise<void> => {
       await mutateAndRefetch({ action: "updatePriority", priority });
-    },
-    [mutateAndRefetch],
-  );
-
-  const transitionColumn = useCallback(
-    async (column: BoardColumnId, actor?: string | null): Promise<void> => {
-      await mutateAndRefetch({ action: "transitionColumn", column, actor });
     },
     [mutateAndRefetch],
   );
@@ -222,10 +182,7 @@ export function useIssue(options: UseIssueOptions): UseIssueResult {
     issue: data,
     error,
     isLoading,
-    updateTitle,
-    updateDescription,
     updatePriority,
-    transitionColumn,
     setExecutor,
     setAutoApprovePermissions,
     setTags,

@@ -13,12 +13,8 @@ export function groupIssuesByColumn(
   ) as Record<BoardColumnId, ProjectBoardIssue[]>;
 
   for (const issue of issues) {
-    grouped[issue.boardColumn].push({
-      issueId: issue.issueId,
-      identifier: issue.identifier,
-      title: issue.title,
-      priority: issue.priority,
-    });
+    const { boardColumn, ...card } = issue;
+    grouped[boardColumn].push(card);
   }
 
   return grouped;

@@ -15,15 +15,17 @@ export function FormRow({ label, description, htmlFor, children, className }: Fo
   return (
     <div
       className={cn(
-        "flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between",
+        "grid gap-4 lg:grid-cols-[minmax(12rem,16rem)_minmax(0,18rem)] lg:items-start lg:gap-8",
         className,
       )}
     >
-      <div className="space-y-1 sm:max-w-md">
+      <div className="min-w-0 space-y-1 text-xs">
         <Label htmlFor={htmlFor}>{label}</Label>
-        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+        {description ? (
+          <p className="text-xs text-muted-foreground">{description}</p>
+        ) : null}
       </div>
-      <div className="w-full shrink-0 sm:w-72">{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }

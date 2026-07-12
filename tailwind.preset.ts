@@ -113,7 +113,6 @@ const preset = {
       },
       width: {
         sidebar: "var(--sidebar-width)",
-        "settings-nav": "var(--settings-nav-width)",
         "board-column": "var(--board-column-width)",
       },
       gap: {

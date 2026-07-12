@@ -5,8 +5,8 @@ import type {
   ActivityTimeRange,
   AddIssueCommentResponse,
   AgentActivityOverTimeResponse,
+  AttachIssueFilesResponse,
   BoardColumnId,
-  ClearRuntimePollIntervalOverrideResponse,
   CreateIssueResponse,
   CreateProjectResponse,
   IssueComment,
@@ -20,25 +20,17 @@ import type {
   ProjectSummary,
   RetryPolicy,
   RuntimeAuditEvent,
-  RuntimeCandidateEntry,
   RuntimeRecentFinishedEntry,
   RuntimeRetryEntry,
   RuntimeRunningEntry,
-  RuntimeSummary,
   SessionEvent,
+  SetIssueAutoApprovePermissionsResponse,
+  SetIssueExecutorResponse,
+  SetIssueTagsResponse,
   SetProjectMaxConcurrencyResponse,
   SetProjectNameResponse,
   SetProjectPollIntervalResponse,
-  SetProjectPromptTemplateResponse,
   SetProjectRetryPolicyResponse,
-  SetRuntimePollIntervalResponse,
-  AttachIssueFilesResponse,
-  SetIssueExecutorResponse,
-  SetIssueAutoApprovePermissionsResponse,
-  SetIssueTagsResponse,
-  StartRuntimeResponse,
-  StopRuntimeResponse,
-  TickRuntimeResponse,
   TransitionIssueColumnResponse,
   UpdateIssueDescriptionResponse,
   UpdateIssuePriorityResponse,
@@ -109,30 +101,16 @@ export interface OpenSymphonyDesktopApi {
     decision: PermissionDecision,
   ): Promise<void>;
   // runtime reads
-  getRuntimeSummary(projectId: string): Promise<RuntimeSummary>;
   getRuntimeRunning(projectId: string): Promise<RuntimeRunningEntry[]>;
   getRuntimeRetrying(projectId: string): Promise<RuntimeRetryEntry[]>;
-  getRuntimeCandidates(projectId: string): Promise<RuntimeCandidateEntry[]>;
   getRuntimeRecentFinished(projectId: string): Promise<RuntimeRecentFinishedEntry[]>;
   getRuntimeRecentEvents(projectId: string): Promise<RuntimeAuditEvent[]>;
   // runtime writes
-  startRuntime(projectId: string): Promise<StartRuntimeResponse>;
-  stopRuntime(projectId: string): Promise<StopRuntimeResponse>;
-  tickRuntime(projectId: string): Promise<TickRuntimeResponse>;
-  setRuntimePollInterval(
-    projectId: string,
-    pollIntervalMs: number,
-  ): Promise<SetRuntimePollIntervalResponse>;
-  clearRuntimePollIntervalOverride(
-    projectId: string,
-  ): Promise<ClearRuntimePollIntervalOverrideResponse>;
   pauseRun(projectId: string, runAttemptId: string): Promise<void>;
   resumeRun(projectId: string, runAttemptId: string): Promise<void>;
   cancelRun(projectId: string, runAttemptId: string): Promise<void>;
   // project reads
   listProjectSummaries(): Promise<ProjectSummary[]>;
-  getProjectName(projectId: string): Promise<string>;
-  getProjectPromptTemplate(projectId: string): Promise<string>;
   getProjectPollInterval(projectId: string): Promise<number>;
   getProjectMaxConcurrency(projectId: string): Promise<number>;
   getProjectRetryPolicy(projectId: string): Promise<RetryPolicy>;
@@ -141,10 +119,6 @@ export interface OpenSymphonyDesktopApi {
   createProject(input: CreateProjectInput): Promise<CreateProjectResponse>;
   deleteProject(projectId: string): Promise<void>;
   setProjectName(projectId: string, name: string): Promise<SetProjectNameResponse>;
-  setProjectPromptTemplate(
-    projectId: string,
-    promptTemplate: string,
-  ): Promise<SetProjectPromptTemplateResponse>;
   setProjectPollInterval(
     projectId: string,
     pollIntervalMs: number,
@@ -239,14 +213,10 @@ function createIpcClient(): OpenSymphonyDesktopApi {
     resolveSessionPermission: (permissionId, decision) =>
       invoke<void>(IPC_CHANNELS.resolveSessionPermission, { permissionId, decision }),
     // runtime reads
-    getRuntimeSummary: (projectId) =>
-      invoke<RuntimeSummary>(IPC_CHANNELS.getRuntimeSummary, { projectId }),
     getRuntimeRunning: (projectId) =>
       invoke<RuntimeRunningEntry[]>(IPC_CHANNELS.getRuntimeRunning, { projectId }),
     getRuntimeRetrying: (projectId) =>
       invoke<RuntimeRetryEntry[]>(IPC_CHANNELS.getRuntimeRetrying, { projectId }),
-    getRuntimeCandidates: (projectId) =>
-      invoke<RuntimeCandidateEntry[]>(IPC_CHANNELS.getRuntimeCandidates, { projectId }),
     getRuntimeRecentFinished: (projectId) =>
       invoke<RuntimeRecentFinishedEntry[]>(IPC_CHANNELS.getRuntimeRecentFinished, {
         projectId,
@@ -254,22 +224,6 @@ function createIpcClient(): OpenSymphonyDesktopApi {
     getRuntimeRecentEvents: (projectId) =>
       invoke<RuntimeAuditEvent[]>(IPC_CHANNELS.getRuntimeRecentEvents, { projectId }),
     // runtime writes
-    startRuntime: (projectId) =>
-      invoke<StartRuntimeResponse>(IPC_CHANNELS.startRuntime, { projectId }),
-    stopRuntime: (projectId) =>
-      invoke<StopRuntimeResponse>(IPC_CHANNELS.stopRuntime, { projectId }),
-    tickRuntime: (projectId) =>
-      invoke<TickRuntimeResponse>(IPC_CHANNELS.tickRuntime, { projectId }),
-    setRuntimePollInterval: (projectId, pollIntervalMs) =>
-      invoke<SetRuntimePollIntervalResponse>(IPC_CHANNELS.setRuntimePollInterval, {
-        projectId,
-        pollIntervalMs,
-      }),
-    clearRuntimePollIntervalOverride: (projectId) =>
-      invoke<ClearRuntimePollIntervalOverrideResponse>(
-        IPC_CHANNELS.clearRuntimePollIntervalOverride,
-        { projectId },
-      ),
     pauseRun: (projectId, runAttemptId) =>
       invoke<void>(IPC_CHANNELS.pauseRun, { projectId, runAttemptId }),
     resumeRun: (projectId, runAttemptId) =>
@@ -279,10 +233,6 @@ function createIpcClient(): OpenSymphonyDesktopApi {
     // project reads
     listProjectSummaries: () =>
       invoke<ProjectSummary[]>(IPC_CHANNELS.listProjectSummaries),
-    getProjectName: (projectId) =>
-      invoke<string>(IPC_CHANNELS.getProjectName, { projectId }),
-    getProjectPromptTemplate: (projectId) =>
-      invoke<string>(IPC_CHANNELS.getProjectPromptTemplate, { projectId }),
     getProjectPollInterval: (projectId) =>
       invoke<number>(IPC_CHANNELS.getProjectPollInterval, { projectId }),
     getProjectMaxConcurrency: (projectId) =>
@@ -297,11 +247,6 @@ function createIpcClient(): OpenSymphonyDesktopApi {
     deleteProject: (projectId) => invoke<void>(IPC_CHANNELS.deleteProject, { projectId }),
     setProjectName: (projectId, name) =>
       invoke<SetProjectNameResponse>(IPC_CHANNELS.setProjectName, { projectId, name }),
-    setProjectPromptTemplate: (projectId, promptTemplate) =>
-      invoke<SetProjectPromptTemplateResponse>(IPC_CHANNELS.setProjectPromptTemplate, {
-        projectId,
-        promptTemplate,
-      }),
     setProjectPollInterval: (projectId, pollIntervalMs) =>
       invoke<SetProjectPollIntervalResponse>(IPC_CHANNELS.setProjectPollInterval, {
         projectId,

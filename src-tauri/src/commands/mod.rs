@@ -13,18 +13,16 @@ pub use issue::{
 };
 
 pub use runtime::{
-    cancel_run, clear_runtime_poll_interval_override, get_runtime_candidates,
-    get_runtime_recent_events, get_runtime_recent_finished, get_runtime_retrying,
-    get_runtime_running, get_runtime_summary, pause_run, resume_run,
-    set_runtime_poll_interval, start_runtime, stop_runtime, tick_runtime,
+    cancel_run, get_runtime_recent_events, get_runtime_recent_finished, get_runtime_retrying,
+    get_runtime_running, pause_run, resume_run,
 };
 
 pub use project::{
-    create_project, delete_project, get_project_max_concurrency, get_project_name,
+    create_project, delete_project, get_project_max_concurrency,
     get_project_orchestrator_status, get_project_poll_interval,
-    get_project_prompt_template, get_project_retry_policy, list_project_summaries,
+    get_project_retry_policy, list_project_summaries,
     set_project_max_concurrency, set_project_name, set_project_poll_interval,
-    set_project_prompt_template, set_project_retry_policy,
+    set_project_retry_policy,
 };
 
 pub use platform::{list_platform_statuses, list_project_platforms};

@@ -8,17 +8,14 @@ use crate::db::repos::issue::IssueRepo;
 use crate::db::repos::project::ProjectRepo;
 use crate::db::repos::retry_queue::RetryQueueRepo;
 use crate::db::repos::run_attempt::RunAttemptRepo;
-use crate::types::{Project, RuntimeStatus, RuntimeSummary};
-use crate::utils::iso_timestamp;
+use crate::types::{Project, RuntimeStatus};
+use crate::acp::types::AcpAdapter;
 
-use super::audit::{self, action};
 use super::pause::PauseGateRegistry;
 use super::poll::{poll_running_sessions, reconcile_running_attempts, run_poll_cycle};
 use super::workspace::{cleanup_done_workspaces, WorkspaceManager};
-use super::DEFAULT_POLL_INTERVAL_MS;
-use crate::acp::types::AcpAdapter;
 
-pub(crate) struct TickContext<'a> {
+pub(crate) struct CycleContext<'a> {
     pub adapter: &'a dyn AcpAdapter,
     pub workspaces: &'a WorkspaceManager,
     pub pause_gates: &'a PauseGateRegistry,
@@ -29,12 +26,6 @@ pub struct Runtime {
     pub(crate) config: Option<Project>,
     pub(crate) status: RuntimeStatus,
     pub(crate) started_at: Option<DateTime<Utc>>,
-    pub(crate) poll_interval_override: Option<u32>,
-    pub(crate) next_tick_at: Option<DateTime<Utc>>,
-    pub(crate) tick_count: u32,
-    pub(crate) last_tick_at: Option<DateTime<Utc>>,
-    pub(crate) last_dispatched_count: u32,
-    pub(crate) last_action: Option<String>,
     pub(crate) last_error: Option<String>,
     timer: Option<JoinHandle<()>>,
 }
@@ -46,12 +37,6 @@ impl Runtime {
             config: None,
             status: RuntimeStatus::Idle,
             started_at: None,
-            poll_interval_override: None,
-            next_tick_at: None,
-            tick_count: 0,
-            last_tick_at: None,
-            last_dispatched_count: 0,
-            last_action: None,
             last_error: None,
             timer: None,
         }
@@ -65,26 +50,11 @@ impl Runtime {
         };
     }
 
-    pub fn effective_poll_interval_ms(&self) -> Option<u32> {
-        self.poll_interval_override
-            .or_else(|| self.config.as_ref().map(|project| project.poll_interval_ms as u32))
-    }
-
-    pub fn summary(&self) -> RuntimeSummary {
-        RuntimeSummary {
-            status: self.status,
-            poll_interval_ms: self
-                .effective_poll_interval_ms()
-                .unwrap_or(DEFAULT_POLL_INTERVAL_MS),
-            started_at: iso_timestamp(self.started_at),
-            next_tick_at: iso_timestamp(self.next_tick_at),
-            tick_count: self.tick_count,
-            last_tick_at: iso_timestamp(self.last_tick_at),
-            last_dispatched_count: self.last_dispatched_count,
-            last_action: self.last_action.clone(),
-            last_error: self.last_error.clone(),
-            validation_error: None,
-        }
+    pub fn poll_interval_ms(&self) -> u32 {
+        self.config
+            .as_ref()
+            .map(|project| project.poll_interval_ms as u32)
+            .unwrap_or(super::DEFAULT_POLL_INTERVAL_MS)
     }
 
     pub fn reload_config(&mut self, conn: &Connection) -> DbResult<()> {
@@ -104,76 +74,55 @@ impl Runtime {
         Ok(())
     }
 
-    pub fn stop(&mut self) {
-        self.abort_timer();
-        self.status = RuntimeStatus::Stopped;
-        self.next_tick_at = None;
-    }
-
-    pub fn tick(&mut self, conn: &Connection, ctx: &TickContext<'_>) -> DbResult<()> {
+    pub fn run_cycle(&mut self, conn: &Connection, ctx: &CycleContext<'_>) -> DbResult<()> {
         self.reload_config(conn)?;
 
-        let mut last_action = "tick_completed".to_string();
-
-        if self.status == RuntimeStatus::Running {
-            let project = self
-                .config
-                .as_ref()
-                .ok_or_else(|| DbError::NotFound(format!("project {}", self.project_id)))?
-                .clone();
-            let project_id = self.project_id.clone();
-            let now_iso = Utc::now()
-                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-
-            let attempts = RunAttemptRepo::new(conn);
-            let issues = IssueRepo::new(conn);
-            let sessions = AgentSessionRepo::new(conn);
-            let retries = RetryQueueRepo::new(conn);
-
-            reconcile_running_attempts(&attempts, &issues, &retries, &project_id)?;
-
-            let finished = poll_running_sessions(
-                conn,
-                ctx.adapter,
-                &attempts,
-                &issues,
-                &sessions,
-                &retries,
-                ctx.pause_gates,
-                &project,
-                &now_iso,
-            )?;
-            if finished > 0 {
-                last_action = format!("polled_{finished}_sessions");
-            }
-
-            let dispatched = run_poll_cycle(
-                conn,
-                ctx.adapter,
-                &attempts,
-                &issues,
-                &sessions,
-                &retries,
-                ctx.workspaces,
-                &project,
-                &now_iso,
-                ctx.pause_gates,
-            )?;
-            self.last_dispatched_count = dispatched.len() as u32;
-            if !dispatched.is_empty() {
-                last_action = format!("dispatched_{}", dispatched.len());
-            }
-
-            let _ = cleanup_done_workspaces(&issues, ctx.workspaces, &project)?;
-        } else {
-            self.last_dispatched_count = 0;
+        if self.status != RuntimeStatus::Running {
+            return Ok(());
         }
 
-        self.tick_count = self.tick_count.saturating_add(1);
-        self.last_tick_at = Some(Utc::now());
-        self.last_action = Some(last_action);
+        let project = self
+            .config
+            .as_ref()
+            .ok_or_else(|| DbError::NotFound(format!("project {}", self.project_id)))?
+            .clone();
+        let project_id = self.project_id.clone();
+        let now_iso = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+
+        let attempts = RunAttemptRepo::new(conn);
+        let issues = IssueRepo::new(conn);
+        let sessions = AgentSessionRepo::new(conn);
+        let retries = RetryQueueRepo::new(conn);
+
+        reconcile_running_attempts(&attempts, &issues, &retries, &project_id)?;
+
+        let _ = poll_running_sessions(
+            conn,
+            ctx.adapter,
+            &attempts,
+            &issues,
+            &sessions,
+            &retries,
+            ctx.pause_gates,
+            &project,
+            &now_iso,
+        )?;
+
+        let _ = run_poll_cycle(
+            conn,
+            ctx.adapter,
+            &attempts,
+            &issues,
+            &sessions,
+            &retries,
+            ctx.workspaces,
+            &project,
+            &now_iso,
+            ctx.pause_gates,
+        )?;
+
+        let _ = cleanup_done_workspaces(&issues, ctx.workspaces, &project)?;
         self.last_error = None;
-        audit::log(conn, &self.project_id, action::TICK_COMPLETED, None)?;
         Ok(())
     }
 
@@ -188,4 +137,3 @@ impl Runtime {
         }
     }
 }
-

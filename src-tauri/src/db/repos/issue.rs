@@ -12,6 +12,13 @@ use crate::types::{
     ProjectIssueListItem,
 };
 
+const ISSUE_CARD_SELECT: &str = "id, identifier, title, priority, executor";
+const ISSUE_CARD_SELECT_ALIASED: &str = "i.id, i.identifier, i.title, i.priority, i.executor";
+const ISSUE_CARD_ORDER_BY: &str = "ORDER BY priority IS NULL, priority ASC, updated_at ASC";
+const ISSUE_CARD_ORDER_BY_ALIASED: &str =
+    "ORDER BY i.priority IS NULL, i.priority ASC, i.updated_at ASC";
+const ISSUE_LIST_SELECT: &str = "id, identifier, title, priority, board_column, executor";
+
 pub struct IssueRepo<'a> {
     conn: &'a Connection,
 }
@@ -83,12 +90,12 @@ impl<'a> IssueRepo<'a> {
     }
 
     pub fn list_by_project(&self, project_id: &str) -> DbResult<Vec<ProjectIssueListItem>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, identifier, title, priority, board_column
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {ISSUE_LIST_SELECT}
              FROM issues
              WHERE project_id = ?1
-             ORDER BY updated_at ASC",
-        )?;
+             {ISSUE_CARD_ORDER_BY}",
+        ))?;
 
         let mut rows = stmt.query([project_id])?;
         let mut items = Vec::new();
@@ -103,12 +110,12 @@ impl<'a> IssueRepo<'a> {
         project_id: &str,
         column: BoardColumnId,
     ) -> DbResult<Vec<ProjectBoardIssue>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, identifier, title, priority
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {ISSUE_CARD_SELECT}
              FROM issues
              WHERE project_id = ?1 AND board_column = ?2
-             ORDER BY priority IS NULL, priority ASC, updated_at ASC",
-        )?;
+             {ISSUE_CARD_ORDER_BY}",
+        ))?;
 
         let mut rows = stmt.query(params![project_id, column.as_str()])?;
         let mut cards = Vec::new();
@@ -202,8 +209,8 @@ impl<'a> IssueRepo<'a> {
     }
 
     pub fn list_candidates(&self, project_id: &str) -> DbResult<Vec<ProjectBoardIssue>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT i.id, i.identifier, i.title, i.priority
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {ISSUE_CARD_SELECT_ALIASED}
              FROM issues i
              WHERE i.project_id = ?1
                AND i.board_column = ?2
@@ -212,8 +219,8 @@ impl<'a> IssueRepo<'a> {
                  FROM run_attempts ra
                  WHERE ra.issue_id = i.id AND ra.status = 'succeeded'
                )
-             ORDER BY i.priority IS NULL, i.priority ASC, i.updated_at ASC",
-        )?;
+             {ISSUE_CARD_ORDER_BY_ALIASED}",
+        ))?;
 
         let mut rows = stmt.query(params![project_id, BoardColumnId::Backlog.as_str()])?;
         let mut cards = Vec::new();
@@ -270,22 +277,29 @@ fn map_issue(row: &Row<'_>) -> rusqlite::Result<Issue> {
     })
 }
 
-fn map_issue_card(row: &Row<'_>) -> rusqlite::Result<ProjectBoardIssue> {
+fn read_board_issue_fields(row: &Row<'_>, executor_index: usize) -> rusqlite::Result<ProjectBoardIssue> {
     Ok(ProjectBoardIssue {
         issue_id: row.get(0)?,
         identifier: row.get(1)?,
         title: row.get(2)?,
         priority: row.get(3)?,
+        executor: row.get(executor_index)?,
     })
 }
 
+fn map_issue_card(row: &Row<'_>) -> rusqlite::Result<ProjectBoardIssue> {
+    read_board_issue_fields(row, 4)
+}
+
 fn map_issue_list_item(row: &Row<'_>) -> rusqlite::Result<ProjectIssueListItem> {
+    let card = read_board_issue_fields(row, 5)?;
     let board_column: String = row.get(4)?;
     Ok(ProjectIssueListItem {
-        issue_id: row.get(0)?,
-        identifier: row.get(1)?,
-        title: row.get(2)?,
-        priority: row.get(3)?,
+        issue_id: card.issue_id,
+        identifier: card.identifier,
+        title: card.title,
+        priority: card.priority,
+        executor: card.executor,
         board_column: parse_board_column(&board_column)
             .map_err(|err| rusqlite::Error::InvalidColumnType(4, err.to_string(), rusqlite::types::Type::Text))?,
     })
@@ -311,5 +325,36 @@ mod tests {
             .expect_err("reject");
 
         assert!(err.to_string().contains("not assigned"));
+    }
+
+    #[test]
+    fn list_project_and_candidate_queries_include_executor() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+
+        let issue = IssueRepo::new(&conn)
+            .create(
+                &fixtures.project_id,
+                "Dispatch me",
+                None,
+                Some("hermes"),
+                None,
+                &[],
+            )
+            .expect("create issue");
+
+        let list_items = IssueRepo::new(&conn)
+            .list_by_project(&fixtures.project_id)
+            .expect("list project issues");
+        assert_eq!(list_items.len(), 1);
+        assert_eq!(list_items[0].issue_id, issue.id);
+        assert_eq!(list_items[0].executor.as_deref(), Some("hermes"));
+
+        let candidates = IssueRepo::new(&conn)
+            .list_candidates(&fixtures.project_id)
+            .expect("list candidates");
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].issue_id, issue.id);
+        assert_eq!(candidates[0].executor.as_deref(), Some("hermes"));
     }
 }

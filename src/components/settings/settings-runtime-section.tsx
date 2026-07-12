@@ -129,13 +129,12 @@ export function SettingsRuntimeSection({
   };
 
   return (
-    <section id="runtime" aria-labelledby="settings-runtime-title">
-      <SurfaceCard>
+    <SurfaceCard>
         <CardHeader className="pb-4">
-          <CardTitle id="settings-runtime-title" className="text-base">
-            Runtime
+          <CardTitle id="settings-runtime-title" className="text-sm">
+            <span className="text-sm">Runtime</span>
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs">
             Orchestrator poll cadence, concurrency limits, and retry behavior for this project.
           </CardDescription>
         </CardHeader>
@@ -223,7 +222,7 @@ export function SettingsRuntimeSection({
             >
               <div className="space-y-3">
                 <div className="grid gap-2">
-                  <Label htmlFor="retry-max-attempts">Max attempts</Label>
+                  <Label htmlFor="retry-max-attempts" className="text-xs">Max attempts</Label>
                   <Input
                     id="retry-max-attempts"
                     type="number"
@@ -236,7 +235,7 @@ export function SettingsRuntimeSection({
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="retry-backoff-ms">Backoff (ms)</Label>
+                  <Label htmlFor="retry-backoff-ms" className="text-xs">Backoff (ms)</Label>
                   <Input
                     id="retry-backoff-ms"
                     type="number"
@@ -272,6 +271,5 @@ export function SettingsRuntimeSection({
           </div>
         </CardContent>
       </SurfaceCard>
-    </section>
   );
 }

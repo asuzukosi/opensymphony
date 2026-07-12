@@ -51,6 +51,7 @@ pub struct ProjectBoardIssue {
     pub identifier: String,
     pub title: String,
     pub priority: Option<i32>,
+    pub executor: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,4 +62,5 @@ pub struct ProjectIssueListItem {
     pub title: String,
     pub priority: Option<i32>,
     pub board_column: BoardColumnId,
+    pub executor: Option<String>,
 }

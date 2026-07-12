@@ -21,25 +21,16 @@ export const IPC_CHANNELS = {
   // permissions writes
   resolveSessionPermission: "opensymphony:resolve-session-permission",
   // runtime reads
-  getRuntimeSummary: "opensymphony:get-runtime-summary",
   getRuntimeRunning: "opensymphony:get-runtime-running",
   getRuntimeRetrying: "opensymphony:get-runtime-retrying",
-  getRuntimeCandidates: "opensymphony:get-runtime-candidates",
   getRuntimeRecentFinished: "opensymphony:get-runtime-recent-finished",
   getRuntimeRecentEvents: "opensymphony:get-runtime-recent-events",
   // runtime writes
-  startRuntime: "opensymphony:start-runtime",
-  stopRuntime: "opensymphony:stop-runtime",
-  tickRuntime: "opensymphony:tick-runtime",
-  setRuntimePollInterval: "opensymphony:set-runtime-poll-interval",
-  clearRuntimePollIntervalOverride: "opensymphony:clear-runtime-poll-interval-override",
   pauseRun: "opensymphony:pause-run",
   resumeRun: "opensymphony:resume-run",
   cancelRun: "opensymphony:cancel-run",
   // project reads
   listProjectSummaries: "opensymphony:list-project-summaries",
-  getProjectName: "opensymphony:get-project-name",
-  getProjectPromptTemplate: "opensymphony:get-project-prompt-template",
   getProjectPollInterval: "opensymphony:get-project-poll-interval",
   getProjectMaxConcurrency: "opensymphony:get-project-max-concurrency",
   getProjectRetryPolicy: "opensymphony:get-project-retry-policy",
@@ -48,7 +39,6 @@ export const IPC_CHANNELS = {
   createProject: "opensymphony:create-project",
   deleteProject: "opensymphony:delete-project",
   setProjectName: "opensymphony:set-project-name",
-  setProjectPromptTemplate: "opensymphony:set-project-prompt-template",
   setProjectPollInterval: "opensymphony:set-project-poll-interval",
   setProjectMaxConcurrency: "opensymphony:set-project-max-concurrency",
   setProjectRetryPolicy: "opensymphony:set-project-retry-policy",

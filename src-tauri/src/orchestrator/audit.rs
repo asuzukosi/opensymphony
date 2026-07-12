@@ -7,8 +7,6 @@ use crate::db::repos::audit::AuditRepo;
 
 pub mod action {
     pub const RUNTIME_STARTED: &str = "runtime_started";
-    pub const RUNTIME_STOPPED: &str = "runtime_stopped";
-    pub const TICK_COMPLETED: &str = "tick_completed";
     pub const RESTART_RECOVERY_APPLIED: &str = "restart_recovery_applied";
     pub const WORKSPACE_CLEANUP_STARTUP: &str = "workspace_cleanup_startup";
     pub const ATTEMPT_DISPATCHED: &str = "attempt_dispatched";

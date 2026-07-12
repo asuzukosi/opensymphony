@@ -45,18 +45,6 @@ export function IssueMetadata({
         <CardDescription>Issue metadata loaded from the local tracker.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Description
-          </p>
-          {issue.description ? (
-            <p className="whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/20 p-4 text-sm leading-relaxed">
-              {issue.description}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">No description provided.</p>
-          )}
-        </div>
         <IssuePriorityField
           value={issue.priority}
           onChange={(nextPriority) => void onPriorityChange(nextPriority)}

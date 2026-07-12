@@ -17,7 +17,3 @@ pub fn parse_timestamp(value: &str) -> DbResult<DateTime<Utc>> {
 
     Err(DbError::Internal(format!("invalid timestamp: {value}")))
 }
-
-pub fn iso_timestamp(value: Option<DateTime<Utc>>) -> Option<String> {
-    value.map(format_timestamp)
-}
