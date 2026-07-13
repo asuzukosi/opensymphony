@@ -1,6 +1,4 @@
 "use client";
-import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
 import { PlatformAssignField } from "@/components/project/platform-assign-field";
 import { RuntimeFields } from "@/components/project/runtime-fields";
 import { WorkspaceFolderField } from "@/components/project/workspace-folder-field";
@@ -18,14 +16,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePlatformStatuses } from "@/hooks/use-platform-statuses";
 import {
+  type CreateProjectFormState,
+  type CreateProjectInput,
   createInitialProjectFormState,
   validateCreateProjectForm,
   validateEditProjectName,
-  type CreateProjectFormState,
-  type CreateProjectInput,
 } from "@/lib/create-project-form";
-import { usePlatformStatuses } from "@/hooks/use-platform-statuses";
+import dynamic from "next/dynamic";
+import { useEffect, useMemo, useState } from "react";
 
 const MonacoEditorField = dynamic(
   () =>
@@ -37,6 +37,13 @@ const MonacoEditorField = dynamic(
     loading: () => <Skeleton className="h-[220px] w-full rounded-md" />,
   },
 );
+
+function isRadixOverlayTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return target.closest("[data-radix-popper-content-wrapper]") != null;
+}
 
 type ProjectFormDialogProps = {
   open: boolean;
@@ -76,16 +83,10 @@ export function ProjectFormDialog({
   const [showRuntimeFields, setShowRuntimeFields] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
-  const {
-    isPlatformInstalled,
-    isLoading: platformStatusesLoading,
-  } = usePlatformStatuses();
+  const { isPlatformInstalled, isLoading: platformStatusesLoading } = usePlatformStatuses();
 
   const installValidationOptions = useMemo(
-    () =>
-      platformStatusesLoading
-        ? undefined
-        : { isPlatformInstalled },
+    () => (platformStatusesLoading ? undefined : { isPlatformInstalled }),
     [isPlatformInstalled, platformStatusesLoading],
   );
 
@@ -193,9 +194,13 @@ export function ProjectFormDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className={
-          isEdit ? undefined : "max-h-[85vh] max-w-lg overflow-y-auto sm:max-w-lg"
-        }
+        className={isEdit ? undefined : "max-h-[85vh] max-w-lg overflow-y-auto sm:max-w-lg"}
+        onCloseAutoFocus={(event) => event.preventDefault()}
+        onInteractOutside={(event) => {
+          if (isRadixOverlayTarget(event.target)) {
+            event.preventDefault();
+          }
+        }}
       >
         <form onSubmit={(event) => void handleSubmit(event)}>
           <DialogHeader>
@@ -304,7 +309,6 @@ export function ProjectFormDialog({
                   <div className="grid gap-2">
                     <RuntimeFields
                       value={{
-                        pollIntervalMs: createForm.pollIntervalMs,
                         maxConcurrency: createForm.maxConcurrency,
                         retryMaxAttempts: createForm.retryMaxAttempts,
                         retryBackoffMs: createForm.retryBackoffMs,
@@ -314,7 +318,6 @@ export function ProjectFormDialog({
                       }
                       disabled={isPending}
                     />
-                    <FieldError message={visibleFieldErrors.pollIntervalMs} />
                     <FieldError message={visibleFieldErrors.maxConcurrency} />
                     <FieldError message={visibleFieldErrors.retryMaxAttempts} />
                     <FieldError message={visibleFieldErrors.retryBackoffMs} />

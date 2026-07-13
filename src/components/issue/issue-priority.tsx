@@ -2,15 +2,16 @@
 
 import type { VariantProps } from "class-variance-authority";
 
+import { PlusIcon } from "@/components/ui/hero-icons";
 import { Badge, type badgeVariants } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 export type IssuePriorityValue = 0 | 1 | 2 | 3;
@@ -30,7 +31,10 @@ export const ISSUE_PRIORITY_OPTIONS: readonly IssuePriorityOption[] = [
   { value: 3, label: "Low", badgeVariant: "priorityLow" },
 ] as const;
 
-const NONE_VALUE = "__none__";
+export const compactPriorityBadgeClass =
+  "h-4 min-h-0 rounded-full px-1.5 py-0 text-[9px] font-normal leading-none shadow-none";
+
+const addButtonClassName = "h-8 w-8 shrink-0 rounded-full";
 
 function getIssuePriorityOption(priority: number | null | undefined): IssuePriorityOption | null {
   if (priority == null) {
@@ -51,7 +55,7 @@ export function IssuePriorityBadge({ priority, className }: IssuePriorityBadgePr
   }
 
   return (
-    <Badge variant={option.badgeVariant} className={cn("font-normal", className)}>
+    <Badge variant={option.badgeVariant} className={cn(compactPriorityBadgeClass, className)}>
       {option.label}
     </Badge>
   );
@@ -71,35 +75,55 @@ export function IssuePriorityField({
   id = "issue-priority",
 }: IssuePriorityFieldProps) {
   const selected = getIssuePriorityOption(value);
+  const pickable = ISSUE_PRIORITY_OPTIONS.filter((option) => option.value !== value);
 
   return (
     <div className="grid gap-2">
-      <Label htmlFor={id}>Priority</Label>
-      <Select
-        value={value == null ? NONE_VALUE : String(value)}
-        onValueChange={(nextValue) => {
-          if (nextValue === NONE_VALUE) {
-            onChange(null);
-            return;
-          }
-          onChange(Number(nextValue) as IssuePriorityValue);
-        }}
-        disabled={disabled}
-      >
-        <SelectTrigger id={id}>
-          <SelectValue placeholder="Select priority">
-            {selected ? <IssuePriorityBadge priority={selected.value} /> : "Select priority"}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE_VALUE}>None</SelectItem>
-          {ISSUE_PRIORITY_OPTIONS.map((option) => (
-            <SelectItem key={option.value} value={String(option.value)}>
-              <IssuePriorityBadge priority={option.value} />
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Label id={id}>Priority</Label>
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-labelledby={id}>
+        {selected ? (
+          <button
+            type="button"
+            disabled={disabled}
+            title={`${selected.label} — click to remove`}
+            aria-label={`${selected.label} priority — click to remove`}
+            onClick={() => onChange(null)}
+            className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <IssuePriorityBadge priority={selected.value} />
+          </button>
+        ) : null}
+        {pickable.length > 0 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={disabled}
+                className={addButtonClassName}
+                aria-label="Select priority"
+              >
+                <PlusIcon className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="z-[60] w-40"
+              onCloseAutoFocus={(event) => event.preventDefault()}
+            >
+              {pickable.map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onSelect={() => onChange(option.value)}
+                >
+                  <IssuePriorityBadge priority={option.value} />
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+      </div>
     </div>
   );
 }

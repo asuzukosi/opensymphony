@@ -14,6 +14,7 @@ import {
 import { formatDateTime } from "@/lib/datetime";
 import { DEFAULT_IPC_POLL_INTERVAL_MS } from "@/lib/ipc/hooks";
 import type { IssueDetailRunAttempt, PendingPermission, PermissionDecision } from "@/lib/ipc/types";
+import { cn, wrapText } from "@/lib/utils";
 
 type IssuePermissionsPanelProps = {
   issueId: string;
@@ -52,18 +53,18 @@ function PermissionItem({
     <div className="rounded-lg border border-border/60 bg-background/80 p-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium">{permission.summary}</p>
-            <Badge variant="outline">Awaiting decision</Badge>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <p className={cn("text-xs font-medium", wrapText)}>{permission.summary}</p>
+            <Badge variant="outline" className="shrink-0 text-[10px]">
+              Awaiting decision
+            </Badge>
           </div>
-          <dl className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+          <dl className={cn("grid gap-1 text-[10px] text-muted-foreground sm:grid-cols-2", wrapText)}>
             <div className="sm:col-span-2">
               <dt className="sr-only">Session</dt>
               <dd>
                 Session{" "}
-                <span className="font-mono text-foreground">
-                  {truncateSessionId(permission.sessionId)}
-                </span>
+                <span className="font-mono text-foreground">{truncateSessionId(permission.sessionId)}</span>
               </dd>
             </div>
             <div className="sm:col-span-2">
@@ -145,13 +146,13 @@ export function IssuePermissionsPanel({ issueId, attempts }: IssuePermissionsPan
   }
 
   return (
-    <Alert className="border-amber-500/40 bg-amber-500/5">
+    <Alert className="border-amber-500/40 bg-amber-500/5 text-xs">
       <ShieldExclamationIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
       <AlertTitle className="text-amber-950 dark:text-amber-100">
         Pending agent permissions ({permissions.length})
       </AlertTitle>
-      <AlertDescription className="space-y-3">
-        <p className="text-muted-foreground">
+      <AlertDescription className="space-y-3 text-xs">
+        <p className={cn("text-muted-foreground", wrapText)}>
           Agents are blocked until you approve or deny each permission request for this issue.
         </p>
         <div className="space-y-2">
@@ -167,7 +168,9 @@ export function IssuePermissionsPanel({ issueId, attempts }: IssuePermissionsPan
           ))}
         </div>
         {failedResolve && resolveError ? (
-          <p className="text-sm text-destructive">Permission decision failed: {resolveError.message}</p>
+          <p className={cn("text-xs text-destructive", wrapText)}>
+            Permission decision failed: {resolveError.message}
+          </p>
         ) : null}
       </AlertDescription>
     </Alert>

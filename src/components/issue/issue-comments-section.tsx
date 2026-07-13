@@ -2,13 +2,12 @@
 
 import { IssueAddCommentForm } from "@/components/issue/issue-add-comment-form";
 import { IssueCommentsList } from "@/components/issue/issue-comments-list";
-import { SurfaceCard } from "@/components/layout/surface-card";
-import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { IssueDetailSection } from "@/components/issue/issue-detail-section";
 import type { IssueComment } from "@/lib/ipc/types";
 
 type IssueCommentsSectionProps = {
   comments: IssueComment[];
-  onAddComment: (body: string) => Promise<void>;
+  onAddComment?: (body: string) => Promise<void>;
   isPending?: boolean;
   submitError?: Error | null;
 };
@@ -20,23 +19,22 @@ export function IssueCommentsSection({
   submitError = null,
 }: IssueCommentsSectionProps) {
   return (
-    <SurfaceCard>
-      <CardHeader className="pb-4">
-        <CardTitle className="text-base">Comments</CardTitle>
-        <CardDescription>
-          {comments.length === 0
-            ? "No comments on this issue yet."
-            : `${comments.length} comment${comments.length === 1 ? "" : "s"}.`}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <IssueCommentsList comments={comments} />
+    <IssueDetailSection
+      title="Comments"
+      description={
+        comments.length === 0
+          ? "No comments on this issue yet."
+          : `${comments.length} comment${comments.length === 1 ? "" : "s"}.`
+      }
+    >
+      <IssueCommentsList comments={comments} />
+      {onAddComment != null ? (
         <IssueAddCommentForm
           onSubmit={onAddComment}
           isPending={isPending}
           submitError={submitError}
         />
-      </CardContent>
-    </SurfaceCard>
+      ) : null}
+    </IssueDetailSection>
   );
 }

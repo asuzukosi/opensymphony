@@ -3,7 +3,7 @@
 import { useCallback, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 
 import { ChartBarIcon } from "@/components/ui/hero-icons";
-import { BorderedTable, tableHeadClass, tableHeaderRowClass } from "@/components/dashboard/shared";
+import { BorderedTable, tableCellClass, tableHeadClass, tableHeaderRowClass, tableMutedTextClass } from "@/components/dashboard/shared";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PanelSection } from "@/components/layout/panel-section";
 import { Input } from "@/components/ui/input";
@@ -325,13 +325,15 @@ export function ActivityPanel({
                 <TableRow
                   key={`${bucket.bucketStart}:${bucket.projectId ?? "all"}`}
                 >
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className={cn(tableCellClass, tableMutedTextClass)}>
                     {formatDateTime(bucket.bucketStart)}
                   </TableCell>
                   {showProjectColumn ? (
-                    <TableCell>{bucket.projectName ?? "—"}</TableCell>
+                    <TableCell className={cn(tableCellClass, "text-xs")}>{bucket.projectName ?? "—"}</TableCell>
                   ) : null}
-                  <TableCell className="font-mono tabular-nums">{bucket.totalEvents}</TableCell>
+                  <TableCell className={cn(tableCellClass, tableMutedTextClass, "tabular-nums")}>
+                    {bucket.totalEvents}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

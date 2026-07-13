@@ -10,6 +10,7 @@ type PageHeaderProps = {
   actions?: ReactNode;
   isLoading?: boolean;
   className?: string;
+  titleClassName?: string;
 };
 
 export function PageHeader({
@@ -20,6 +21,7 @@ export function PageHeader({
   actions,
   isLoading = false,
   className,
+  titleClassName,
 }: PageHeaderProps) {
   return (
     <header className={cn("space-y-1", className)}>
@@ -38,7 +40,7 @@ export function PageHeader({
             </>
           ) : (
             <>
-              <h1 className="text-base font-medium tracking-tight">{title}</h1>
+              <h1 className={cn("text-base font-medium tracking-tight", titleClassName)}>{title}</h1>
               {description ? (
                 <p className="max-w-lg text-xs text-muted-foreground">{description}</p>
               ) : null}

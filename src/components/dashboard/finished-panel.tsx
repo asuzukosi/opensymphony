@@ -1,9 +1,15 @@
 "use client";
 
 import { CheckCircleIcon } from "@/components/ui/hero-icons";
-import { BorderedTable, tableHeadClass, tableHeaderRowClass } from "@/components/dashboard/shared";
+import { DashboardIssueCell } from "@/components/dashboard/dashboard-issue-cell";
+import {
+  BorderedTable,
+  tableCellClass,
+  tableHeadClass,
+  tableHeaderRowClass,
+  tableMutedTextClass,
+} from "@/components/dashboard/shared";
 import { EmptyState } from "@/components/layout/empty-state";
-import { IssueLink } from "@/components/layout/issue-link";
 import { PanelSection } from "@/components/layout/panel-section";
 import { TableSkeleton } from "@/components/layout/table-skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -18,12 +24,18 @@ import {
 import { formatDateTime } from "@/lib/datetime";
 import { isPendingLoad } from "@/lib/is-pending-load";
 import type { RunAttemptStatus, RuntimeRecentFinishedEntry } from "@/lib/ipc/types";
+import { cn } from "@/lib/utils";
 
-function attemptStatusVariant(status: RunAttemptStatus): "default" | "secondary" | "destructive" | "outline" {
+function attemptStatusVariant(
+  status: RunAttemptStatus,
+): "default" | "secondary" | "destructive" | "outline" {
   if (status === "failed") return "destructive";
   if (status === "cancelled") return "outline";
   return "secondary";
 }
+
+const compactBadgeClass =
+  "h-4 min-h-0 rounded px-1 py-0 text-[9px] font-normal leading-none shadow-none";
 
 export function FinishedPanel({
   recentFinished,
@@ -35,54 +47,73 @@ export function FinishedPanel({
   const pending = isPendingLoad(isLoading, recentFinished);
 
   return (
-    <PanelSection title="Recently finished" description="Latest completed run attempts for the active project.">
+    <PanelSection
+      compact
+      title="Recently finished"
+      description="Latest completed runs with task context for the active project."
+    >
       {pending ? (
-        <TableSkeleton columns={6} />
+        <TableSkeleton columns={6} rows={4} />
       ) : recentFinished && recentFinished.length > 0 ? (
         <BorderedTable>
           <Table>
             <TableHeader>
               <TableRow className={tableHeaderRowClass}>
-                <TableHead className={tableHeadClass}>Issue</TableHead>
-                <TableHead className={tableHeadClass}>Attempt</TableHead>
-                <TableHead className={tableHeadClass}>Status</TableHead>
-                <TableHead className={tableHeadClass}>Finished</TableHead>
-                <TableHead className={tableHeadClass}>Review</TableHead>
-                <TableHead className={tableHeadClass}>Error</TableHead>
+                <TableHead className={cn(tableHeadClass, "w-[36%] min-w-[220px]")}>Task</TableHead>
+                <TableHead className={cn(tableHeadClass, "w-10")}>#</TableHead>
+                <TableHead className={cn(tableHeadClass, "w-16 whitespace-nowrap")}>Status</TableHead>
+                <TableHead className={cn(tableHeadClass, "w-36 whitespace-nowrap")}>Finished</TableHead>
+                <TableHead className={cn(tableHeadClass, "w-20 whitespace-nowrap")}>Review</TableHead>
+                <TableHead className={cn(tableHeadClass, "min-w-[160px]")}>Error</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {recentFinished.map((entry) => (
                 <TableRow key={entry.runAttemptId} className="hover:bg-muted/20">
-                  <TableCell>
-                    <IssueLink issueId={entry.issueId} label={entry.identifier} />
+                  <TableCell className={cn(tableCellClass, "min-w-[220px]")}>
+                    <DashboardIssueCell
+                      issueId={entry.issueId}
+                      title={entry.title}
+                      description={entry.description}
+                      executor={entry.executor}
+                    />
                   </TableCell>
-                  <TableCell className="font-mono tabular-nums">{entry.attemptNumber}</TableCell>
-                  <TableCell>
-                    <Badge variant={attemptStatusVariant(entry.status)} className="font-normal capitalize">
+                  <TableCell className={cn(tableCellClass, tableMutedTextClass, "tabular-nums")}>
+                    {entry.attemptNumber}
+                  </TableCell>
+                  <TableCell className={tableCellClass}>
+                    <Badge
+                      variant={attemptStatusVariant(entry.status)}
+                      className={cn(compactBadgeClass, "capitalize")}
+                    >
                       {entry.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{formatDateTime(entry.finishedAt)}</TableCell>
-                  <TableCell>
+                  <TableCell className={cn(tableCellClass, tableMutedTextClass)}>
+                    {formatDateTime(entry.finishedAt)}
+                  </TableCell>
+                  <TableCell className={tableCellClass}>
                     {entry.reviewStatus ? (
                       <Badge
                         variant={entry.reviewStatus === "approved" ? "success" : "warning"}
-                        className="font-normal"
+                        className={compactBadgeClass}
                       >
-                        {entry.reviewStatus === "approved" ? "Approved" : "Pending review"}
+                        {entry.reviewStatus === "approved" ? "Approved" : "Pending"}
                       </Badge>
                     ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
+                      <span className={tableMutedTextClass}>—</span>
                     )}
                   </TableCell>
-                  <TableCell className="max-w-[240px]">
+                  <TableCell className={cn(tableCellClass, "min-w-[160px]")}>
                     {entry.errorMessage ? (
-                      <Badge variant="destructive" className="max-w-full truncate font-normal" title={entry.errorMessage}>
+                      <span
+                        className="block truncate text-[10px] leading-snug text-destructive"
+                        title={entry.errorMessage}
+                      >
                         {entry.errorMessage}
-                      </Badge>
+                      </span>
                     ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
+                      <span className={tableMutedTextClass}>—</span>
                     )}
                   </TableCell>
                 </TableRow>

@@ -3,13 +3,13 @@
 import { useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
-import { AgentsIcon, CodeIcon, SettingsIcon } from "@/components/ui/hero-icons";
 import { PageShell } from "@/components/layout/page-shell";
 import { SurfaceCard } from "@/components/layout/surface-card";
 import { SettingsPlatformsSection } from "@/components/settings/settings-platforms-section";
 import { SettingsRuntimeSection } from "@/components/settings/settings-runtime-section";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CardContent } from "@/components/ui/card";
+import { AgentsIcon, CodeIcon, SettingsIcon } from "@/components/ui/hero-icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useActiveProject } from "@/contexts/active-project-context";
@@ -34,7 +34,6 @@ export default function SettingsPage() {
     settings,
     error,
     isLoading,
-    setPollInterval,
     setMaxConcurrency,
     setRetryPolicy,
     isMutating,
@@ -42,7 +41,7 @@ export default function SettingsPage() {
     resetMutation,
   } = useProjectSettings({ enabled: projectId != null });
   const [failedRuntimeAction, setFailedRuntimeAction] = useState<
-    "pollInterval" | "maxConcurrency" | "retryPolicy" | null
+    "maxConcurrency" | "retryPolicy" | null
   >(null);
 
   const isRuntimeSettingsLoading =
@@ -50,17 +49,6 @@ export default function SettingsPage() {
 
   const clearFailedActions = (): void => {
     setFailedRuntimeAction(null);
-  };
-
-  const handleSavePollInterval = async (pollIntervalMs: number): Promise<void> => {
-    resetMutation();
-    clearFailedActions();
-
-    try {
-      await setPollInterval(pollIntervalMs);
-    } catch {
-      setFailedRuntimeAction("pollInterval");
-    }
   };
 
   const handleSaveMaxConcurrency = async (maxConcurrency: number): Promise<void> => {
@@ -121,23 +109,20 @@ export default function SettingsPage() {
           {projectId == null ? (
             <Alert>
               <AlertTitle>No active project</AlertTitle>
-              <AlertDescription>Select a project to view and edit runtime settings.</AlertDescription>
+              <AlertDescription>
+                Select a project to view and edit runtime settings.
+              </AlertDescription>
             </Alert>
           ) : isRuntimeSettingsLoading ? (
             <RuntimeSettingsLoadingState />
           ) : settings ? (
             <SettingsRuntimeSection
-              pollIntervalMs={settings.pollIntervalMs}
               maxConcurrency={settings.maxConcurrency}
               retryPolicy={settings.retryPolicy}
-              onSavePollInterval={handleSavePollInterval}
               onSaveMaxConcurrency={handleSaveMaxConcurrency}
               onSaveRetryPolicy={handleSaveRetryPolicy}
               isPending={isMutating}
-              pollIntervalError={failedRuntimeAction === "pollInterval" ? mutationError : null}
-              maxConcurrencyError={
-                failedRuntimeAction === "maxConcurrency" ? mutationError : null
-              }
+              maxConcurrencyError={failedRuntimeAction === "maxConcurrency" ? mutationError : null}
               retryPolicyError={failedRuntimeAction === "retryPolicy" ? mutationError : null}
             />
           ) : null}

@@ -4,7 +4,6 @@ import { ExclamationCircleIcon } from "@/components/ui/hero-icons";
 import { useEffect, useState } from "react";
 
 import { ActivityPanel } from "@/components/dashboard/activity-panel";
-import { AuditPanel } from "@/components/dashboard/audit-panel";
 import { FinishedPanel } from "@/components/dashboard/finished-panel";
 import { RetryPanel } from "@/components/dashboard/retry-panel";
 import { RunningPanel } from "@/components/dashboard/running-panel";
@@ -37,11 +36,11 @@ export function DashboardPageContent() {
   ].filter((item): item is { title: string; message: string } => item != null);
 
   return (
-    <div className="flex flex-col gap-section">
+    <div className="flex flex-col gap-4">
       {errors.length > 0 ? (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {errors.map((item) => (
-            <Alert key={item.title} variant="destructive">
+            <Alert key={item.title} variant="destructive" className="text-xs">
               <ExclamationCircleIcon className="h-4 w-4" />
               <AlertTitle>{item.title}</AlertTitle>
               <AlertDescription>{item.message}</AlertDescription>
@@ -50,19 +49,23 @@ export function DashboardPageContent() {
         </div>
       ) : null}
 
-      <section aria-label="Active work" className="grid gap-4 lg:grid-cols-2">
-        <RunningPanel
-          running={runtime.running}
-          isLoading={runtime.isLoading}
-          onPauseRun={runtimeControlsEnabled ? runtime.pauseRun : undefined}
-          onResumeRun={runtimeControlsEnabled ? runtime.resumeRun : undefined}
-          onCancelRun={runtimeControlsEnabled ? runtime.cancelRun : undefined}
-          isControlling={runtime.isControlling}
-        />
-        <RetryPanel retrying={runtime.retrying} isLoading={runtime.isLoading} />
+      <section aria-label="Active work" className="grid min-w-0 gap-3 lg:grid-cols-2">
+        <div className="min-w-0">
+          <RunningPanel
+            running={runtime.running}
+            isLoading={runtime.isLoading}
+            onPauseRun={runtimeControlsEnabled ? runtime.pauseRun : undefined}
+            onResumeRun={runtimeControlsEnabled ? runtime.resumeRun : undefined}
+            onCancelRun={runtimeControlsEnabled ? runtime.cancelRun : undefined}
+            isControlling={runtime.isControlling}
+          />
+        </div>
+        <div className="min-w-0">
+          <RetryPanel retrying={runtime.retrying} isLoading={runtime.isLoading} />
+        </div>
       </section>
 
-      <section aria-label="Activity charts">
+      <section aria-label="Activity charts" className="space-y-3">
         <ActivityPanel
           timeRange={timeRange}
           onTimeRangeChange={setTimeRange}
@@ -75,9 +78,8 @@ export function DashboardPageContent() {
         />
       </section>
 
-      <section aria-label="Recent activity" className="grid gap-4 xl:grid-cols-2">
+      <section aria-label="Recent activity">
         <FinishedPanel recentFinished={runtime.recentFinished} isLoading={runtime.isLoading} />
-        <AuditPanel recentEvents={runtime.recentEvents} isLoading={runtime.isLoading} />
       </section>
     </div>
   );

@@ -11,14 +11,13 @@ CREATE TABLE IF NOT EXISTS projects (
   slug TEXT NOT NULL UNIQUE,
   workspace_root TEXT NOT NULL,
   prompt_template TEXT NOT NULL DEFAULT '',
-  poll_interval_ms INTEGER NOT NULL DEFAULT 3000,
   max_concurrency INTEGER NOT NULL DEFAULT 1,
   retry_max_attempts INTEGER NOT NULL DEFAULT 3,
   retry_backoff_ms INTEGER NOT NULL DEFAULT 30000,
   use_per_issue_workspaces INTEGER NOT NULL DEFAULT 1,
   use_worktrees INTEGER NOT NULL DEFAULT 0,
   orchestrator_status TEXT NOT NULL DEFAULT 'idle'
-    CHECK (orchestrator_status IN ('idle', 'running', 'stopped')),
+    CHECK (orchestrator_status IN ('idle', 'running')),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -117,16 +116,6 @@ CREATE TABLE IF NOT EXISTS retry_queue (
   FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS audit_events (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  issue_id TEXT,
-  action TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-  FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE SET NULL
-);
-
 CREATE INDEX IF NOT EXISTS idx_platforms_project ON platforms(project_id);
 CREATE INDEX IF NOT EXISTS idx_issues_project_column ON issues(project_id, board_column);
 CREATE INDEX IF NOT EXISTS idx_issues_updated_at ON issues(updated_at);
@@ -137,4 +126,3 @@ CREATE INDEX IF NOT EXISTS idx_run_attempts_issue_started ON run_attempts(issue_
 CREATE INDEX IF NOT EXISTS idx_agent_sessions_attempt ON agent_sessions(run_attempt_id);
 CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events(session_id);
 CREATE INDEX IF NOT EXISTS idx_retry_queue_due_at ON retry_queue(due_at);
-CREATE INDEX IF NOT EXISTS idx_audit_events_project_created ON audit_events(project_id, created_at);

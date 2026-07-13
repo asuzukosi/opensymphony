@@ -1,12 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-/// orchestrator lifecycle: idle until backlog work starts the runtime loop.
+/// orchestrator lifecycle: idle when no work; running while dispatching or waiting on retries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RuntimeStatus {
     Idle,
     Running,
-    Stopped,
 }
 
 /// high-level phase of an in-flight acp session.
@@ -36,28 +35,18 @@ pub enum ReviewStatus {
     PendingReview,
 }
 
-/// slim audit line for runtime/dashboard ipc views.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeAuditEvent {
-    pub action: String,
-    pub issue_id: Option<String>,
-    pub created_at: String,
-}
-
 /// one actively running agent attempt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeRunningEntry {
     pub run_attempt_id: String,
     pub issue_id: String,
-    pub identifier: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub executor: Option<String>,
     pub attempt_number: u32,
     pub started_at: String,
-    pub session_id: Option<String>,
-    pub session_status: Option<String>,
     pub phase: Option<RuntimeSessionPhase>,
-    pub current_activity: Option<String>,
     pub paused: bool,
 }
 
@@ -66,7 +55,9 @@ pub struct RuntimeRunningEntry {
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeRetryEntry {
     pub issue_id: String,
-    pub identifier: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub executor: Option<String>,
     pub attempt_number: u32,
     pub due_at: String,
     pub error_message: Option<String>,
@@ -78,10 +69,27 @@ pub struct RuntimeRetryEntry {
 pub struct RuntimeRecentFinishedEntry {
     pub run_attempt_id: String,
     pub issue_id: String,
-    pub identifier: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub executor: Option<String>,
     pub attempt_number: u32,
     pub status: RunAttemptStatus,
     pub finished_at: String,
     pub error_message: Option<String>,
     pub review_status: Option<ReviewStatus>,
+}
+
+/// tauri runtime event payload scoped to a project.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeProjectEventPayload {
+    pub project_id: String,
+}
+
+/// tauri runtime event payload for orchestrator status changes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeOrchestratorStatusPayload {
+    pub project_id: String,
+    pub status: String,
 }

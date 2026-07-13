@@ -1,11 +1,11 @@
-pub(crate) mod audit;
+pub(crate) mod events;
 mod manager;
 mod pause;
 mod poll;
-mod recovery;
-mod runtime;
+pub(crate) mod runtime_events;
 pub(crate) mod workspace;
 
-pub(crate) const DEFAULT_POLL_INTERVAL_MS: u32 = 3_000;
+/// fixed watchdog interval for orphan detection and safety sweeps (not user-configurable)
+pub(crate) const WATCHDOG_INTERVAL_MS: u32 = 30_000;
 
 pub use manager::Manager;

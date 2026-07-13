@@ -1,12 +1,17 @@
 "use client";
 
 import { ArrowPathIcon } from "@/components/ui/hero-icons";
-import { BorderedTable, tableHeadClass, tableHeaderRowClass } from "@/components/dashboard/shared";
+import { DashboardIssueCell } from "@/components/dashboard/dashboard-issue-cell";
+import {
+  BorderedTable,
+  tableCellClass,
+  tableHeadClass,
+  tableHeaderRowClass,
+  tableMutedTextClass,
+} from "@/components/dashboard/shared";
 import { EmptyState } from "@/components/layout/empty-state";
-import { IssueLink } from "@/components/layout/issue-link";
 import { PanelSection } from "@/components/layout/panel-section";
 import { TableSkeleton } from "@/components/layout/table-skeleton";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -18,6 +23,7 @@ import {
 import { formatDateTime } from "@/lib/datetime";
 import { isPendingLoad } from "@/lib/is-pending-load";
 import type { RuntimeRetryEntry } from "@/lib/ipc/types";
+import { cn } from "@/lib/utils";
 
 export function RetryPanel({ retrying, isLoading = false }: { retrying?: RuntimeRetryEntry[]; isLoading?: boolean }) {
   const pending = isPendingLoad(isLoading, retrying);
@@ -28,30 +34,42 @@ export function RetryPanel({ retrying, isLoading = false }: { retrying?: Runtime
         <TableSkeleton columns={4} />
       ) : retrying && retrying.length > 0 ? (
         <BorderedTable>
-          <Table>
+          <Table className="w-full table-fixed">
             <TableHeader>
               <TableRow className={tableHeaderRowClass}>
-                <TableHead className={tableHeadClass}>Issue</TableHead>
-                <TableHead className={tableHeadClass}>Attempt</TableHead>
-                <TableHead className={tableHeadClass}>Due</TableHead>
+                <TableHead className={cn(tableHeadClass, "w-[42%]")}>Task</TableHead>
+                <TableHead className={cn(tableHeadClass, "w-10")}>*</TableHead>
+                <TableHead className={cn(tableHeadClass, "w-28 whitespace-nowrap")}>Due</TableHead>
                 <TableHead className={tableHeadClass}>Error</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {retrying.map((entry) => (
                 <TableRow key={`${entry.issueId}-${entry.attemptNumber}`} className="hover:bg-muted/20">
-                  <TableCell>
-                    <IssueLink issueId={entry.issueId} label={entry.identifier} />
+                  <TableCell className={cn(tableCellClass, "max-w-0")}>
+                    <DashboardIssueCell
+                      issueId={entry.issueId}
+                      title={entry.title}
+                      description={entry.description}
+                      executor={entry.executor}
+                    />
                   </TableCell>
-                  <TableCell className="font-mono tabular-nums">{entry.attemptNumber}</TableCell>
-                  <TableCell className="text-muted-foreground">{formatDateTime(entry.dueAt)}</TableCell>
-                  <TableCell className="max-w-[320px]">
+                  <TableCell className={cn(tableCellClass, tableMutedTextClass, "tabular-nums")}>
+                    {entry.attemptNumber}
+                  </TableCell>
+                  <TableCell className={cn(tableCellClass, tableMutedTextClass)}>
+                    {formatDateTime(entry.dueAt)}
+                  </TableCell>
+                  <TableCell className={cn(tableCellClass, "max-w-0")}>
                     {entry.errorMessage ? (
-                      <Badge variant="destructive" className="max-w-full truncate font-normal" title={entry.errorMessage}>
+                      <span
+                        className="block truncate text-[10px] leading-snug text-destructive"
+                        title={entry.errorMessage}
+                      >
                         {entry.errorMessage}
-                      </Badge>
+                      </span>
                     ) : (
-                      <span className="text-sm text-muted-foreground">No error recorded</span>
+                      <span className={tableMutedTextClass}>No error recorded</span>
                     )}
                   </TableCell>
                 </TableRow>

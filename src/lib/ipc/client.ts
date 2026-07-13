@@ -1,4 +1,3 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { CreateProjectInput } from "@/lib/create-project-form";
 import { IPC_CHANNELS } from "@/lib/ipc/channels";
 import type {
@@ -19,7 +18,6 @@ import type {
   ProjectIssueListItem,
   ProjectSummary,
   RetryPolicy,
-  RuntimeAuditEvent,
   RuntimeRecentFinishedEntry,
   RuntimeRetryEntry,
   RuntimeRunningEntry,
@@ -29,13 +27,11 @@ import type {
   SetIssueTagsResponse,
   SetProjectMaxConcurrencyResponse,
   SetProjectNameResponse,
-  SetProjectPollIntervalResponse,
   SetProjectRetryPolicyResponse,
   TransitionIssueColumnResponse,
-  UpdateIssueDescriptionResponse,
   UpdateIssuePriorityResponse,
-  UpdateIssueTitleResponse,
 } from "@/lib/ipc/types";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 
 export class IpcUnavailableError extends Error {
   constructor(message = "Desktop IPC unavailable") {
@@ -74,11 +70,6 @@ export interface OpenSymphonyDesktopApi {
   ): Promise<SetIssueAutoApprovePermissionsResponse>;
   setIssueTags(issueId: string, tags: string[]): Promise<SetIssueTagsResponse>;
   attachIssueFiles(issueId: string, sourcePaths: string[]): Promise<AttachIssueFilesResponse>;
-  updateIssueTitle(issueId: string, title: string): Promise<UpdateIssueTitleResponse>;
-  updateIssueDescription(
-    issueId: string,
-    description?: string | null,
-  ): Promise<UpdateIssueDescriptionResponse>;
   updateIssuePriority(
     issueId: string,
     priority?: number | null,
@@ -96,33 +87,23 @@ export interface OpenSymphonyDesktopApi {
   // permissions reads
   listIssuePendingPermissions(issueId: string): Promise<PendingPermission[]>;
   // permissions writes
-  resolveSessionPermission(
-    permissionId: string,
-    decision: PermissionDecision,
-  ): Promise<void>;
+  resolveSessionPermission(permissionId: string, decision: PermissionDecision): Promise<void>;
   // runtime reads
   getRuntimeRunning(projectId: string): Promise<RuntimeRunningEntry[]>;
   getRuntimeRetrying(projectId: string): Promise<RuntimeRetryEntry[]>;
   getRuntimeRecentFinished(projectId: string): Promise<RuntimeRecentFinishedEntry[]>;
-  getRuntimeRecentEvents(projectId: string): Promise<RuntimeAuditEvent[]>;
   // runtime writes
-  pauseRun(projectId: string, runAttemptId: string): Promise<void>;
-  resumeRun(projectId: string, runAttemptId: string): Promise<void>;
-  cancelRun(projectId: string, runAttemptId: string): Promise<void>;
+  pauseRun(runAttemptId: string): Promise<void>;
+  resumeRun(runAttemptId: string): Promise<void>;
+  cancelRun(runAttemptId: string): Promise<void>;
   // project reads
   listProjectSummaries(): Promise<ProjectSummary[]>;
-  getProjectPollInterval(projectId: string): Promise<number>;
   getProjectMaxConcurrency(projectId: string): Promise<number>;
   getProjectRetryPolicy(projectId: string): Promise<RetryPolicy>;
-  getProjectOrchestratorStatus(projectId: string): Promise<string>;
   // project writes
   createProject(input: CreateProjectInput): Promise<CreateProjectResponse>;
   deleteProject(projectId: string): Promise<void>;
   setProjectName(projectId: string, name: string): Promise<SetProjectNameResponse>;
-  setProjectPollInterval(
-    projectId: string,
-    pollIntervalMs: number,
-  ): Promise<SetProjectPollIntervalResponse>;
   setProjectMaxConcurrency(
     projectId: string,
     maxConcurrency: number,
@@ -145,8 +126,7 @@ export interface OpenSymphonyDesktopApi {
 function createIpcClient(): OpenSymphonyDesktopApi {
   return {
     // issue reads
-    getIssueHeader: (issueId) =>
-      invoke<IssueHeader>(IPC_CHANNELS.getIssueHeader, { issueId }),
+    getIssueHeader: (issueId) => invoke<IssueHeader>(IPC_CHANNELS.getIssueHeader, { issueId }),
     listProjectIssues: (projectId) =>
       invoke<ProjectIssueListItem[]>(IPC_CHANNELS.listProjectIssues, { projectId }),
     listIssueComments: (issueId) =>
@@ -171,23 +151,16 @@ function createIpcClient(): OpenSymphonyDesktopApi {
         executor: executor ?? null,
       }),
     setIssueAutoApprovePermissions: (issueId, autoApprovePermissions) =>
-      invoke<SetIssueAutoApprovePermissionsResponse>(
-        IPC_CHANNELS.setIssueAutoApprovePermissions,
-        { issueId, autoApprovePermissions },
-      ),
+      invoke<SetIssueAutoApprovePermissionsResponse>(IPC_CHANNELS.setIssueAutoApprovePermissions, {
+        issueId,
+        autoApprovePermissions,
+      }),
     setIssueTags: (issueId, tags) =>
       invoke<SetIssueTagsResponse>(IPC_CHANNELS.setIssueTags, { issueId, tags }),
     attachIssueFiles: (issueId, sourcePaths) =>
       invoke<AttachIssueFilesResponse>(IPC_CHANNELS.attachIssueFiles, {
         issueId,
         sourcePaths,
-      }),
-    updateIssueTitle: (issueId, title) =>
-      invoke<UpdateIssueTitleResponse>(IPC_CHANNELS.updateIssueTitle, { issueId, title }),
-    updateIssueDescription: (issueId, description) =>
-      invoke<UpdateIssueDescriptionResponse>(IPC_CHANNELS.updateIssueDescription, {
-        issueId,
-        description: description ?? null,
       }),
     updateIssuePriority: (issueId, priority) =>
       invoke<UpdateIssuePriorityResponse>(IPC_CHANNELS.updateIssuePriority, {
@@ -221,37 +194,21 @@ function createIpcClient(): OpenSymphonyDesktopApi {
       invoke<RuntimeRecentFinishedEntry[]>(IPC_CHANNELS.getRuntimeRecentFinished, {
         projectId,
       }),
-    getRuntimeRecentEvents: (projectId) =>
-      invoke<RuntimeAuditEvent[]>(IPC_CHANNELS.getRuntimeRecentEvents, { projectId }),
     // runtime writes
-    pauseRun: (projectId, runAttemptId) =>
-      invoke<void>(IPC_CHANNELS.pauseRun, { projectId, runAttemptId }),
-    resumeRun: (projectId, runAttemptId) =>
-      invoke<void>(IPC_CHANNELS.resumeRun, { projectId, runAttemptId }),
-    cancelRun: (projectId, runAttemptId) =>
-      invoke<void>(IPC_CHANNELS.cancelRun, { projectId, runAttemptId }),
+    pauseRun: (runAttemptId) => invoke<void>(IPC_CHANNELS.pauseRun, { runAttemptId }),
+    resumeRun: (runAttemptId) => invoke<void>(IPC_CHANNELS.resumeRun, { runAttemptId }),
+    cancelRun: (runAttemptId) => invoke<void>(IPC_CHANNELS.cancelRun, { runAttemptId }),
     // project reads
-    listProjectSummaries: () =>
-      invoke<ProjectSummary[]>(IPC_CHANNELS.listProjectSummaries),
-    getProjectPollInterval: (projectId) =>
-      invoke<number>(IPC_CHANNELS.getProjectPollInterval, { projectId }),
+    listProjectSummaries: () => invoke<ProjectSummary[]>(IPC_CHANNELS.listProjectSummaries),
     getProjectMaxConcurrency: (projectId) =>
       invoke<number>(IPC_CHANNELS.getProjectMaxConcurrency, { projectId }),
     getProjectRetryPolicy: (projectId) =>
       invoke<RetryPolicy>(IPC_CHANNELS.getProjectRetryPolicy, { projectId }),
-    getProjectOrchestratorStatus: (projectId) =>
-      invoke<string>(IPC_CHANNELS.getProjectOrchestratorStatus, { projectId }),
     // project writes
-    createProject: (input) =>
-      invoke<CreateProjectResponse>(IPC_CHANNELS.createProject, { input }),
+    createProject: (input) => invoke<CreateProjectResponse>(IPC_CHANNELS.createProject, { input }),
     deleteProject: (projectId) => invoke<void>(IPC_CHANNELS.deleteProject, { projectId }),
     setProjectName: (projectId, name) =>
       invoke<SetProjectNameResponse>(IPC_CHANNELS.setProjectName, { projectId, name }),
-    setProjectPollInterval: (projectId, pollIntervalMs) =>
-      invoke<SetProjectPollIntervalResponse>(IPC_CHANNELS.setProjectPollInterval, {
-        projectId,
-        pollIntervalMs,
-      }),
     setProjectMaxConcurrency: (projectId, maxConcurrency) =>
       invoke<SetProjectMaxConcurrencyResponse>(IPC_CHANNELS.setProjectMaxConcurrency, {
         projectId,
@@ -264,8 +221,7 @@ function createIpcClient(): OpenSymphonyDesktopApi {
         backoffMs,
       }),
     // platform
-    listPlatformStatuses: () =>
-      invoke<PlatformInstallStatus[]>(IPC_CHANNELS.listPlatformStatuses),
+    listPlatformStatuses: () => invoke<PlatformInstallStatus[]>(IPC_CHANNELS.listPlatformStatuses),
     listProjectPlatforms: (projectId) =>
       invoke<PlatformId[]>(IPC_CHANNELS.listProjectPlatforms, { projectId }),
     // analytics reads

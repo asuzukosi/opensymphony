@@ -3,7 +3,6 @@
 
 mod platforms;
 mod analytics;
-mod audit;
 mod board;
 mod comment;
 mod issue;
@@ -15,7 +14,6 @@ mod session;
 
 pub use platforms::*;
 pub use analytics::*;
-pub use audit::*;
 pub use board::*;
 pub use comment::*;
 pub use issue::*;

@@ -2,48 +2,55 @@
 
 import {
   DndContext,
+  type DragEndEvent,
   DragOverlay,
+  type DragStartEvent,
   PointerSensor,
   closestCorners,
   useSensor,
   useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
 } from "@dnd-kit/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { BoardColumns, type BoardColumnMeta } from "@/components/board/board-columns";
+import { useOrchestratorStatus } from "@/hooks/use-orchestrator-status";
+
+import { type BoardColumnMeta, BoardColumns } from "@/components/board/board-columns";
 import { CreateIssueDialog } from "@/components/board/create-issue-dialog";
 import { IssueCard } from "@/components/board/issue-card";
-import { BoardIcon, BadgeCheckIcon, ClockIcon, PlayCircleIcon, PlusIcon, StopCircleIcon } from "@/components/ui/hero-icons";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageShell } from "@/components/layout/page-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  BadgeCheckIcon,
+  BoardIcon,
+  ClockIcon,
+  PlayCircleIcon,
+  PlusIcon,
+} from "@/components/ui/hero-icons";
 import { useActiveProject } from "@/contexts/active-project-context";
-import { useIssueSheet } from "@/contexts/issue-sheet-context";
-import { useBoard, type CreateIssueInput } from "@/hooks/use-board";
+import { type CreateIssueInput, useBoard } from "@/hooks/use-board";
 import {
   findIssueById,
   findIssueColumn,
   moveIssueBetweenColumns,
   resolveDropTargetColumnId,
 } from "@/lib/board-drag-utils";
-import { DEFAULT_IPC_POLL_INTERVAL_MS, useIpcQuery } from "@/lib/ipc/hooks";
-import {
-  type BoardColumnId,
-  type ProjectBoard,
-  type ProjectBoardIssue,
-  type RuntimeStatus,
+import type {
+  BoardColumnId,
+  ProjectBoard,
+  ProjectBoardIssue,
+  RuntimeStatus,
 } from "@/lib/ipc/types";
+import { useIssueSheetParams } from "@/lib/issue-sheet-params";
 
 function formatOrchestratorStatus(status: string): string {
   return status.replace(/_/g, " ");
 }
 
 function isRuntimeStatus(status: string): status is RuntimeStatus {
-  return status === "idle" || status === "running" || status === "stopped";
+  return status === "idle" || status === "running";
 }
 
 function OrchestratorStatusBadge({ status }: { status: string }) {
@@ -54,15 +61,6 @@ function OrchestratorStatusBadge({ status }: { status: string }) {
     return (
       <Badge variant="default" className="shrink-0 font-normal capitalize">
         <PlayCircleIcon data-icon="inline-start" />
-        {label}
-      </Badge>
-    );
-  }
-
-  if (normalizedStatus === "stopped") {
-    return (
-      <Badge variant="secondary" className="shrink-0 font-normal capitalize">
-        <StopCircleIcon data-icon="inline-start" />
         {label}
       </Badge>
     );
@@ -97,17 +95,14 @@ function BoardDnDContent() {
   const { projectId } = useActiveProject();
   const board = useBoard();
 
-  const syncedBoard = useMemo(
-    () => buildSyncedBoard(board.issuesByColumn),
-    [board.issuesByColumn],
-  );
+  const syncedBoard = useMemo(() => buildSyncedBoard(board.issuesByColumn), [board.issuesByColumn]);
 
   const [optimisticBoard, setOptimisticBoard] = useState<ProjectBoard | null>(null);
   const [activeIssue, setActiveIssue] = useState<ProjectBoardIssue | null>(null);
   const [failedTransition, setFailedTransition] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [failedCreate, setFailedCreate] = useState(false);
-  const { openIssueSheet } = useIssueSheet();
+  const { openIssueSheet } = useIssueSheetParams();
 
   useEffect(() => {
     setOptimisticBoard(null);
@@ -166,9 +161,7 @@ function BoardDnDContent() {
       return;
     }
 
-    setOptimisticBoard(
-      moveIssueBetweenColumns(syncedBoard, issueId, sourceColumn, targetColumn),
-    );
+    setOptimisticBoard(moveIssueBetweenColumns(syncedBoard, issueId, sourceColumn, targetColumn));
     board.resetTransition();
     setFailedTransition(false);
 
@@ -184,6 +177,7 @@ function BoardDnDContent() {
   const handleCreateIssue = async (input: CreateIssueInput): Promise<void> => {
     board.resetCreate();
     setFailedCreate(false);
+    console.log("handleCreateIssue", input);
 
     try {
       await board.createIssue(input);
@@ -215,7 +209,13 @@ function BoardDnDContent() {
             <BadgeCheckIcon data-icon="inline-end" />
           </Badge>
         </div>
-        <Button type="button" size="sm" className="gap-2" disabled={isMutating} onClick={openCreateDialog}>
+        <Button
+          type="button"
+          size="sm"
+          className="gap-2"
+          disabled={isMutating}
+          onClick={openCreateDialog}
+        >
           <PlusIcon className="size-4" />
           Add task
         </Button>
@@ -225,7 +225,8 @@ function BoardDnDContent() {
         <Alert variant="destructive" className="shrink-0">
           <AlertTitle>Task update failed</AlertTitle>
           <AlertDescription>
-            {board.transitionError.message}. Your change was reverted to the last synced board state.
+            {board.transitionError.message}. Your change was reverted to the last synced board
+            state.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -261,9 +262,7 @@ function BoardDnDContent() {
           </div>
 
           <DragOverlay>
-            {activeIssue ? (
-              <IssueCard issue={activeIssue} isOverlay disabled={isMutating} />
-            ) : null}
+            {activeIssue ? <IssueCard issue={activeIssue} isOverlay disabled={isMutating} /> : null}
           </DragOverlay>
         </DndContext>
       </div>
@@ -284,21 +283,10 @@ function BoardDnDContent() {
 export default function BoardPage() {
   const { projectId, projects, isLoading: isProjectLoading } = useActiveProject();
   const activeProject = projects?.find((project) => project.id === projectId);
-
-  const { data: orchestratorStatus, isLoading: isOrchestratorLoading } = useIpcQuery<string>(
-    `project-orchestrator-status:${projectId ?? "none"}`,
-    async (client) => client.getProjectOrchestratorStatus(projectId as string),
-    { pollIntervalMs: DEFAULT_IPC_POLL_INTERVAL_MS, enabled: projectId != null },
-  );
-
-  const isHeaderLoading =
-    isProjectLoading ||
-    (projectId != null && orchestratorStatus === undefined && isOrchestratorLoading);
+  const orchestratorStatus = useOrchestratorStatus(projectId, activeProject);
 
   const projectName =
     projectId == null ? "No active project" : (activeProject?.name ?? "Task board");
-
-  const statusLabel = orchestratorStatus ?? activeProject?.orchestratorStatus;
 
   return (
     <PageShell width="full" className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -306,15 +294,16 @@ export default function BoardPage() {
         eyebrow="Board"
         icon={BoardIcon}
         title={projectName}
+        titleClassName="text-sm"
         description={
           projectId == null
             ? "Select a project to view its task board."
             : "Drag tasks between columns to update their status."
         }
-        isLoading={isHeaderLoading}
+        isLoading={isProjectLoading}
         actions={
-          statusLabel && projectId != null ? (
-            <OrchestratorStatusBadge status={statusLabel} />
+          orchestratorStatus && projectId != null ? (
+            <OrchestratorStatusBadge status={orchestratorStatus} />
           ) : null
         }
         className="mb-2 shrink-0"

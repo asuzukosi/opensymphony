@@ -10,7 +10,6 @@ pub struct CreateProjectRequest {
     pub use_worktrees: bool,
     pub prompt_template: String,
     pub platforms: Vec<String>,
-    pub poll_interval_ms: i32,
     pub max_concurrency: i32,
     pub retry_max_attempts: i32,
     pub retry_backoff_ms: i32,
@@ -25,7 +24,6 @@ pub struct Project {
     pub slug: String,
     pub workspace_root: String,
     pub prompt_template: String,
-    pub poll_interval_ms: i32,
     pub max_concurrency: i32,
     pub retry_max_attempts: i32,
     pub retry_backoff_ms: i32,
@@ -59,7 +57,6 @@ pub struct CreateProjectParams {
     pub prompt_template: String,
     pub use_per_issue_workspaces: bool,
     pub use_worktrees: bool,
-    pub poll_interval_ms: i32,
     pub max_concurrency: i32,
     pub retry_max_attempts: i32,
     pub retry_backoff_ms: i32,
@@ -69,13 +66,8 @@ pub struct CreateProjectParams {
 #[derive(Default)]
 pub struct ProjectPatch {
     pub name: Option<String>,
-    pub workspace_root: Option<String>,
-    pub prompt_template: Option<String>,
-    pub poll_interval_ms: Option<i32>,
     pub max_concurrency: Option<i32>,
     pub retry_max_attempts: Option<i32>,
     pub retry_backoff_ms: Option<i32>,
-    pub use_per_issue_workspaces: Option<bool>,
-    pub use_worktrees: Option<bool>,
     pub orchestrator_status: Option<String>,
 }

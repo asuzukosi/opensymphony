@@ -16,7 +16,6 @@ export type UseIpcQueryResult<T> = {
   data: T | undefined;
   error: Error | null;
   isLoading: boolean;
-  isRefreshing: boolean;
   refetch: () => Promise<void>;
 };
 
@@ -29,7 +28,6 @@ export function useIpcQuery<T>(
   const [data, setData] = useState<T | undefined>(undefined);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(enabled);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const hasLoadedRef = useRef(false);
   const queryFnRef = useRef(queryFn);
@@ -44,8 +42,6 @@ export function useIpcQuery<T>(
     const isInitialLoad = !hasLoadedRef.current;
     if (isInitialLoad) {
       setIsLoading(true);
-    } else {
-      setIsRefreshing(true);
     }
 
     try {
@@ -71,7 +67,6 @@ export function useIpcQuery<T>(
         return;
       }
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   }, [enabled]);
 
@@ -81,7 +76,6 @@ export function useIpcQuery<T>(
     setData(undefined);
     setError(null);
     setIsLoading(enabled);
-    setIsRefreshing(false);
 
     return () => {
       mountedRef.current = false;
@@ -109,7 +103,7 @@ export function useIpcQuery<T>(
     };
   }, [enabled, pollIntervalMs, queryKey, refetch]);
 
-  return { data, error, isLoading, isRefreshing, refetch };
+  return { data, error, isLoading, refetch };
 }
 
 export type IpcMutationFn<TInput, TResult> = (

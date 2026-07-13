@@ -12,12 +12,13 @@ use crate::types::{
     ProjectIssueListItem,
 };
 
-const ISSUE_CARD_SELECT: &str = "id, identifier, title, priority, executor";
-const ISSUE_CARD_SELECT_ALIASED: &str = "i.id, i.identifier, i.title, i.priority, i.executor";
+const ISSUE_CARD_SELECT: &str = "id, identifier, title, description, priority, executor";
+const ISSUE_CARD_SELECT_ALIASED: &str =
+    "i.id, i.identifier, i.title, i.description, i.priority, i.executor";
 const ISSUE_CARD_ORDER_BY: &str = "ORDER BY priority IS NULL, priority ASC, updated_at ASC";
 const ISSUE_CARD_ORDER_BY_ALIASED: &str =
     "ORDER BY i.priority IS NULL, i.priority ASC, i.updated_at ASC";
-const ISSUE_LIST_SELECT: &str = "id, identifier, title, priority, board_column, executor";
+const ISSUE_LIST_SELECT: &str = "id, identifier, title, description, priority, board_column, executor";
 
 pub struct IssueRepo<'a> {
     conn: &'a Connection,
@@ -40,7 +41,7 @@ impl<'a> IssueRepo<'a> {
         validate_executor(&PlatformsRepo::new(self.conn), project_id, executor)?;
 
         let id = Uuid::new_v4().to_string();
-        let identifier = self.next_identifier(project_id)?;
+        let identifier = id.clone();
 
         self.conn.execute(
             "INSERT INTO issues (id, project_id, identifier, title, description, priority, executor)
@@ -229,15 +230,6 @@ impl<'a> IssueRepo<'a> {
         }
         Ok(cards)
     }
-
-    fn next_identifier(&self, project_id: &str) -> DbResult<String> {
-        let count: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM issues WHERE project_id = ?1",
-            [project_id],
-            |row| row.get(0),
-        )?;
-        Ok(format!("SYM-{}", count + 1))
-    }
 }
 
 fn validate_executor(
@@ -282,26 +274,28 @@ fn read_board_issue_fields(row: &Row<'_>, executor_index: usize) -> rusqlite::Re
         issue_id: row.get(0)?,
         identifier: row.get(1)?,
         title: row.get(2)?,
-        priority: row.get(3)?,
+        description: row.get(3)?,
+        priority: row.get(4)?,
         executor: row.get(executor_index)?,
     })
 }
 
 fn map_issue_card(row: &Row<'_>) -> rusqlite::Result<ProjectBoardIssue> {
-    read_board_issue_fields(row, 4)
+    read_board_issue_fields(row, 5)
 }
 
 fn map_issue_list_item(row: &Row<'_>) -> rusqlite::Result<ProjectIssueListItem> {
-    let card = read_board_issue_fields(row, 5)?;
-    let board_column: String = row.get(4)?;
+    let card = read_board_issue_fields(row, 6)?;
+    let board_column: String = row.get(5)?;
     Ok(ProjectIssueListItem {
         issue_id: card.issue_id,
         identifier: card.identifier,
         title: card.title,
+        description: card.description,
         priority: card.priority,
         executor: card.executor,
         board_column: parse_board_column(&board_column)
-            .map_err(|err| rusqlite::Error::InvalidColumnType(4, err.to_string(), rusqlite::types::Type::Text))?,
+            .map_err(|err| rusqlite::Error::InvalidColumnType(5, err.to_string(), rusqlite::types::Type::Text))?,
     })
 }
 

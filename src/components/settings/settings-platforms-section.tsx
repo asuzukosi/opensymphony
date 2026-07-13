@@ -64,6 +64,11 @@ export function SettingsPlatformsSection() {
                         <p className={cn(wrapText, "font-mono text-xs text-muted-foreground")}>
                           {platform.acpCommand}
                         </p>
+                        {platform.runtimeNote ? (
+                          <p className={cn(wrapText, "text-xs text-muted-foreground")}>
+                            {platform.runtimeNote}
+                          </p>
+                        ) : null}
                         {!installed && status?.missingBinaries.length ? (
                           <p className={cn(wrapText, "text-xs text-muted-foreground")}>
                             Missing: {status.missingBinaries.join(", ")}

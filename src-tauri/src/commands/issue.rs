@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use crate::acp::AcpState;
-use super::runtime::{ensure_runtime_for_backlog, SharedManager};
+use super::runtime::{on_issue_column_changed, on_work_added, SharedManager};
 use crate::db::error::DbError;
 use crate::db::repos::comment::CommentRepo;
 use crate::db::repos::issue::IssueRepo;
@@ -107,7 +107,7 @@ pub fn create_issue(
         &tags.unwrap_or_default(),
     )?;
     let header = load_header(&conn, issue)?;
-    ensure_runtime_for_backlog(&db, &manager, &project_id)?;
+    on_work_added(&conn, &manager, &project_id)?;
     Ok(header)
 }
 
@@ -122,7 +122,7 @@ pub fn set_issue_executor(
     let issue = IssueRepo::new(&conn).set_executor(&issue_id, executor.as_deref())?;
     let header = load_header(&conn, issue.clone())?;
     if issue.board_column == BoardColumnId::Backlog {
-        ensure_runtime_for_backlog(&db, &manager, &issue.project_id)?;
+        on_work_added(&conn, &manager, &issue.project_id)?;
     }
     Ok(header)
 }
@@ -162,40 +162,6 @@ pub fn attach_issue_files(
         .map_err(|err| err.to_string())
 }
 
-#[tauri::command(rename = "opensymphony:update-issue-title")]
-pub fn update_issue_title(
-    db: State<Arc<Db>>,
-    issue_id: String,
-    title: String,
-) -> Result<IssueHeader, String> {
-    let conn = db.conn().map_err(|err| err.to_string())?;
-    let issue = IssueRepo::new(&conn).update(
-        &issue_id,
-        &IssuePatch {
-            title: Some(title),
-            ..Default::default()
-        },
-    )?;
-    load_header(&conn, issue)
-}
-
-#[tauri::command(rename = "opensymphony:update-issue-description")]
-pub fn update_issue_description(
-    db: State<Arc<Db>>,
-    issue_id: String,
-    description: Option<String>,
-) -> Result<IssueHeader, String> {
-    let conn = db.conn().map_err(|err| err.to_string())?;
-    let issue = IssueRepo::new(&conn).update(
-        &issue_id,
-        &IssuePatch {
-            description,
-            ..Default::default()
-        },
-    )?;
-    load_header(&conn, issue)
-}
-
 #[tauri::command(rename = "opensymphony:update-issue-priority")]
 pub fn update_issue_priority(
     db: State<Arc<Db>>,
@@ -225,9 +191,7 @@ pub fn transition_issue_column(
     let conn = db.conn().map_err(|err| err.to_string())?;
     let issue = IssueRepo::new(&conn).transition_column(&issue_id, column)?;
     let header = load_header(&conn, issue.clone())?;
-    if column == BoardColumnId::Backlog {
-        ensure_runtime_for_backlog(&db, &manager, &issue.project_id)?;
-    }
+    on_issue_column_changed(&conn, &manager, &issue)?;
     Ok(header)
 }
 

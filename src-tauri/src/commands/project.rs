@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use tauri::{AppHandle, Manager, State};
 
+use crate::commands::runtime::{try_dispatch_if_active, SharedManager};
 use crate::db::error::DbError;
 use crate::db::repos::project::ProjectRepo;
 use crate::db::Db;
@@ -24,11 +25,6 @@ pub fn list_project_summaries(db: State<Arc<Db>>) -> Result<Vec<ProjectSummary>,
         .map_err(|err| err.to_string())
 }
 
-#[tauri::command(rename = "opensymphony:get-project-poll-interval")]
-pub fn get_project_poll_interval(db: State<Arc<Db>>, project_id: String) -> Result<u32, String> {
-    Ok(require_project(db, &project_id)?.poll_interval_ms as u32)
-}
-
 #[tauri::command(rename = "opensymphony:get-project-max-concurrency")]
 pub fn get_project_max_concurrency(db: State<Arc<Db>>, project_id: String) -> Result<i32, String> {
     Ok(require_project(db, &project_id)?.max_concurrency)
@@ -41,11 +37,6 @@ pub fn get_project_retry_policy(db: State<Arc<Db>>, project_id: String) -> Resul
         max_attempts: project.retry_max_attempts,
         backoff_ms: project.retry_backoff_ms,
     })
-}
-
-#[tauri::command(rename = "opensymphony:get-project-orchestrator-status")]
-pub fn get_project_orchestrator_status(db: State<Arc<Db>>, project_id: String) -> Result<String, String> {
-    Ok(require_project(db, &project_id)?.orchestrator_status)
 }
 
 // writes
@@ -95,28 +86,10 @@ pub fn set_project_name(
     Ok(project.name)
 }
 
-#[tauri::command(rename = "opensymphony:set-project-poll-interval")]
-pub fn set_project_poll_interval(
-    db: State<Arc<Db>>,
-    project_id: String,
-    poll_interval_ms: i32,
-) -> Result<u32, String> {
-    let conn = db.conn().map_err(|err| err.to_string())?;
-    let project = ProjectRepo::new(&conn)
-        .update(
-            &project_id,
-            &ProjectPatch {
-                poll_interval_ms: Some(poll_interval_ms),
-                ..ProjectPatch::default()
-            },
-        )
-        .map_err(|err| err.to_string())?;
-    Ok(project.poll_interval_ms as u32)
-}
-
 #[tauri::command(rename = "opensymphony:set-project-max-concurrency")]
 pub fn set_project_max_concurrency(
     db: State<Arc<Db>>,
+    manager: State<SharedManager>,
     project_id: String,
     max_concurrency: i32,
 ) -> Result<i32, String> {
@@ -130,6 +103,7 @@ pub fn set_project_max_concurrency(
             },
         )
         .map_err(|err| err.to_string())?;
+    try_dispatch_if_active(&conn, &manager, &project_id)?;
     Ok(project.max_concurrency)
 }
 
@@ -216,9 +190,6 @@ fn validate_create_project_request(request: CreateProjectRequest) -> Result<Crea
         }
     }
 
-    if request.poll_interval_ms < 1000 {
-        return Err("poll interval must be at least 1000 ms".into());
-    }
     if request.max_concurrency < 1 {
         return Err("max concurrency must be at least 1".into());
     }
@@ -238,7 +209,6 @@ fn validate_create_project_request(request: CreateProjectRequest) -> Result<Crea
         prompt_template: prompt_template.to_string(),
         use_per_issue_workspaces: request.use_per_issue_workspaces,
         use_worktrees,
-        poll_interval_ms: request.poll_interval_ms,
         max_concurrency: request.max_concurrency,
         retry_max_attempts: request.retry_max_attempts,
         retry_backoff_ms: request.retry_backoff_ms,

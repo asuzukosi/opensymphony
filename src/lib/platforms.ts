@@ -13,6 +13,8 @@ export interface PlatformDefinition {
   acpCommand: string;
   /** all binaries that must be on path for this platform to be usable */
   installBinaries: readonly string[];
+  /** optional note shown in settings when extra runtime setup is required */
+  runtimeNote?: string;
 }
 
 export const DEFAULT_PLATFORM: PlatformId = "hermes";
@@ -30,7 +32,8 @@ const OPENCLAW: PlatformDefinition = {
   label: "OpenClaw",
   logoPath: "/images/agents/openclaw-logo.png",
   acpCommand: "openclaw acp",
-  installBinaries: ["openclaw"],
+  installBinaries: ["openclaw", "node"],
+  runtimeNote: "Requires the OpenClaw gateway on 127.0.0.1:18789 (run: openclaw gateway).",
 };
 
 const CLAUDE_CODE: PlatformDefinition = {

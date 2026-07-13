@@ -21,18 +21,18 @@ Next.js App Router UI in `src/`. Pages use domain hooks over Tauri IPC — do no
 
 | Route | Purpose |
 | ----- | ------- |
-| `/` | Dashboard — running/retry panels, activity charts, audit feed |
+| `/` | Dashboard — running/retry panels, activity charts, recent finished |
 | `/board` | Kanban — four fixed columns, drag-and-drop, create issue dialog, issue detail sheet |
 | `/settings` | Settings — platform install status and active project runtime |
 
-Shell layout: `src/app/(shell)/layout.tsx` wraps all routes with sidebar nav, project switcher (create/edit projects), `ActiveProjectProvider`, and `IssueSheetProvider`.
+Shell layout: `src/app/(shell)/layout.tsx` wraps all routes with sidebar nav, project switcher (create/edit projects), `ActiveProjectProvider`, and a URL-driven issue sheet (`?issue=` via `IssueSheetHost`).
 
 ### domain hooks
 
 | Hook | Responsibility |
 | ---- | -------------- |
 | `useProject()` | Project list, active project, create/rename/delete, `setActiveProject` |
-| `useRuntime({ projectId?, enabled? })` | Dashboard activity panels (running, retry, finished, audit) |
+| `useRuntime({ projectId?, enabled? })` | Dashboard activity panels (running, retry, finished) |
 | `useAgentActivity(timeRange, { projectId? })` | Dashboard agent activity buckets; omit `projectId` for cross-project |
 | `useBoard()` | All board columns, `transitionIssue`, `createIssue` |
 | `useIssue({ issueId, enabled? })` | Issue sheet reads/writes, comments, session events, auto-approve permissions |
@@ -56,7 +56,7 @@ Private IPC primitives: `useIpcQuery`, `useIpcMutation` in `src/lib/ipc/hooks.ts
 src/
   app/(shell)/          # routed pages
   components/           # feature + layout + ui (shadcn)
-  contexts/             # active project + issue sheet providers
+  contexts/             # active project provider
   hooks/                # domain hooks
   lib/ipc/              # channels, types, client, hooks
 ```
@@ -76,11 +76,32 @@ Six supported agent platforms are defined in `src/lib/platforms.ts` (Rust mirror
 
 **Install check:** on startup and in Settings → Platforms, the app checks whether each platform's required binaries are on `PATH`. Uninstalled platforms are grayed out and not selectable in pickers. Project create rejects any selected platform that is not installed.
 
-**No connect/disconnect flow:** platforms are assigned to a project at create time only. Dispatch spawns the platform's ACP command directly — there is no separate agent registry or connection step. Install the CLI, assign the platform when creating a project, set an issue executor, and create backlog work. The orchestrator auto-starts when a project has backlog issues.
+**No connect/disconnect flow:** platforms are assigned to a project at create time only. Dispatch spawns the platform's ACP command directly — there is no separate agent registry or connection step. Install the CLI, assign the platform when creating a project, set an issue executor, and create backlog work. The orchestrator wakes automatically when a project has work (backlog, running attempts, or scheduled retries).
 
 ### hermes setup
 
 Install the Hermes CLI so `hermes` is on `PATH`, then verify in Settings → Platforms. Create a project with Hermes assigned, set Hermes as the issue executor, and add a backlog issue — the orchestrator starts automatically.
+
+## orchestrator
+
+Per-project runtime in `src-tauri/src/orchestrator/`. Event-driven dispatch with a fixed 30s watchdog for safety sweeps.
+
+**Wake:** issue create, column → backlog, executor set, session finish (when retry scheduled), retry timer fire, max concurrency increase.
+
+**Sleep:** when a project has no backlog, no running attempts, and no retry queue rows — watchdog stops and `orchestrator_status` becomes `idle`.
+
+**Event triggers (immediate):**
+
+| Event | Action |
+| ----- | ------ |
+| Work added | wake runtime + dispatch |
+| Session terminal (ACP channel) | sync outcome + fill slots + maybe sleep |
+| Column → review/done | reconcile (cancel ACP + retry) + maybe sleep |
+| Column → done | remove per-issue workspace immediately |
+
+**Watchdog (30s):** reconcile out-of-scope attempts, sweep orphan sessions, dispatch due retries, fill slots, cleanup done workspaces, maybe sleep.
+
+**Startup:** `hydrate_from_db` wakes projects with any work and heals stale `orchestrator_status = running` when idle.
 
 ## project creation
 
@@ -94,7 +115,6 @@ Open the project switcher → **New project**. All configuration is set at creat
 | Per-issue workspaces | Default on — each issue gets an isolated sandbox under app data |
 | Use worktrees | Only when per-issue workspaces is on; uses `git worktree` instead of directory copy |
 | Prompt template | Monaco editor; must include `{{identifier}}`, `{{title}}`, `{{description}}` |
-| Poll interval | Default 3000 ms |
 | Max concurrency | Default 5 |
 | Retry max / backoff | Default 3 attempts, 30000 ms backoff |
 

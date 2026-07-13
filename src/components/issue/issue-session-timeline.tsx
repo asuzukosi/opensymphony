@@ -3,7 +3,6 @@
 import type { ComponentType, SVGProps } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/layout/empty-state";
 import {
   BoltIcon,
   ChatBubbleLeftIcon,
@@ -15,7 +14,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTime } from "@/lib/datetime";
 import type { SessionEvent, SessionEventKind } from "@/lib/ipc/types";
-import { cn } from "@/lib/utils";
+import { cn, wrapText, wrapTextPreserve } from "@/lib/utils";
 
 type IssueSessionTimelineProps = {
   events: SessionEvent[];
@@ -121,14 +120,13 @@ function formatEventBody(event: SessionEvent): string {
 }
 
 function eventBodyClassName(kind: SessionEventKind): string {
-  const wrap = "min-w-0 max-w-full break-words [overflow-wrap:anywhere]";
   if (kind === "Error") {
-    return cn(wrap, "text-sm text-destructive");
+    return cn(wrapText, "text-xs text-destructive");
   }
   if (kind === "Prompt") {
-    return cn(wrap, "whitespace-pre-wrap font-mono text-xs");
+    return cn(wrapTextPreserve, "font-mono text-[10px]");
   }
-  return cn(wrap, "text-sm");
+  return cn(wrapText, "text-xs");
 }
 
 function filterTimelineEvents(events: SessionEvent[]): SessionEvent[] {
@@ -163,7 +161,7 @@ function TimelineSkeleton() {
 }
 
 function TimelineEmptyState({ message }: { message: string }) {
-  return <EmptyState title={message} className="py-8" />;
+  return <p className="text-xs text-muted-foreground">{message}</p>;
 }
 
 function TimelineItem({ event }: { event: SessionEvent }) {
@@ -180,7 +178,7 @@ function TimelineItem({ event }: { event: SessionEvent }) {
       <span className="absolute left-0 top-1 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-border/60 bg-background">
         <Icon className="h-2.5 w-2.5 text-muted-foreground" />
       </span>
-      <div className="min-w-0 space-y-1 overflow-hidden rounded-lg border border-border/60 bg-muted/20 p-3">
+      <div className="min-w-0 space-y-1 overflow-hidden pb-1">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <Badge
             variant={config.badgeVariant ?? "outline"}
@@ -188,7 +186,7 @@ function TimelineItem({ event }: { event: SessionEvent }) {
           >
             {config.label}
           </Badge>
-          <time className="shrink-0 text-xs text-muted-foreground" dateTime={event.createdAt}>
+          <time className="shrink-0 text-[10px] text-muted-foreground" dateTime={event.createdAt}>
             {formatDateTime(event.createdAt)}
           </time>
         </div>

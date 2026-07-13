@@ -53,8 +53,8 @@
 
     /* layout: shell and panel widths */
     --sidebar-width: 16rem;
-    --board-column-width: 25rem;
-    --board-column-gap: 1.25rem;
+    --board-column-width: 19rem;
+    --board-column-gap: 1rem;
 
     /* color: page canvas behind cards */
     --page-background: 240 4.8% 95.9%;

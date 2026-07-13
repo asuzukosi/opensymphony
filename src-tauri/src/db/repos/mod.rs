@@ -1,6 +1,5 @@
 pub mod agent_session;
 pub mod analytics;
-pub mod audit;
 pub mod comment;
 pub mod issue;
 pub mod issue_files;

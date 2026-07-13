@@ -1,9 +1,8 @@
 "use client";
 
-import { SurfaceCard } from "@/components/layout/surface-card";
-import { EmptyState } from "@/components/layout/empty-state";
+import { IssueDetailSection } from "@/components/issue/issue-detail-section";
+import { IssueSessionTimeline } from "@/components/issue/issue-session-timeline";
 import { Badge } from "@/components/ui/badge";
-import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -15,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/datetime";
 import type { IssueDetailRunAttempt, SessionEvent } from "@/lib/ipc/types";
-import { IssueSessionTimeline } from "@/components/issue/issue-session-timeline";
+import { cn, wrapText, wrapTextPreserve } from "@/lib/utils";
 
 type IssueRunHistoryTableProps = {
   attempts?: IssueDetailRunAttempt[];
@@ -84,72 +83,78 @@ export function IssueRunHistoryTable({
   const hasAttempts = attempts != null && attempts.length > 0;
 
   return (
-    <SurfaceCard>
-      <CardHeader className="pb-4">
-        <CardTitle className="text-base">Run history</CardTitle>
-        <CardDescription>Run attempts for this issue.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <div className="min-w-0 space-y-8">
+      <IssueDetailSection title="Run history" description="Run attempts for this issue.">
         {isLoading ? (
           <RunHistoryTableSkeleton />
         ) : hasAttempts ? (
-          <div className="overflow-hidden rounded-lg border border-border/60">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30 hover:bg-muted/30">
-                  <TableHead className="text-xs uppercase tracking-wide">Attempt</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wide">Status</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wide">Started</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wide">Finished</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wide">Details</TableHead>
+          <Table className="w-full table-fixed text-xs">
+            <TableHeader>
+              <TableRow className="border-b border-border/60 hover:bg-transparent">
+                <TableHead className="h-8 text-[10px]">Attempt</TableHead>
+                <TableHead className="h-8 text-[10px]">Status</TableHead>
+                <TableHead className="h-8 text-[10px]">Started</TableHead>
+                <TableHead className="h-8 text-[10px]">Finished</TableHead>
+                <TableHead className="h-8 text-[10px]">Details</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {attempts.map((attempt) => (
+                <TableRow
+                  key={attempt.runAttemptId}
+                  className="border-b border-border/40 hover:bg-transparent"
+                >
+                  <TableCell className="py-2 font-medium tabular-nums">
+                    #{attempt.attemptNumber}
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <Badge
+                      variant={statusBadgeVariant(attempt.status)}
+                      className="text-[10px] font-normal capitalize"
+                    >
+                      {attempt.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell
+                    className={cn("py-2 text-[10px] leading-tight text-muted-foreground", wrapText)}
+                  >
+                    {formatTimestamp(attempt.startedAt)}
+                  </TableCell>
+                  <TableCell
+                    className={cn("py-2 text-[10px] leading-tight text-muted-foreground", wrapText)}
+                  >
+                    {formatTimestamp(attempt.finishedAt)}
+                  </TableCell>
+                  <TableCell className="min-w-0 max-w-[320px] py-2">
+                    {attempt.errorMessage ? (
+                      <p className={cn("text-xs text-destructive", wrapTextPreserve)}>
+                        {attempt.errorMessage}
+                      </p>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {attempts.map((attempt) => (
-                  <TableRow key={attempt.runAttemptId} className="hover:bg-muted/20">
-                    <TableCell className="font-medium tabular-nums">#{attempt.attemptNumber}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusBadgeVariant(attempt.status)} className="font-normal capitalize">
-                        {attempt.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{formatTimestamp(attempt.startedAt)}</TableCell>
-                    <TableCell className="text-muted-foreground">{formatTimestamp(attempt.finishedAt)}</TableCell>
-                    <TableCell className="max-w-[320px]">
-                      {attempt.errorMessage ? (
-                        <p className="truncate text-sm text-destructive" title={attempt.errorMessage}>
-                          {attempt.errorMessage}
-                        </p>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
         ) : (
-          <EmptyState
-            title="No run history"
-            description="Run attempts will appear here after the orchestrator dispatches this issue."
-            className="py-12"
-          />
+          <p className="text-xs text-muted-foreground">
+            Run attempts will appear here after the orchestrator dispatches this issue.
+          </p>
         )}
-        <div className="space-y-3">
-          <div>
-            <h3 className="text-sm font-medium">Session timeline</h3>
-            <p className="text-sm text-muted-foreground">
-              Prompt, tool, permission, and error events from agent runs.
-            </p>
-          </div>
-          <IssueSessionTimeline
-            events={sessionEvents}
-            isLoading={isLoading}
-            emptyMessage="Session events will appear here after an agent run records activity."
-          />
-        </div>
-      </CardContent>
-    </SurfaceCard>
+      </IssueDetailSection>
+
+      <IssueDetailSection
+        title="Session timeline"
+        description="Prompt, tool, permission, and error events from agent runs."
+      >
+        <IssueSessionTimeline
+          events={sessionEvents}
+          isLoading={isLoading}
+          emptyMessage="Session events will appear here after an agent run records activity."
+        />
+      </IssueDetailSection>
+    </div>
   );
 }

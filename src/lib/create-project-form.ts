@@ -1,9 +1,8 @@
-import { z } from "zod";
 import type { PlatformId } from "@/lib/platforms";
 import { DEFAULT_PLATFORM, PLATFORMS } from "@/lib/platforms";
+import { z } from "zod";
 
 export type ProjectRuntimeFields = {
-  pollIntervalMs: number;
   maxConcurrency: number;
   retryMaxAttempts: number;
   retryBackoffMs: number;
@@ -16,7 +15,6 @@ export type CreateProjectFormState = {
   useWorktrees: boolean;
   promptTemplate: string;
   platformIds: PlatformId[];
-  pollIntervalMs: number;
   maxConcurrency: number;
   retryMaxAttempts: number;
   retryBackoffMs: number;
@@ -29,7 +27,6 @@ export type CreateProjectInput = {
   useWorktrees: boolean;
   promptTemplate: string;
   platforms: PlatformId[];
-  pollIntervalMs: number;
   maxConcurrency: number;
   retryMaxAttempts: number;
   retryBackoffMs: number;
@@ -38,27 +35,19 @@ export type CreateProjectInput = {
 export type CreateProjectFormField = keyof CreateProjectFormState;
 export type CreateProjectFormErrors = Partial<Record<CreateProjectFormField, string>>;
 
-const platformIds = PLATFORMS.map((platform) => platform.id) as [
-  PlatformId,
-  ...PlatformId[],
-];
+const platformIds = PLATFORMS.map((platform) => platform.id) as [PlatformId, ...PlatformId[]];
 
 export const DEFAULT_PROJECT_RUNTIME: ProjectRuntimeFields = {
-  pollIntervalMs: 3000,
   maxConcurrency: 5,
   retryMaxAttempts: 3,
   retryBackoffMs: 30000,
 };
 
-export const DEFAULT_PROJECT_PROMPT_TEMPLATE = `Run issue {{identifier}}: {{title}}
+export const DEFAULT_PROJECT_PROMPT_TEMPLATE = `{{title}}
 
 {{description}}`;
 
-export const REQUIRED_PROMPT_TEMPLATE_TAGS = [
-  "identifier",
-  "title",
-  "description",
-] as const;
+export const REQUIRED_PROMPT_TEMPLATE_TAGS = ["title", "description"] as const;
 
 export function getMissingPromptTemplateTags(template: string): string[] {
   return REQUIRED_PROMPT_TEMPLATE_TAGS.filter((tag) => !template.includes(`{{${tag}}}`));
@@ -88,11 +77,6 @@ const createProjectFormSchema = z
         }
       }),
     platformIds: z.array(z.enum(platformIds)).min(1, "Select at least one platform"),
-    pollIntervalMs: z
-      .number()
-      .finite("Poll interval must be a number")
-      .int("Poll interval must be a whole number")
-      .min(1000, "Poll interval must be at least 1000 ms"),
     maxConcurrency: z
       .number()
       .finite("Max concurrency must be a number")
@@ -106,8 +90,8 @@ const createProjectFormSchema = z
     retryBackoffMs: z
       .number()
       .finite("Backoff must be a number")
-      .int("Backoff must be a whole number")
-      .min(0, "Backoff must be at least 0"),
+      .int("Backoff must be a whole number of seconds")
+      .min(0, "Backoff must be at least 0 seconds"),
   })
   .strict();
 
@@ -119,7 +103,6 @@ function toCreateProjectInput(form: CreateProjectFormState): CreateProjectInput 
     useWorktrees: form.usePerIssueWorkspaces ? form.useWorktrees : false,
     promptTemplate: form.promptTemplate.trim(),
     platforms: form.platformIds,
-    pollIntervalMs: form.pollIntervalMs,
     maxConcurrency: form.maxConcurrency,
     retryMaxAttempts: form.retryMaxAttempts,
     retryBackoffMs: form.retryBackoffMs,
@@ -181,9 +164,9 @@ export function createInitialProjectFormState(): CreateProjectFormState {
 
 const editProjectNameSchema = z.string().trim().min(1, "Project name is required");
 
-export function validateEditProjectName(name: string):
-  | { success: true; name: string }
-  | { success: false; error: string } {
+export function validateEditProjectName(
+  name: string,
+): { success: true; name: string } | { success: false; error: string } {
   const result = editProjectNameSchema.safeParse(name);
   if (!result.success) {
     return { success: false, error: result.error.issues[0]?.message ?? "Invalid name" };

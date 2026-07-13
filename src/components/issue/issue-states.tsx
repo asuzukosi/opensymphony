@@ -2,30 +2,19 @@
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { QuestionMarkCircleIcon } from "@/components/ui/hero-icons";
-import { Skeleton } from "@/components/ui/skeleton";
-
-export function IssueSheetLoadingState() {
-  return (
-    <div className="space-y-4 pr-6">
-      <Skeleton className="h-4 w-24" />
-      <Skeleton className="h-6 w-full" />
-      <Skeleton className="h-16 w-full" />
-      <Skeleton className="h-40 w-full" />
-    </div>
-  );
-}
+import { cn, wrapText } from "@/lib/utils";
 
 type IssueNotFoundStateProps = {
-  issueId: string;
+  issueId?: string;
 };
 
-export function IssueNotFoundState({ issueId }: IssueNotFoundStateProps) {
+export function IssueNotFoundState({ issueId: _issueId }: IssueNotFoundStateProps) {
   return (
-    <Alert>
+    <Alert className="text-xs">
       <QuestionMarkCircleIcon className="h-4 w-4" />
       <AlertTitle>Issue not found</AlertTitle>
-      <AlertDescription>
-        No issue exists for id <span className="font-mono">{issueId}</span>.
+      <AlertDescription className={cn("text-xs", wrapText)}>
+        This issue may have been deleted or is no longer available.
       </AlertDescription>
     </Alert>
   );
@@ -37,9 +26,9 @@ type IssueErrorAlertProps = {
 
 export function IssueErrorAlert({ error }: IssueErrorAlertProps) {
   return (
-    <Alert variant="destructive">
+    <Alert variant="destructive" className="text-xs">
       <AlertTitle>Issue unavailable</AlertTitle>
-      <AlertDescription>{error.message}</AlertDescription>
+      <AlertDescription className={cn("text-xs", wrapText)}>{error.message}</AlertDescription>
     </Alert>
   );
 }

@@ -26,10 +26,10 @@ impl RuntimeSessionStatus {
 
 #[derive(Clone)]
 pub struct StartRuntimeSessionInput {
+    pub project_id: String,
     pub agent_session_id: String,
     pub run_attempt_id: String,
     pub issue_id: String,
-    pub identifier: String,
     pub title: String,
     pub description: Option<String>,
     pub prompt_template: String,
@@ -67,8 +67,6 @@ pub trait AcpAdapter: Send + Sync {
     ) -> Option<RuntimeSessionRecord>;
 
     fn get_session_phase(&self, session_id: &str) -> Option<RuntimeSessionPhase>;
-
-    fn get_current_activity(&self, session_id: &str) -> Option<String>;
 
     fn get_last_agent_message(&self, session_id: &str) -> Option<String>;
 

@@ -50,6 +50,7 @@ pub struct ProjectBoardIssue {
     pub issue_id: String,
     pub identifier: String,
     pub title: String,
+    pub description: Option<String>,
     pub priority: Option<i32>,
     pub executor: Option<String>,
 }
@@ -60,6 +61,7 @@ pub struct ProjectIssueListItem {
     pub issue_id: String,
     pub identifier: String,
     pub title: String,
+    pub description: Option<String>,
     pub priority: Option<i32>,
     pub board_column: BoardColumnId,
     pub executor: Option<String>,

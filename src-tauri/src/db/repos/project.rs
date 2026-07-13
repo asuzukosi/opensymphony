@@ -23,17 +23,16 @@ impl<'a> ProjectRepo<'a> {
         let tx = self.conn.unchecked_transaction()?;
         tx.execute(
             "INSERT INTO projects (
-                id, name, slug, workspace_root, prompt_template, poll_interval_ms,
+                id, name, slug, workspace_root, prompt_template,
                 max_concurrency, retry_max_attempts, retry_backoff_ms,
                 use_per_issue_workspaces, use_worktrees
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 id,
                 params.name,
                 slug,
                 params.workspace_root,
                 params.prompt_template,
-                params.poll_interval_ms,
                 params.max_concurrency,
                 params.retry_max_attempts,
                 params.retry_backoff_ms,
@@ -51,7 +50,7 @@ impl<'a> ProjectRepo<'a> {
 
     pub fn get(&self, id: &str) -> DbResult<Option<Project>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, slug, workspace_root, prompt_template, poll_interval_ms,
+            "SELECT id, name, slug, workspace_root, prompt_template,
                     max_concurrency, retry_max_attempts, retry_backoff_ms,
                     use_per_issue_workspaces, use_worktrees, orchestrator_status, created_at, updated_at
              FROM projects WHERE id = ?1",
@@ -91,18 +90,6 @@ impl<'a> ProjectRepo<'a> {
             sets.push("name = ?");
             values.push(Box::new(name.clone()));
         }
-        if let Some(workspace_root) = &patch.workspace_root {
-            sets.push("workspace_root = ?");
-            values.push(Box::new(workspace_root.clone()));
-        }
-        if let Some(prompt_template) = &patch.prompt_template {
-            sets.push("prompt_template = ?");
-            values.push(Box::new(prompt_template.clone()));
-        }
-        if let Some(poll_interval_ms) = patch.poll_interval_ms {
-            sets.push("poll_interval_ms = ?");
-            values.push(Box::new(poll_interval_ms));
-        }
         if let Some(max_concurrency) = patch.max_concurrency {
             sets.push("max_concurrency = ?");
             values.push(Box::new(max_concurrency));
@@ -114,14 +101,6 @@ impl<'a> ProjectRepo<'a> {
         if let Some(retry_backoff_ms) = patch.retry_backoff_ms {
             sets.push("retry_backoff_ms = ?");
             values.push(Box::new(retry_backoff_ms));
-        }
-        if let Some(use_per_issue_workspaces) = patch.use_per_issue_workspaces {
-            sets.push("use_per_issue_workspaces = ?");
-            values.push(Box::new(i32::from(use_per_issue_workspaces)));
-        }
-        if let Some(use_worktrees) = patch.use_worktrees {
-            sets.push("use_worktrees = ?");
-            values.push(Box::new(i32::from(use_worktrees)));
         }
         if let Some(orchestrator_status) = &patch.orchestrator_status {
             sets.push("orchestrator_status = ?");
@@ -159,22 +138,21 @@ impl<'a> ProjectRepo<'a> {
 }
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
-    let use_per_issue_workspaces: i32 = row.get(9)?;
-    let use_worktrees: i32 = row.get(10)?;
+    let use_per_issue_workspaces: i32 = row.get(8)?;
+    let use_worktrees: i32 = row.get(9)?;
     Ok(Project {
         id: row.get(0)?,
         name: row.get(1)?,
         slug: row.get(2)?,
         workspace_root: row.get(3)?,
         prompt_template: row.get(4)?,
-        poll_interval_ms: row.get(5)?,
-        max_concurrency: row.get(6)?,
-        retry_max_attempts: row.get(7)?,
-        retry_backoff_ms: row.get(8)?,
+        max_concurrency: row.get(5)?,
+        retry_max_attempts: row.get(6)?,
+        retry_backoff_ms: row.get(7)?,
         use_per_issue_workspaces: use_per_issue_workspaces != 0,
         use_worktrees: use_worktrees != 0,
-        orchestrator_status: row.get(11)?,
-        created_at: row.get(12)?,
-        updated_at: row.get(13)?,
+        orchestrator_status: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
     })
 }

@@ -6,7 +6,6 @@ use super::types::StartRuntimeSessionInput;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptRenderIssueFields {
-    pub identifier: String,
     pub title: String,
     pub description: Option<String>,
 }
@@ -60,23 +59,18 @@ pub fn render_prompt_template(input: &RenderPromptInput<'_>) -> Result<String, P
 pub fn render_task_prompt(input: &StartRuntimeSessionInput) -> Result<String, String> {
     if input.prompt_template.trim().is_empty() {
         return Ok(
-            [
-                input.identifier.as_str(),
-                input.title.as_str(),
-                input.description.as_deref().unwrap_or(""),
-            ]
-            .iter()
-            .copied()
-            .filter(|value| !value.is_empty())
-            .collect::<Vec<_>>()
-            .join("\n"),
+            [input.title.as_str(), input.description.as_deref().unwrap_or("")]
+                .iter()
+                .copied()
+                .filter(|value| !value.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n"),
         );
     }
 
     render_prompt_template(&RenderPromptInput {
         prompt_template: &input.prompt_template,
         issue: &PromptRenderIssueFields {
-            identifier: input.identifier.clone(),
             title: input.title.clone(),
             description: input.description.clone(),
         },
@@ -96,10 +90,9 @@ fn resolve_prompt_variable<'a>(
     issue: &'a PromptRenderIssueFields,
 ) -> Option<&'a str> {
     match name {
-        "identifier" => Some(issue.identifier.as_str()),
+        "identifier" => Some(""),
         "title" => Some(issue.title.as_str()),
         "description" => Some(issue.description.as_deref().unwrap_or("")),
         _ => None,
     }
 }
-

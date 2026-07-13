@@ -10,11 +10,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { PlatformAvatar } from "@/components/ui/platform-avatar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getPlatform, resolvePlatformInstalled, type PlatformId } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 
-const addButtonClassName = "h-9 w-9 shrink-0 rounded-full";
+const addButtonClassName = "h-8 w-8 shrink-0 rounded-full";
 
 type PlatformPickerMenuItemProps = {
   platformId: PlatformId;
@@ -41,6 +40,7 @@ function PlatformPickerMenuItem({ platformId, installed, onSelect }: PlatformPic
     <DropdownMenuItem
       aria-disabled={!installed}
       className={cn(!installed && "cursor-not-allowed opacity-60")}
+      title={!installed ? `${platform.label} not installed on this computer` : undefined}
       onSelect={(event) => {
         if (!installed) {
           event.preventDefault();
@@ -49,18 +49,7 @@ function PlatformPickerMenuItem({ platformId, installed, onSelect }: PlatformPic
         onSelect(platformId);
       }}
     >
-      {installed ? (
-        row
-      ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="flex w-full items-center">{row}</div>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="border bg-page text-xs text-muted-foreground">
-            {platform.label} not installed on this computer
-          </TooltipContent>
-        </Tooltip>
-      )}
+      {row}
     </DropdownMenuItem>
   );
 }
@@ -122,7 +111,11 @@ export function PlatformPickerField({
                 <PlusIcon className="h-4 w-4 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-52">
+            <DropdownMenuContent
+              align="start"
+              className="z-[60] w-52"
+              onCloseAutoFocus={(event) => event.preventDefault()}
+            >
               {pickable.map((platformId) => (
                 <PlatformPickerMenuItem
                   key={platformId}

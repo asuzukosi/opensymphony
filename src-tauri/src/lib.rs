@@ -8,22 +8,22 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use acp::AcpState;
 use orchestrator::Manager as OrchestratorManager;
+use orchestrator::events::orchestrator_event_channel;
 use orchestrator::workspace::WorkspaceManager;
 use commands::{
     // issue
     add_issue_comment, attach_issue_files, create_issue, get_issue_header, list_issue_comments,
     list_issue_pending_permissions, list_issue_run_attempts, list_project_issues,
     list_session_events, resolve_session_permission, set_issue_auto_approve_permissions,
-    set_issue_executor, set_issue_tags, transition_issue_column, update_issue_description,
-    update_issue_priority, update_issue_title,
+    set_issue_executor, set_issue_tags, transition_issue_column,
+    update_issue_priority,
     // runtime
-    cancel_run, get_runtime_recent_events, get_runtime_recent_finished, get_runtime_retrying,
+    cancel_run, get_runtime_recent_finished, get_runtime_retrying,
     get_runtime_running, pause_run, resume_run,
     // project
     create_project, delete_project, get_project_max_concurrency,
-    get_project_orchestrator_status, get_project_poll_interval,
     get_project_retry_policy, list_project_summaries,
-    set_project_max_concurrency, set_project_name, set_project_poll_interval,
+    set_project_max_concurrency, set_project_name,
     set_project_retry_policy,
     // platform
     list_platform_statuses, list_project_platforms,
@@ -49,9 +49,11 @@ pub fn run() {
             let db_path = app_data_dir.join(db::DB_FILE_NAME);
             let database = Arc::new(Db::open(&db_path)?);
             app.manage(Arc::clone(&database));
+            let (event_tx, event_rx) = orchestrator_event_channel();
             let (acp_state, adapter) = AcpState::new(
                 tauri::async_runtime::handle(),
                 Arc::clone(&database),
+                event_tx.clone(),
             );
             app.manage(acp_state);
             let manager = Arc::new(Mutex::new(OrchestratorManager::new(
@@ -59,6 +61,8 @@ pub fn run() {
                 tauri::async_runtime::handle(),
                 adapter,
                 WorkspaceManager::from_app_data(&app_data_dir),
+                event_rx,
+                app.handle().clone(),
             )));
             OrchestratorManager::attach_handle(&manager);
             {
@@ -85,29 +89,23 @@ pub fn run() {
             set_issue_auto_approve_permissions,
             set_issue_tags,
             transition_issue_column,
-            update_issue_description,
             update_issue_priority,
-            update_issue_title,
             list_issue_pending_permissions,
             resolve_session_permission,
             // runtime
             get_runtime_running,
             get_runtime_retrying,
             get_runtime_recent_finished,
-            get_runtime_recent_events,
             pause_run,
             resume_run,
             cancel_run,
             // project
             list_project_summaries,
-            get_project_poll_interval,
             get_project_max_concurrency,
             get_project_retry_policy,
-            get_project_orchestrator_status,
             create_project,
             delete_project,
             set_project_name,
-            set_project_poll_interval,
             set_project_max_concurrency,
             set_project_retry_policy,
             // platform

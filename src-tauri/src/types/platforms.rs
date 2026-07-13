@@ -58,7 +58,7 @@ impl Platform {
     pub fn install_binaries(self) -> &'static [&'static str] {
         match self {
             Self::Hermes => &["hermes"],
-            Self::OpenClaw => &["openclaw"],
+            Self::OpenClaw => &["openclaw", "node"],
             Self::ClaudeCode => &["npx", "claude"],
             Self::Codex => &["npx", "codex"],
             Self::Pi => &["npx", "pi"],

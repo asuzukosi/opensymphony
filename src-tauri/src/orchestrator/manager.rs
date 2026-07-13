@@ -5,27 +5,82 @@ use std::time::Duration;
 use chrono::Utc;
 use rusqlite::Connection;
 use tauri::async_runtime::{JoinHandle, RuntimeHandle};
+use tauri::AppHandle;
+use tokio::sync::mpsc::Receiver;
 use tokio::time::{self, MissedTickBehavior};
 
 use crate::acp::types::AcpAdapter;
 use crate::db::error::{DbError, DbResult};
-use crate::db::Db;
 use crate::db::repos::agent_session::AgentSessionRepo;
-use crate::db::repos::audit::AuditRepo;
 use crate::db::repos::issue::IssueRepo;
 use crate::db::repos::project::ProjectRepo;
 use crate::db::repos::retry_queue::RetryQueueRepo;
 use crate::db::repos::run_attempt::RunAttemptRepo;
+use crate::db::Db;
 use crate::types::{
-    BoardColumnId, ProjectPatch, RuntimeAuditEvent, RuntimeRecentFinishedEntry,
-    RuntimeRetryEntry, RuntimeRunningEntry, RuntimeStatus, ReviewStatus, RunAttemptStatus,
+    BoardColumnId, Issue, Project, ProjectPatch, RuntimeRecentFinishedEntry, RuntimeRetryEntry,
+    RuntimeRunningEntry, RuntimeStatus, ReviewStatus, RunAttemptStatus,
 };
 
-use super::audit::{self, action};
+use super::events::OrchestratorEvent;
 use super::pause::PauseGateRegistry;
-use super::recovery::recover_stale_runs;
-use super::runtime::{CycleContext, Runtime};
+use super::poll::{
+    cancel_run_attempt, dispatch_due_retries, reconcile_running_attempts, sweep_orphan_sessions,
+    sync_session_outcome, try_dispatch,
+};
+use super::runtime_events::RuntimeEventEmitter;
 use super::workspace::{cleanup_done_workspaces, WorkspaceManager};
+use super::WATCHDOG_INTERVAL_MS;
+
+struct ProjectRuntime {
+    config: Option<Project>,
+    status: RuntimeStatus,
+    timer: Option<JoinHandle<()>>,
+}
+
+impl ProjectRuntime {
+    fn new() -> Self {
+        Self {
+            config: None,
+            status: RuntimeStatus::Idle,
+            timer: None,
+        }
+    }
+
+    fn reload_config(&mut self, conn: &Connection, project_id: &str) -> DbResult<()> {
+        self.config = Some(
+            ProjectRepo::new(conn)
+                .get(project_id)?
+                .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))?,
+        );
+        Ok(())
+    }
+
+    fn apply_orchestrator_status(&mut self, value: &str) {
+        self.status = if value == "running" {
+            RuntimeStatus::Running
+        } else {
+            RuntimeStatus::Idle
+        };
+    }
+
+    fn set_timer(&mut self, handle: JoinHandle<()>) {
+        if let Some(existing) = self.timer.take() {
+            existing.abort();
+        }
+        self.timer = Some(handle);
+    }
+
+    fn stop_timer(&mut self) {
+        if let Some(handle) = self.timer.take() {
+            handle.abort();
+        }
+    }
+
+    fn has_watchdog(&self) -> bool {
+        self.timer.is_some()
+    }
+}
 
 pub struct Manager {
     db: Arc<Db>,
@@ -34,7 +89,9 @@ pub struct Manager {
     workspaces: WorkspaceManager,
     pause_gates: PauseGateRegistry,
     self_handle: OnceLock<Arc<Mutex<Manager>>>,
-    runtimes: HashMap<String, Runtime>,
+    runtimes: HashMap<String, ProjectRuntime>,
+    event_rx: Option<Receiver<OrchestratorEvent>>,
+    app_handle: AppHandle,
 }
 
 impl Manager {
@@ -43,6 +100,8 @@ impl Manager {
         async_runtime: RuntimeHandle,
         adapter: Arc<dyn AcpAdapter>,
         workspaces: WorkspaceManager,
+        event_rx: Receiver<OrchestratorEvent>,
+        app: AppHandle,
     ) -> Self {
         Self {
             db,
@@ -52,7 +111,67 @@ impl Manager {
             pause_gates: PauseGateRegistry::default(),
             self_handle: OnceLock::new(),
             runtimes: HashMap::new(),
+            event_rx: Some(event_rx),
+            app_handle: app,
         }
+    }
+
+    fn emitter(&self) -> RuntimeEventEmitter {
+        RuntimeEventEmitter::new(self.app_handle.clone())
+    }
+
+    pub fn attach_handle(handle: &Arc<Mutex<Manager>>) {
+        let (event_rx, db, async_runtime) = {
+            let Ok(mut guard) = handle.lock() else {
+                return;
+            };
+            let _ = guard.self_handle.set(Arc::clone(handle));
+            (
+                guard.event_rx.take(),
+                Arc::clone(&guard.db),
+                guard.async_runtime.clone(),
+            )
+        };
+
+        let Some(mut event_rx) = event_rx else {
+            return;
+        };
+
+        let manager = Arc::clone(handle);
+        async_runtime.spawn(async move {
+            while let Some(event) = event_rx.recv().await {
+                let Ok(conn) = db.conn() else {
+                    log::error!("orchestrator event consumer: db connection failed");
+                    continue;
+                };
+                let Ok(mut guard) = manager.lock() else {
+                    log::error!("orchestrator event consumer: manager lock poisoned");
+                    break;
+                };
+                if let Err(err) = guard.handle_orchestrator_event(&conn, event) {
+                    log::error!("orchestrator event handler failed: {err}");
+                }
+            }
+            log::info!("orchestrator event consumer stopped");
+        });
+    }
+
+    pub fn register_project(&mut self, project_id: impl Into<String>) {
+        self.runtimes
+            .entry(project_id.into())
+            .or_insert_with(ProjectRuntime::new);
+    }
+
+    fn runtime(&self, project_id: &str) -> DbResult<&ProjectRuntime> {
+        self.runtimes
+            .get(project_id)
+            .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))
+    }
+
+    fn runtime_mut(&mut self, project_id: &str) -> DbResult<&mut ProjectRuntime> {
+        self.runtimes
+            .get_mut(project_id)
+            .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))
     }
 
     pub fn pause_run(&self, conn: &Connection, run_attempt_id: &str) -> DbResult<()> {
@@ -65,55 +184,30 @@ impl Manager {
         self.pause_gates.resume(&session_id)
     }
 
-    pub fn cancel_run(
-        &mut self,
-        conn: &Connection,
-        project_id: &str,
-        run_attempt_id: &str,
-    ) -> DbResult<()> {
-        self.register_project(project_id);
+    pub fn cancel_run(&mut self, conn: &Connection, run_attempt_id: &str) -> DbResult<()> {
+        let attempt = RunAttemptRepo::new(conn)
+            .get(run_attempt_id)?
+            .ok_or_else(|| DbError::NotFound(format!("run attempt {run_attempt_id}")))?;
+        let issue = IssueRepo::new(conn)
+            .get(&attempt.issue_id)?
+            .ok_or_else(|| DbError::NotFound(format!("issue {}", attempt.issue_id)))?;
         let project = ProjectRepo::new(conn)
-            .get(project_id)?
-            .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))?;
-        let now_iso = Utc::now().to_rfc3339();
+            .get(&issue.project_id)?
+            .ok_or_else(|| DbError::NotFound(format!("project {}", issue.project_id)))?;
 
-        let Manager {
-            adapter,
-            pause_gates,
-            ..
-        } = self;
-
-        super::poll::cancel_run_attempt(
+        self.register_project(&project.id);
+        cancel_run_attempt(
             conn,
-            adapter.as_ref(),
+            self.adapter.as_ref(),
             &RunAttemptRepo::new(conn),
             &AgentSessionRepo::new(conn),
             &RetryQueueRepo::new(conn),
-            pause_gates,
+            &self.pause_gates,
             &project,
             run_attempt_id,
-            &now_iso,
+            &Utc::now().to_rfc3339(),
+            &self.emitter(),
         )
-    }
-
-    pub fn attach_handle(handle: &Arc<Mutex<Manager>>) {
-        let Ok(guard) = handle.lock() else {
-            return;
-        };
-        let _ = guard.self_handle.set(Arc::clone(handle));
-    }
-
-    pub fn register_project(&mut self, project_id: impl Into<String>) -> &Runtime {
-        let project_id = project_id.into();
-        self.runtimes
-            .entry(project_id.clone())
-            .or_insert_with(|| Runtime::new(project_id))
-    }
-
-    pub fn get(&self, project_id: &str) -> DbResult<&Runtime> {
-        self.runtimes
-            .get(project_id)
-            .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))
     }
 
     pub fn runtime_running(
@@ -127,41 +221,34 @@ impl Manager {
 
         let mut entries = Vec::with_capacity(attempts.len());
         for attempt in attempts {
-            let identifier = issue_repo
-                .get(&attempt.issue_id)?
-                .map(|issue| issue.identifier)
-                .unwrap_or_default();
+            let issue = issue_repo.get(&attempt.issue_id)?;
+            let (title, description, executor) = runtime_issue_summary(issue.as_ref());
 
             let running_session = session_repo
                 .list_by_run_attempt(&attempt.id)?
                 .into_iter()
                 .find(|session| session.status == "running");
 
-            let (session_id, session_status, phase, current_activity, paused) =
-                match running_session {
-                    Some(session) => {
-                        let sid = session.id;
-                        (
-                            Some(sid.clone()),
-                            Some(session.status),
-                            self.adapter.get_session_phase(&sid),
-                            self.adapter.get_current_activity(&sid),
-                            self.adapter.is_session_paused(&sid),
-                        )
-                    }
-                    None => (None, None, None, None, false),
-                };
+            let (phase, paused) = match running_session {
+                Some(session) => {
+                    let sid = session.id;
+                    (
+                        self.adapter.get_session_phase(&sid),
+                        self.adapter.is_session_paused(&sid),
+                    )
+                }
+                None => (None, false),
+            };
 
             entries.push(RuntimeRunningEntry {
                 run_attempt_id: attempt.id,
                 issue_id: attempt.issue_id,
-                identifier,
+                title,
+                description,
+                executor,
                 attempt_number: attempt.attempt_number as u32,
                 started_at: attempt.started_at,
-                session_id,
-                session_status,
                 phase,
-                current_activity,
                 paused,
             });
         }
@@ -176,22 +263,22 @@ impl Manager {
         let issue_repo = IssueRepo::new(conn);
         let retries = RetryQueueRepo::new(conn).list_for_project(project_id)?;
 
-        let mut entries = Vec::with_capacity(retries.len());
-        for entry in retries {
-            let identifier = issue_repo
-                .get(&entry.issue_id)?
-                .map(|issue| issue.identifier)
-                .unwrap_or_default();
-
-            entries.push(RuntimeRetryEntry {
-                issue_id: entry.issue_id,
-                identifier,
-                attempt_number: entry.attempt_number as u32,
-                due_at: entry.due_at,
-                error_message: entry.error_message,
-            });
-        }
-        Ok(entries)
+        Ok(retries
+            .into_iter()
+            .map(|entry| {
+                let issue = issue_repo.get(&entry.issue_id).ok().flatten();
+                let (title, description, executor) = runtime_issue_summary(issue.as_ref());
+                RuntimeRetryEntry {
+                    issue_id: entry.issue_id,
+                    title,
+                    description,
+                    executor,
+                    attempt_number: entry.attempt_number as u32,
+                    due_at: entry.due_at,
+                    error_message: entry.error_message,
+                }
+            })
+            .collect())
     }
 
     pub fn runtime_recent_finished(
@@ -203,44 +290,27 @@ impl Manager {
         let issue_repo = IssueRepo::new(conn);
         let attempts = RunAttemptRepo::new(conn).list_recent_finished(project_id, limit)?;
 
-        let mut entries = Vec::with_capacity(attempts.len());
-        for attempt in attempts {
-            let issue = issue_repo.get(&attempt.issue_id)?;
-            let identifier = issue
-                .as_ref()
-                .map(|row| row.identifier.clone())
-                .unwrap_or_default();
-            let review_status = issue
-                .as_ref()
-                .and_then(|row| resolve_review_status(&attempt.status, row.board_column));
-
-            entries.push(RuntimeRecentFinishedEntry {
-                run_attempt_id: attempt.id,
-                issue_id: attempt.issue_id,
-                identifier,
-                attempt_number: attempt.attempt_number as u32,
-                status: parse_run_attempt_status(&attempt.status),
-                finished_at: attempt.finished_at.unwrap_or_default(),
-                error_message: attempt.error_message,
-                review_status,
-            });
-        }
-        Ok(entries)
-    }
-
-    pub fn runtime_recent_events(
-        &self,
-        conn: &Connection,
-        project_id: &str,
-        limit: i32,
-    ) -> DbResult<Vec<RuntimeAuditEvent>> {
-        let events = AuditRepo::new(conn).list_recent(project_id, limit)?;
-        Ok(events
+        Ok(attempts
             .into_iter()
-            .map(|event| RuntimeAuditEvent {
-                action: event.action,
-                issue_id: event.issue_id,
-                created_at: event.created_at,
+            .map(|attempt| {
+                let issue = issue_repo.get(&attempt.issue_id).ok().flatten();
+                let (title, description, executor) = runtime_issue_summary(issue.as_ref());
+                let review_status = issue
+                    .as_ref()
+                    .and_then(|row| resolve_review_status(&attempt.status, row.board_column));
+
+                RuntimeRecentFinishedEntry {
+                    run_attempt_id: attempt.id,
+                    issue_id: attempt.issue_id,
+                    title,
+                    description,
+                    executor,
+                    attempt_number: attempt.attempt_number as u32,
+                    status: parse_run_attempt_status(&attempt.status),
+                    finished_at: attempt.finished_at.unwrap_or_default(),
+                    error_message: attempt.error_message,
+                    review_status,
+                }
             })
             .collect())
     }
@@ -248,28 +318,180 @@ impl Manager {
     pub fn hydrate_from_db(&mut self, conn: &Connection) -> DbResult<()> {
         for summary in ProjectRepo::new(conn).list_summaries()? {
             self.register_project(&summary.id);
-            let runtime = self.get_mut(&summary.id)?;
-            runtime.reload_config(conn)?;
+            let runtime = self.runtime_mut(&summary.id)?;
+            runtime.reload_config(conn, &summary.id)?;
             runtime.apply_orchestrator_status(&summary.orchestrator_status);
-            self.ensure_runtime_for_backlog(conn, &summary.id)?;
+
+            if Self::project_is_idle(conn, &summary.id)? {
+                self.maybe_stop_runtime(conn, &summary.id)?;
+                continue;
+            }
+
+            self.ensure_runtime_active(conn, &summary.id)?;
         }
         Ok(())
     }
 
-    pub fn ensure_runtime_for_backlog(
-        &mut self,
-        conn: &Connection,
-        project_id: &str,
-    ) -> DbResult<()> {
-        if !Self::project_has_backlog_issues(conn, project_id)? {
+    pub fn on_work_added(&mut self, conn: &Connection, project_id: &str) -> DbResult<()> {
+        self.ensure_runtime_active(conn, project_id)?;
+        self.fill_dispatch_slots(conn, project_id)
+    }
+
+    pub fn on_issue_column_changed(&mut self, conn: &Connection, issue: &Issue) -> DbResult<()> {
+        let project_id = issue.project_id.clone();
+        let now_iso = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        let project = ProjectRepo::new(conn)
+            .get(&project_id)?
+            .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))?;
+
+        reconcile_running_attempts(
+            self.adapter.as_ref(),
+            &RunAttemptRepo::new(conn),
+            &IssueRepo::new(conn),
+            &AgentSessionRepo::new(conn),
+            &RetryQueueRepo::new(conn),
+            &self.pause_gates,
+            &project,
+            Some(issue.id.as_str()),
+            &now_iso,
+            &self.emitter(),
+        )?;
+
+        if issue.board_column == BoardColumnId::Done {
+            let _ = self.workspaces.remove_workspace(&project_id, &issue.id);
+        }
+
+        if issue.board_column == BoardColumnId::Backlog {
+            self.ensure_runtime_active(conn, &project_id)?;
+            self.fill_dispatch_slots(conn, &project_id)?;
+        }
+
+        self.maybe_stop_runtime(conn, &project_id)
+    }
+
+    pub fn project_is_idle(conn: &Connection, project_id: &str) -> DbResult<bool> {
+        if Self::project_has_backlog_issues(conn, project_id)? {
+            return Ok(false);
+        }
+        if !RunAttemptRepo::new(conn)
+            .list_running(project_id)?
+            .is_empty()
+        {
+            return Ok(false);
+        }
+        if !RetryQueueRepo::new(conn)
+            .list_for_project(project_id)?
+            .is_empty()
+        {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
+    pub fn ensure_runtime_active(&mut self, conn: &Connection, project_id: &str) -> DbResult<()> {
+        if Self::project_is_idle(conn, project_id)? {
             return Ok(());
         }
 
         self.register_project(project_id);
-        if self.get(project_id)?.status != RuntimeStatus::Running {
+        if self.runtime(project_id)?.status != RuntimeStatus::Running {
             self.start_runtime(conn, project_id)?;
+        } else if !self.runtime(project_id)?.has_watchdog() {
+            self.spawn_watchdog(project_id)?;
+            self.fill_dispatch_slots(conn, project_id)?;
         }
         Ok(())
+    }
+
+    pub fn maybe_stop_runtime(&mut self, conn: &Connection, project_id: &str) -> DbResult<()> {
+        if !Self::project_is_idle(conn, project_id)? {
+            return Ok(());
+        }
+
+        self.register_project(project_id);
+        let runtime = self.runtime_mut(project_id)?;
+        if runtime.status != RuntimeStatus::Running {
+            return Ok(());
+        }
+
+        runtime.stop_timer();
+        runtime.status = RuntimeStatus::Idle;
+        ProjectRepo::new(conn).update(
+            project_id,
+            &ProjectPatch {
+                orchestrator_status: Some("idle".into()),
+                ..ProjectPatch::default()
+            },
+        )?;
+        self.emitter().orchestrator_status(project_id, "idle");
+        Ok(())
+    }
+
+    fn handle_orchestrator_event(
+        &mut self,
+        conn: &Connection,
+        event: OrchestratorEvent,
+    ) -> DbResult<()> {
+        let OrchestratorEvent::SessionTerminal { project_id, record } = event;
+        self.on_session_terminal(conn, &project_id, record)
+    }
+
+    fn on_session_terminal(
+        &mut self,
+        conn: &Connection,
+        project_id: &str,
+        record: crate::acp::types::RuntimeSessionRecord,
+    ) -> DbResult<()> {
+        self.register_project(project_id);
+        let project = ProjectRepo::new(conn)
+            .get(project_id)?
+            .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))?;
+        let now_iso = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        let emitter = self.emitter();
+
+        sync_session_outcome(
+            conn,
+            self.adapter.as_ref(),
+            &record,
+            &RunAttemptRepo::new(conn),
+            &IssueRepo::new(conn),
+            &AgentSessionRepo::new(conn),
+            &RetryQueueRepo::new(conn),
+            &self.pause_gates,
+            &project,
+            &now_iso,
+            &emitter,
+        )?;
+
+        self.fill_dispatch_slots(conn, project_id)?;
+        self.maybe_stop_runtime(conn, project_id)
+    }
+
+    pub fn try_dispatch_project(&mut self, conn: &Connection, project_id: &str) -> DbResult<()> {
+        self.fill_dispatch_slots(conn, project_id)
+    }
+
+    fn fill_dispatch_slots(&mut self, conn: &Connection, project_id: &str) -> DbResult<()> {
+        self.register_project(project_id);
+        if self.runtime(project_id)?.status != RuntimeStatus::Running {
+            return Ok(());
+        }
+
+        let project = ProjectRepo::new(conn)
+            .get(project_id)?
+            .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))?;
+
+        try_dispatch(
+            conn,
+            self.adapter.as_ref(),
+            &RunAttemptRepo::new(conn),
+            &IssueRepo::new(conn),
+            &AgentSessionRepo::new(conn),
+            &self.workspaces,
+            &project,
+            &self.pause_gates,
+            &self.emitter(),
+        )
     }
 
     fn project_has_backlog_issues(conn: &Connection, project_id: &str) -> DbResult<bool> {
@@ -281,34 +503,14 @@ impl Manager {
         Ok(count > 0)
     }
 
-    pub fn start(&mut self, project_id: &str, conn: &Connection) -> DbResult<()> {
-        let project = ProjectRepo::new(conn)
-            .get(project_id)?
-            .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))?;
-
-        let recovered = recover_stale_runs(
-            &RunAttemptRepo::new(conn),
-            &AgentSessionRepo::new(conn),
-            &RetryQueueRepo::new(conn),
-            &project,
-        )?;
-        let cleaned =
-            cleanup_done_workspaces(&IssueRepo::new(conn), &self.workspaces, &project)?;
-
-        self.get_mut(project_id)?.start(conn)?;
-        if recovered > 0 {
-            audit::log(conn, project_id, action::RESTART_RECOVERY_APPLIED, None)?;
-        }
-        if cleaned > 0 {
-            audit::log(conn, project_id, action::WORKSPACE_CLEANUP_STARTUP, None)?;
-        }
-        audit::log(conn, project_id, action::RUNTIME_STARTED, None)?;
-        let poll_ms = self.get(project_id)?.poll_interval_ms();
-        self.spawn_poll_timer(project_id, poll_ms)
-    }
-
     pub fn start_runtime(&mut self, conn: &Connection, project_id: &str) -> DbResult<()> {
         self.register_project(project_id);
+        if self.runtime(project_id)?.status == RuntimeStatus::Running
+            && self.runtime(project_id)?.has_watchdog()
+        {
+            return self.fill_dispatch_slots(conn, project_id);
+        }
+
         ProjectRepo::new(conn).update(
             project_id,
             &ProjectPatch {
@@ -316,52 +518,125 @@ impl Manager {
                 ..ProjectPatch::default()
             },
         )?;
-        self.start(project_id, conn)?;
-        self.run_project_cycle(project_id, conn)
+        self.emitter().orchestrator_status(project_id, "running");
+
+        let runtime = self.runtime_mut(project_id)?;
+        runtime.reload_config(conn, project_id)?;
+        runtime.status = RuntimeStatus::Running;
+
+        if let Some(project) = runtime.config.clone() {
+            let _ = cleanup_done_workspaces(&IssueRepo::new(conn), &self.workspaces, &project)?;
+        }
+
+        self.spawn_watchdog(project_id)?;
+        self.fill_dispatch_slots(conn, project_id)
     }
 
-    pub(crate) fn run_project_cycle(&mut self, project_id: &str, conn: &Connection) -> DbResult<()> {
-        let Manager {
-            runtimes,
-            adapter,
-            workspaces,
-            pause_gates,
-            ..
-        } = self;
-        let runtime = runtimes
-            .get_mut(project_id)
+    pub fn run_watchdog_cycle(&mut self, project_id: &str, conn: &Connection) -> DbResult<()> {
+        self.register_project(project_id);
+        let runtime = self.runtime_mut(project_id)?;
+        if runtime.status != RuntimeStatus::Running {
+            return Ok(());
+        }
+
+        runtime.reload_config(conn, project_id)?;
+        let project = runtime
+            .config
+            .clone()
             .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))?;
-        let cycle_ctx = CycleContext {
-            adapter: adapter.as_ref(),
-            workspaces,
-            pause_gates,
-        };
-        runtime.run_cycle(conn, &cycle_ctx)
+        let now_iso = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        let emitter = self.emitter();
+
+        let attempts = RunAttemptRepo::new(conn);
+        let issues = IssueRepo::new(conn);
+        let sessions = AgentSessionRepo::new(conn);
+        let retries = RetryQueueRepo::new(conn);
+
+        reconcile_running_attempts(
+            self.adapter.as_ref(),
+            &attempts,
+            &issues,
+            &sessions,
+            &retries,
+            &self.pause_gates,
+            &project,
+            None,
+            &now_iso,
+            &emitter,
+        )?;
+
+        sweep_orphan_sessions(
+            conn,
+            self.adapter.as_ref(),
+            &attempts,
+            &issues,
+            &sessions,
+            &retries,
+            &self.pause_gates,
+            &project,
+            &now_iso,
+            &emitter,
+        )?;
+
+        dispatch_due_retries(
+            conn,
+            self.adapter.as_ref(),
+            &attempts,
+            &issues,
+            &sessions,
+            &retries,
+            &self.workspaces,
+            &project,
+            &now_iso,
+            &self.pause_gates,
+            &emitter,
+        )?;
+
+        try_dispatch(
+            conn,
+            self.adapter.as_ref(),
+            &attempts,
+            &issues,
+            &sessions,
+            &self.workspaces,
+            &project,
+            &self.pause_gates,
+            &emitter,
+        )?;
+
+        let _ = cleanup_done_workspaces(&issues, &self.workspaces, &project)?;
+        self.maybe_stop_runtime(conn, project_id)
     }
 
-    pub(crate) fn get_mut(&mut self, project_id: &str) -> DbResult<&mut Runtime> {
-        self.runtimes
-            .get_mut(project_id)
-            .ok_or_else(|| DbError::NotFound(format!("project {project_id}")))
-    }
-
-    fn spawn_poll_timer(&mut self, project_id: &str, poll_ms: u32) -> DbResult<()> {
+    fn spawn_watchdog(&mut self, project_id: &str) -> DbResult<()> {
         let db = Arc::clone(&self.db);
         let async_runtime = self.async_runtime.clone();
-        let manager = self.self_handle.get().map(Arc::clone);
+        let manager = self
+            .self_handle
+            .get()
+            .ok_or_else(|| DbError::Internal("manager handle not attached".into()))?
+            .clone();
         let project_id = project_id.to_string();
 
-        let runtime = self.get_mut(&project_id)?;
-        if let Some(manager) = manager {
-            runtime.set_timer(spawn_poll_timer(
-                async_runtime,
-                db,
-                manager,
-                project_id,
-                poll_ms,
-            ));
-        }
+        self.runtime_mut(&project_id)?.set_timer(spawn_watchdog(
+            async_runtime,
+            db,
+            manager,
+            project_id,
+            WATCHDOG_INTERVAL_MS,
+        ));
         Ok(())
+    }
+}
+
+fn runtime_issue_summary(issue: Option<&Issue>) -> (String, Option<String>, Option<String>) {
+    match issue {
+        Some(issue) => (
+            issue.title.clone(),
+            issue.description.clone(),
+            issue.executor.clone(),
+        ),
+        None => ("Unknown issue".into(), None, None),
     }
 }
 
@@ -398,36 +673,121 @@ fn running_session_id(conn: &Connection, run_attempt_id: &str) -> DbResult<Strin
         })
 }
 
-fn spawn_poll_timer(
+fn spawn_watchdog(
     async_runtime: RuntimeHandle,
     db: Arc<Db>,
     manager: Arc<Mutex<Manager>>,
     project_id: String,
-    poll_interval_ms: u32,
+    watchdog_interval_ms: u32,
 ) -> JoinHandle<()> {
     async_runtime.spawn(async move {
-        let mut interval = time::interval(Duration::from_millis(poll_interval_ms as u64));
+        let mut interval = time::interval(Duration::from_millis(watchdog_interval_ms as u64));
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         loop {
             interval.tick().await;
 
             let Ok(conn) = db.conn() else {
+                log::warn!("watchdog {project_id}: db connection failed");
                 continue;
             };
             let Ok(mut guard) = manager.lock() else {
+                log::warn!("watchdog {project_id}: orchestrator lock poisoned");
                 break;
             };
-            let Ok(project_runtime) = guard.get_mut(&project_id) else {
+            let Ok(runtime) = guard.runtime(&project_id) else {
                 break;
             };
-            if project_runtime.status != RuntimeStatus::Running {
+            if runtime.status != RuntimeStatus::Running {
                 break;
             }
 
-            if guard.run_project_cycle(&project_id, &conn).is_err() {
-                break;
+            if let Err(err) = guard.run_watchdog_cycle(&project_id, &conn) {
+                log::warn!("watchdog {project_id}: cycle error: {err}");
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::fixtures::{open_test_db, seed_minimal_project};
+    use crate::db::repos::issue::IssueRepo;
+    use crate::db::repos::retry_queue::RetryQueueRepo;
+    use crate::db::repos::run_attempt::RunAttemptRepo;
+
+    #[test]
+    fn project_is_idle_when_no_work() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+        assert!(Manager::project_is_idle(&conn, &fixtures.project_id).expect("idle check"));
+    }
+
+    #[test]
+    fn project_is_not_idle_when_backlog_has_issues() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+
+        IssueRepo::new(&conn)
+            .create(
+                &fixtures.project_id,
+                "Backlog issue",
+                None,
+                Some("hermes"),
+                None,
+                &[],
+            )
+            .expect("create issue");
+
+        assert!(!Manager::project_is_idle(&conn, &fixtures.project_id).expect("idle check"));
+    }
+
+    #[test]
+    fn project_is_not_idle_when_running_attempt_exists() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+        let issues = IssueRepo::new(&conn);
+        let attempts = RunAttemptRepo::new(&conn);
+
+        let issue = issues
+            .create(
+                &fixtures.project_id,
+                "Running issue",
+                None,
+                Some("hermes"),
+                None,
+                &[],
+            )
+            .expect("create issue");
+        attempts
+            .create_with_attempt_number(&issue.id, 1)
+            .expect("create attempt");
+
+        assert!(!Manager::project_is_idle(&conn, &fixtures.project_id).expect("idle check"));
+    }
+
+    #[test]
+    fn project_is_not_idle_when_retry_queue_has_entries() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+        let issues = IssueRepo::new(&conn);
+        let retries = RetryQueueRepo::new(&conn);
+
+        let issue = issues
+            .create(
+                &fixtures.project_id,
+                "Retry issue",
+                None,
+                Some("hermes"),
+                None,
+                &[],
+            )
+            .expect("create issue");
+        retries
+            .upsert(&issue.id, 2, "2099-01-01T00:00:00+00:00", Some("retry"))
+            .expect("queue retry");
+
+        assert!(!Manager::project_is_idle(&conn, &fixtures.project_id).expect("idle check"));
+    }
 }

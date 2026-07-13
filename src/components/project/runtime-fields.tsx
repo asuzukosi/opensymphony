@@ -3,6 +3,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ProjectRuntimeFields } from "@/lib/create-project-form";
+import { backoffMsToSeconds, backoffSecondsToMs } from "@/lib/retry-backoff";
 
 type RuntimeFieldsProps = {
   value: ProjectRuntimeFields;
@@ -19,21 +20,6 @@ export function RuntimeFields({ value, onChange, disabled = false }: RuntimeFiel
     <div className="grid gap-3">
       <Label>Runtime</Label>
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <Label htmlFor="project-poll-interval" className="text-xs font-normal text-muted-foreground">
-            Poll interval (ms)
-          </Label>
-          <Input
-            id="project-poll-interval"
-            type="number"
-            min={1000}
-            step={1000}
-            value={value.pollIntervalMs}
-            onChange={(event) => update({ pollIntervalMs: Number(event.target.value) })}
-            disabled={disabled}
-            className="text-xs"
-          />
-        </div>
         <div className="grid gap-2">
           <Label
             htmlFor="project-max-concurrency"
@@ -71,16 +57,21 @@ export function RuntimeFields({ value, onChange, disabled = false }: RuntimeFiel
           />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="project-retry-backoff" className="text-xs font-normal text-muted-foreground">
-            Retry backoff (ms)
+          <Label
+            htmlFor="project-retry-backoff"
+            className="text-xs font-normal text-muted-foreground"
+          >
+            Retry backoff (seconds)
           </Label>
           <Input
             id="project-retry-backoff"
             type="number"
             min={0}
-            step={1000}
-            value={value.retryBackoffMs}
-            onChange={(event) => update({ retryBackoffMs: Number(event.target.value) })}
+            step={1}
+            value={backoffMsToSeconds(value.retryBackoffMs)}
+            onChange={(event) =>
+              update({ retryBackoffMs: backoffSecondsToMs(Number(event.target.value)) })
+            }
             disabled={disabled}
             className="text-xs"
           />

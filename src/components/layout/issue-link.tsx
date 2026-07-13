@@ -1,6 +1,6 @@
 "use client";
 
-import { useIssueSheet } from "@/contexts/issue-sheet-context";
+import { useIssueSheetParams } from "@/lib/issue-sheet-params";
 import { cn } from "@/lib/utils";
 
 type IssueLinkProps = {
@@ -11,7 +11,7 @@ type IssueLinkProps = {
 };
 
 export function IssueLink({ issueId, label, muted = false, className }: IssueLinkProps) {
-  const { openIssueSheet } = useIssueSheet();
+  const { openIssueSheet } = useIssueSheetParams();
 
   return (
     <button

@@ -70,9 +70,9 @@ impl Recorder {
         Self::default()
     }
 
-    pub fn current_activity(&self) -> &str {
-        &self.current_activity
-    }
+    // pub fn current_activity(&self) -> &str {
+    //     &self.current_activity
+    // }
 
     pub fn handle_update(
         &mut self,

@@ -15,7 +15,10 @@ use crate::types::{RuntimeSessionPhase, SessionEventKind};
 use super::recorder::Recorder;
 use super::types::{RuntimeSessionRecord, RuntimeSessionStatus};
 
+use crate::orchestrator::events::{OrchestratorEvent, OrchestratorEventSender};
+
 pub(crate) struct StoredSession {
+    pub project_id: String,
     pub session_id: String,
     pub run_attempt_id: String,
     pub issue_id: String,
@@ -37,11 +40,20 @@ pub(crate) struct StoredSession {
 pub(crate) struct SessionCtx {
     pub db: Arc<Db>,
     stored: Arc<Mutex<StoredSession>>,
+    event_tx: OrchestratorEventSender,
 }
 
 impl SessionCtx {
-    pub fn new(db: Arc<Db>, stored: Arc<Mutex<StoredSession>>) -> Self {
-        Self { db, stored }
+    pub fn new(
+        db: Arc<Db>,
+        stored: Arc<Mutex<StoredSession>>,
+        event_tx: OrchestratorEventSender,
+    ) -> Self {
+        Self {
+            db,
+            stored,
+            event_tx,
+        }
     }
 
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut StoredSession) -> R) -> R {
@@ -122,9 +134,9 @@ impl SessionCtx {
         error_message: Option<String>,
         finished_at: Option<String>,
     ) {
-        self.with_mut(|session| {
+        let notify = self.with_mut(|session| {
             if session.status != RuntimeSessionStatus::Running {
-                return;
+                return None;
             }
 
             let db = Arc::clone(&self.db);
@@ -161,7 +173,19 @@ impl SessionCtx {
             if let Ok(conn) = conn {
                 let _ = AgentSessionRepo::new(&conn).finish(&session_id, status.as_str(), &finished_at);
             }
+
+            Some((
+                session.project_id.clone(),
+                to_runtime_record(session),
+            ))
         });
+
+        if let Some((project_id, record)) = notify {
+            self.event_tx.send(OrchestratorEvent::SessionTerminal {
+                project_id,
+                record,
+            });
+        }
     }
 
     pub fn check_child_exit(&self) -> Option<(RuntimeSessionStatus, Option<String>, Option<String>)> {
@@ -205,10 +229,6 @@ impl SessionCtx {
                 session.phase
             }
         })
-    }
-
-    pub fn current_activity(&self) -> String {
-        self.with_mut(|session| session.recorder.current_activity().to_string())
     }
 
     pub fn last_agent_message(&self) -> Option<String> {

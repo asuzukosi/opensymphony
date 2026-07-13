@@ -8,20 +8,19 @@ pub use issue::{
     add_issue_comment, attach_issue_files, create_issue, get_issue_header, list_issue_comments,
     list_issue_pending_permissions, list_issue_run_attempts, list_project_issues,
     list_session_events, resolve_session_permission, set_issue_auto_approve_permissions,
-    set_issue_executor, set_issue_tags, transition_issue_column, update_issue_description,
-    update_issue_priority, update_issue_title,
+    set_issue_executor, set_issue_tags, transition_issue_column,
+    update_issue_priority,
 };
 
 pub use runtime::{
-    cancel_run, get_runtime_recent_events, get_runtime_recent_finished, get_runtime_retrying,
+    cancel_run, get_runtime_recent_finished, get_runtime_retrying,
     get_runtime_running, pause_run, resume_run,
 };
 
 pub use project::{
     create_project, delete_project, get_project_max_concurrency,
-    get_project_orchestrator_status, get_project_poll_interval,
     get_project_retry_policy, list_project_summaries,
-    set_project_max_concurrency, set_project_name, set_project_poll_interval,
+    set_project_max_concurrency, set_project_name,
     set_project_retry_policy,
 };
 

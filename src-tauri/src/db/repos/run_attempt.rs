@@ -24,7 +24,7 @@ impl<'a> RunAttemptRepo<'a> {
              VALUES (?1, ?2, ?3, 'running')",
             params![id, issue_id, attempt_number],
         )?;
-        self.get(&id)?.ok_or_else(|| DbError::Internal("run attempt missing after create".into()))
+        self.get_internal(&id)?.ok_or_else(|| DbError::Internal("run attempt missing after create".into()))
     }
 
     pub fn finish(
@@ -42,7 +42,7 @@ impl<'a> RunAttemptRepo<'a> {
         if changed == 0 {
             return Err(DbError::NotFound(format!("run attempt {id}")));
         }
-        self.get(id)?.ok_or_else(|| DbError::NotFound(format!("run attempt {id}")))
+        self.get_internal(id)?.ok_or_else(|| DbError::NotFound(format!("run attempt {id}")))
     }
 
     pub fn list_by_issue(&self, issue_id: &str) -> DbResult<Vec<RunAttempt>> {
@@ -77,6 +77,10 @@ impl<'a> RunAttemptRepo<'a> {
         Ok(attempts)
     }
 
+    pub fn get(&self, id: &str) -> DbResult<Option<RunAttempt>> {
+        self.get_internal(id)
+    }
+
     pub fn list_recent_finished(&self, project_id: &str, limit: i32) -> DbResult<Vec<RunAttempt>> {
         let mut stmt = self.conn.prepare(
             "SELECT ra.id, ra.issue_id, ra.attempt_number, ra.status, ra.started_at,
@@ -95,7 +99,7 @@ impl<'a> RunAttemptRepo<'a> {
         Ok(attempts)
     }
 
-    fn get(&self, id: &str) -> DbResult<Option<RunAttempt>> {
+    fn get_internal(&self, id: &str) -> DbResult<Option<RunAttempt>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, issue_id, attempt_number, status, started_at, finished_at, error_message
              FROM run_attempts WHERE id = ?1",

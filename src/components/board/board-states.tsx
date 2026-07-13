@@ -1,6 +1,13 @@
 "use client";
 
-import { ExclamationCircleIcon } from "@/components/ui/hero-icons";
+import type { ComponentType, SVGProps } from "react";
+import {
+  ArchiveBoxArrowDownIcon,
+  ClipboardDocumentCheckIcon,
+  ClipboardDocumentListIcon,
+  DocumentDuplicateIcon,
+  ExclamationCircleIcon,
+} from "@/components/ui/hero-icons";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -14,8 +21,18 @@ export const BOARD_COLUMN_LABELS: Record<BoardColumnId, string> = {
   done: "Done",
 };
 
+export const BOARD_COLUMN_COUNT_ICONS: Record<
+  BoardColumnId,
+  ComponentType<SVGProps<SVGSVGElement>>
+> = {
+  backlog: DocumentDuplicateIcon,
+  inProgress: DocumentDuplicateIcon,
+  review: ClipboardDocumentListIcon,
+  done: ClipboardDocumentCheckIcon,
+};
+
 export function BoardColumnCountSkeleton() {
-  return <Skeleton className="h-4 w-20" />;
+  return <Skeleton className="h-5 w-16 rounded-full" />;
 }
 
 export function BoardColumnBodySkeleton() {
@@ -35,7 +52,9 @@ type BoardColumnEmptyStateProps = {
 export function BoardColumnEmptyState({ showCreateHint = false }: BoardColumnEmptyStateProps) {
   return (
     <EmptyState
-      className="min-h-[10rem] rounded-xl border-border/70 bg-card/40 px-4 py-10"
+      compact
+      icon={ArchiveBoxArrowDownIcon}
+      className="min-h-[10rem] rounded-xl border-border/70 bg-card/40"
       title="No tasks"
       description={
         showCreateHint

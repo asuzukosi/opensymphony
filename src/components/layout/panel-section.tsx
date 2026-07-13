@@ -6,14 +6,25 @@ type PanelSectionProps = {
   title: string;
   description: string;
   children: ReactNode;
+  compact?: boolean;
 };
 
-export function PanelSection({ title, description, children }: PanelSectionProps) {
+export function PanelSection({ title, description, children, compact = false }: PanelSectionProps) {
   return (
-    <SurfaceCard className="space-y-4">
-      <div className="space-y-1">
-        <h3 className="text-base font-normal tracking-tight">{title}</h3>
-        <p className="text-sm text-muted-foreground">{description}</p>
+    <SurfaceCard className="min-w-0 space-y-3">
+      <div className="space-y-0.5">
+        <h3
+          className={
+            compact
+              ? "text-xs font-medium tracking-tight text-foreground"
+              : "text-sm font-medium tracking-tight"
+          }
+        >
+          {title}
+        </h3>
+        <p className={compact ? "text-[10px] text-muted-foreground" : "text-xs text-muted-foreground"}>
+          {description}
+        </p>
       </div>
       {children}
     </SurfaceCard>

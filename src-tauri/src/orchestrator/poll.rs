@@ -3,29 +3,41 @@ use std::sync::Arc;
 
 use chrono::{Duration as ChronoDuration, Utc};
 
+use crate::acp::dispatch::resolve_dispatch_for_issue;
 use crate::acp::types::{AcpAdapter, RuntimeSessionRecord, RuntimeSessionStatus, StartRuntimeSessionInput};
+use crate::acp::PauseGate;
 use crate::db::error::DbResult;
 use crate::db::repos::agent_session::AgentSessionRepo;
 use crate::db::repos::comment::CommentRepo;
 use crate::db::repos::issue::IssueRepo;
 use crate::db::repos::retry_queue::RetryQueueRepo;
 use crate::db::repos::run_attempt::RunAttemptRepo;
-use crate::acp::dispatch::resolve_dispatch_for_issue;
-use crate::acp::PauseGate;
-use crate::types::{BoardColumnId, Issue, Project, RetryQueueEntry};
+use crate::types::{BoardColumnId, Issue, Project, RuntimeSessionPhase};
 use crate::utils::retry_delay_ms;
 
-use super::audit::{self, action};
 use super::pause::PauseGateRegistry;
+use super::runtime_events::RuntimeEventEmitter;
 use super::workspace::{resolve_dispatch_cwd, WorkspaceManager};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct DispatchedRun {
-    pub issue_id: String,
-    pub identifier: String,
-    pub run_attempt_id: String,
-    pub attempt_number: i32,
-    pub session_id: String,
+const CANCEL_BY_OPERATOR: &str = "cancelled_by_operator";
+const ORPHANED_SESSION: &str = "orphaned_session";
+
+fn is_dispatch_eligible(column: BoardColumnId) -> bool {
+    matches!(column, BoardColumnId::Backlog | BoardColumnId::InProgress)
+}
+
+pub(crate) fn issue_eligible_for_dispatch(
+    issues: &IssueRepo<'_>,
+    issue_id: &str,
+) -> DbResult<bool> {
+    let Some(issue) = issues.get(issue_id)? else {
+        return Ok(false);
+    };
+    Ok(is_dispatch_eligible(issue.board_column))
+}
+
+fn dispatch_slot_limit(max_concurrency: i32, running_count: usize) -> usize {
+    (max_concurrency - running_count as i32).max(0) as usize
 }
 
 pub(crate) fn schedule_retry(
@@ -34,6 +46,7 @@ pub(crate) fn schedule_retry(
     issue_id: &str,
     next_attempt_number: i32,
     error_message: Option<&str>,
+    emitter: &RuntimeEventEmitter,
 ) -> DbResult<()> {
     if next_attempt_number > project.retry_max_attempts {
         return Ok(());
@@ -44,50 +57,65 @@ pub(crate) fn schedule_retry(
         .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
 
     repo.upsert(issue_id, next_attempt_number, &due_at, error_message)?;
+    emitter.retry_changed(&project.id);
     Ok(())
 }
 
-pub(crate) fn pop_due_retries(
+pub(crate) fn cancel_retry(
     repo: &RetryQueueRepo<'_>,
     project_id: &str,
-    now_iso: &str,
-) -> DbResult<Vec<RetryQueueEntry>> {
-    let due = repo.list_due_for_project(project_id, now_iso)?;
-    for entry in &due {
-        repo.remove(&entry.issue_id)?;
-    }
-    Ok(due)
+    issue_id: &str,
+    emitter: &RuntimeEventEmitter,
+) -> DbResult<()> {
+    repo.remove(issue_id)?;
+    emitter.retry_changed(project_id);
+    Ok(())
 }
 
-fn is_dispatch_eligible(column: BoardColumnId) -> bool {
-    matches!(column, BoardColumnId::Backlog | BoardColumnId::InProgress)
-}
-
-pub(crate) fn reconcile_running_attempts(
+pub(crate) fn dispatch_retry(
+    conn: &rusqlite::Connection,
+    adapter: &dyn AcpAdapter,
     attempts: &RunAttemptRepo<'_>,
     issues: &IssueRepo<'_>,
-    retries: &RetryQueueRepo<'_>,
-    project_id: &str,
+    sessions: &AgentSessionRepo<'_>,
+    workspaces: &WorkspaceManager,
+    project: &Project,
+    issue_id: &str,
+    attempt_number: i32,
+    pause_gates: &PauseGateRegistry,
+    emitter: &RuntimeEventEmitter,
 ) -> DbResult<()> {
-    for attempt in attempts.list_running(project_id)? {
-        let Some(issue) = issues.get(&attempt.issue_id)? else {
-            attempts.finish(&attempt.id, "cancelled", Some("reconciled_missing_issue"))?;
-            retries.remove(&attempt.issue_id)?;
-            continue;
-        };
+    let running = attempts.list_running(&project.id)?;
+    if running.iter().any(|attempt| attempt.issue_id == issue_id) {
+        return Ok(());
+    }
+    if dispatch_slot_limit(project.max_concurrency, running.len()) == 0 {
+        return Ok(());
+    }
+    if !issue_eligible_for_dispatch(issues, issue_id)? {
+        log::info!("retry skipped for issue {issue_id}: board column is not dispatch eligible");
+        return Ok(());
+    }
 
-        if is_dispatch_eligible(issue.board_column) {
-            continue;
-        }
-
-        let reason = format!("reconciled_out_of_scope:{}", issue.board_column.as_str());
-        attempts.finish(&attempt.id, "cancelled", Some(&reason))?;
-        retries.remove(&attempt.issue_id)?;
+    if dispatch_attempt(
+        conn,
+        adapter,
+        attempts,
+        issues,
+        sessions,
+        workspaces,
+        project,
+        issue_id,
+        attempt_number,
+        pause_gates,
+        emitter,
+    )? {
+        emitter.running_changed(&project.id);
     }
     Ok(())
 }
 
-pub(crate) fn run_poll_cycle(
+pub(crate) fn dispatch_due_retries(
     conn: &rusqlite::Connection,
     adapter: &dyn AcpAdapter,
     attempts: &RunAttemptRepo<'_>,
@@ -98,18 +126,11 @@ pub(crate) fn run_poll_cycle(
     project: &Project,
     now_iso: &str,
     pause_gates: &PauseGateRegistry,
-) -> DbResult<Vec<DispatchedRun>> {
-    let running = attempts.list_running(&project.id)?;
-    let mut running_issue_ids: HashSet<String> =
-        running.iter().map(|attempt| attempt.issue_id.clone()).collect();
-    let available_slots = (project.max_concurrency - running.len() as i32).max(0);
-    let mut dispatched = Vec::new();
-
-    for retry in pop_due_retries(retries, &project.id, now_iso)? {
-        if running_issue_ids.contains(&retry.issue_id) {
-            continue;
-        }
-        if let Some(run) = dispatch_attempt(
+    emitter: &RuntimeEventEmitter,
+) -> DbResult<()> {
+    for entry in retries.list_due_for_project(&project.id, now_iso)? {
+        retries.take(&entry.issue_id)?;
+        dispatch_retry(
             conn,
             adapter,
             attempts,
@@ -117,27 +138,43 @@ pub(crate) fn run_poll_cycle(
             sessions,
             workspaces,
             project,
-            &retry.issue_id,
-            retry.attempt_number,
+            &entry.issue_id,
+            entry.attempt_number,
             pause_gates,
-        )? {
-            running_issue_ids.insert(retry.issue_id);
-            dispatched.push(run);
-        }
+            emitter,
+        )?;
     }
+    Ok(())
+}
 
-    let remaining_slots = (available_slots - dispatched.len() as i32).max(0) as usize;
+pub(crate) fn try_dispatch(
+    conn: &rusqlite::Connection,
+    adapter: &dyn AcpAdapter,
+    attempts: &RunAttemptRepo<'_>,
+    issues: &IssueRepo<'_>,
+    sessions: &AgentSessionRepo<'_>,
+    workspaces: &WorkspaceManager,
+    project: &Project,
+    pause_gates: &PauseGateRegistry,
+    emitter: &RuntimeEventEmitter,
+) -> DbResult<()> {
+    let running = attempts.list_running(&project.id)?;
+    let mut running_issue_ids: HashSet<String> =
+        running.iter().map(|attempt| attempt.issue_id.clone()).collect();
+    let available_slots = dispatch_slot_limit(project.max_concurrency, running.len());
+    let mut dispatched = false;
+
     for candidate in issues
         .list_candidates(&project.id)?
         .into_iter()
-        .take(remaining_slots)
+        .take(available_slots)
     {
         if running_issue_ids.contains(&candidate.issue_id) {
             continue;
         }
 
         let attempt_number = next_attempt_number(attempts, &candidate.issue_id)?;
-        if let Some(run) = dispatch_attempt(
+        if dispatch_attempt(
             conn,
             adapter,
             attempts,
@@ -148,16 +185,104 @@ pub(crate) fn run_poll_cycle(
             &candidate.issue_id,
             attempt_number,
             pause_gates,
+            emitter,
         )? {
             running_issue_ids.insert(candidate.issue_id);
-            dispatched.push(run);
+            dispatched = true;
         }
     }
 
-    Ok(dispatched)
+    if dispatched {
+        emitter.running_changed(&project.id);
+    }
+    Ok(())
 }
 
-pub(crate) fn poll_running_sessions(
+pub(crate) fn reconcile_running_attempts(
+    adapter: &dyn AcpAdapter,
+    attempts: &RunAttemptRepo<'_>,
+    issues: &IssueRepo<'_>,
+    sessions: &AgentSessionRepo<'_>,
+    retries: &RetryQueueRepo<'_>,
+    pause_gates: &PauseGateRegistry,
+    project: &Project,
+    issue_id: Option<&str>,
+    now_iso: &str,
+    emitter: &RuntimeEventEmitter,
+) -> DbResult<()> {
+    for attempt in attempts.list_running(&project.id)? {
+        if issue_id.is_some_and(|id| attempt.issue_id != id) {
+            continue;
+        }
+
+        let Some(issue) = issues.get(&attempt.issue_id)? else {
+            cancel_out_of_scope_attempt(
+                adapter,
+                attempts,
+                sessions,
+                retries,
+                pause_gates,
+                project,
+                &attempt,
+                "reconciled_missing_issue",
+                now_iso,
+                emitter,
+            )?;
+            continue;
+        };
+
+        if is_dispatch_eligible(issue.board_column) {
+            continue;
+        }
+
+        let reason = format!("reconciled_out_of_scope:{}", issue.board_column.as_str());
+        cancel_out_of_scope_attempt(
+            adapter,
+            attempts,
+            sessions,
+            retries,
+            pause_gates,
+            project,
+            &attempt,
+            &reason,
+            now_iso,
+            emitter,
+        )?;
+    }
+    Ok(())
+}
+
+fn cancel_out_of_scope_attempt(
+    adapter: &dyn AcpAdapter,
+    attempts: &RunAttemptRepo<'_>,
+    sessions: &AgentSessionRepo<'_>,
+    retries: &RetryQueueRepo<'_>,
+    pause_gates: &PauseGateRegistry,
+    project: &Project,
+    attempt: &crate::types::RunAttempt,
+    reason: &str,
+    now_iso: &str,
+    emitter: &RuntimeEventEmitter,
+) -> DbResult<()> {
+    for session in sessions.list_by_run_attempt(&attempt.id)? {
+        if session.status != "running" {
+            continue;
+        }
+        let _ = adapter.cancel_session(&session.id, now_iso, reason);
+        finish_session_if_running(sessions, &session.id, "cancelled", now_iso)?;
+        pause_gates.remove(&session.id);
+    }
+
+    if attempt.status == "running" {
+        attempts.finish(&attempt.id, "cancelled", Some(reason))?;
+    }
+    cancel_retry(retries, &project.id, &attempt.issue_id, emitter)?;
+    emitter.running_changed(&project.id);
+    emitter.finished_changed(&project.id);
+    Ok(())
+}
+
+pub(crate) fn sweep_orphan_sessions(
     conn: &rusqlite::Connection,
     adapter: &dyn AcpAdapter,
     attempts: &RunAttemptRepo<'_>,
@@ -167,63 +292,96 @@ pub(crate) fn poll_running_sessions(
     pause_gates: &PauseGateRegistry,
     project: &Project,
     now_iso: &str,
-) -> DbResult<u32> {
-    let mut adapter_ids = Vec::new();
-    let mut db_session_ids = Vec::new();
-
+    emitter: &RuntimeEventEmitter,
+) -> DbResult<()> {
     for attempt in attempts.list_running(&project.id)? {
         for session in sessions.list_by_run_attempt(&attempt.id)? {
             if session.status != "running" {
                 continue;
             }
-            adapter_ids.push(session.id.clone());
-            db_session_ids.push(session.id);
+
+            let session_id = session.id.clone();
+            adapter.poll_sessions(now_iso, std::slice::from_ref(&session_id));
+
+            match adapter.get_session_phase(&session_id) {
+                None => {
+                    handle_orphan_session(
+                        conn,
+                        adapter,
+                        attempts,
+                        sessions,
+                        retries,
+                        pause_gates,
+                        project,
+                        &attempt,
+                        &session_id,
+                        now_iso,
+                        emitter,
+                    )?;
+                }
+                Some(RuntimeSessionPhase::Terminal) => {
+                    let records = adapter.poll_sessions(now_iso, std::slice::from_ref(&session_id));
+                    if let Some(record) = records.first() {
+                        sync_session_outcome(
+                            conn,
+                            adapter,
+                            record,
+                            attempts,
+                            issues,
+                            sessions,
+                            retries,
+                            pause_gates,
+                            project,
+                            now_iso,
+                            emitter,
+                        )?;
+                    }
+                }
+                Some(_) => {}
+            }
         }
     }
-
-    if adapter_ids.is_empty() {
-        return Ok(0);
-    }
-
-    let mut finished = 0u32;
-    for record in adapter.poll_sessions(now_iso, &adapter_ids) {
-        if record.status == RuntimeSessionStatus::Running {
-            continue;
-        }
-        let Some(db_session_id) = db_session_ids
-            .iter()
-            .zip(adapter_ids.iter())
-            .find_map(|(db_id, adapter_id)| {
-                (adapter_id == &record.session_id).then(|| db_id.clone())
-            })
-        else {
-            continue;
-        };
-
-        sync_session_outcome(
-            conn,
-            adapter,
-            &record,
-            &db_session_id,
-            attempts,
-            issues,
-            sessions,
-            retries,
-            pause_gates,
-            project,
-            now_iso,
-        )?;
-        finished = finished.saturating_add(1);
-    }
-
-    Ok(finished)
+    Ok(())
 }
 
-fn sync_session_outcome(
+fn handle_orphan_session(
+    _conn: &rusqlite::Connection,
+    adapter: &dyn AcpAdapter,
+    attempts: &RunAttemptRepo<'_>,
+    sessions: &AgentSessionRepo<'_>,
+    retries: &RetryQueueRepo<'_>,
+    pause_gates: &PauseGateRegistry,
+    project: &Project,
+    attempt: &crate::types::RunAttempt,
+    session_id: &str,
+    now_iso: &str,
+    emitter: &RuntimeEventEmitter,
+) -> DbResult<()> {
+    if attempt.status != "running" {
+        return Ok(());
+    }
+
+    let _ = adapter.cancel_session(session_id, now_iso, ORPHANED_SESSION);
+    finish_session_if_running(sessions, session_id, "failed", now_iso)?;
+    attempts.finish(&attempt.id, "failed", Some(ORPHANED_SESSION))?;
+    schedule_retry(
+        retries,
+        project,
+        &attempt.issue_id,
+        attempt.attempt_number + 1,
+        Some(ORPHANED_SESSION),
+        emitter,
+    )?;
+    pause_gates.remove(session_id);
+    emitter.running_changed(&project.id);
+    emitter.finished_changed(&project.id);
+    Ok(())
+}
+
+pub(crate) fn sync_session_outcome(
     conn: &rusqlite::Connection,
     adapter: &dyn AcpAdapter,
     record: &RuntimeSessionRecord,
-    db_session_id: &str,
     attempts: &RunAttemptRepo<'_>,
     issues: &IssueRepo<'_>,
     sessions: &AgentSessionRepo<'_>,
@@ -231,16 +389,26 @@ fn sync_session_outcome(
     pause_gates: &PauseGateRegistry,
     project: &Project,
     now_iso: &str,
+    emitter: &RuntimeEventEmitter,
 ) -> DbResult<()> {
-    let finished_at = record
-        .finished_at
-        .as_deref()
-        .unwrap_or(now_iso);
+    if record.status == RuntimeSessionStatus::Running {
+        return Ok(());
+    }
+
+    let Some(attempt) = attempts.get(&record.run_attempt_id)? else {
+        return Ok(());
+    };
+    if attempt.status != "running" {
+        return Ok(());
+    }
+
+    let session_id = &record.session_id;
+    let finished_at = record.finished_at.as_deref().unwrap_or(now_iso);
 
     match record.status {
         RuntimeSessionStatus::Running => {}
         RuntimeSessionStatus::Succeeded => {
-            if let Some(message) = adapter.get_last_agent_message(db_session_id) {
+            if let Some(message) = adapter.get_last_agent_message(session_id) {
                 let message = message.trim();
                 if !message.is_empty() {
                     CommentRepo::new(conn).append(
@@ -250,20 +418,16 @@ fn sync_session_outcome(
                     )?;
                 }
             }
-            sessions.finish(db_session_id, "succeeded", finished_at)?;
+            finish_session_if_running(sessions, session_id, "succeeded", finished_at)?;
             attempts.finish(&record.run_attempt_id, "succeeded", None)?;
             issues.transition_column(&record.issue_id, BoardColumnId::Review)?;
-            pause_gates.remove(db_session_id);
-            audit::log(
-                conn,
-                &project.id,
-                action::ATTEMPT_SUCCEEDED,
-                Some(&record.issue_id),
-            )?;
+            pause_gates.remove(session_id);
+            emitter.running_changed(&project.id);
+            emitter.finished_changed(&project.id);
         }
         RuntimeSessionStatus::Failed => {
             let error = record.error_message.as_deref();
-            sessions.finish(db_session_id, "failed", finished_at)?;
+            finish_session_if_running(sessions, session_id, "failed", finished_at)?;
             attempts.finish(&record.run_attempt_id, "failed", error)?;
             schedule_retry(
                 retries,
@@ -271,34 +435,41 @@ fn sync_session_outcome(
                 &record.issue_id,
                 record.attempt_number as i32 + 1,
                 error,
+                emitter,
             )?;
-            pause_gates.remove(db_session_id);
-            audit::log(
-                conn,
-                &project.id,
-                action::ATTEMPT_FAILED,
-                Some(&record.issue_id),
-            )?;
+            pause_gates.remove(session_id);
+            emitter.running_changed(&project.id);
+            emitter.finished_changed(&project.id);
         }
         RuntimeSessionStatus::Cancelled => {
             let error = record.error_message.as_deref();
-            sessions.finish(db_session_id, "cancelled", finished_at)?;
+            finish_session_if_running(sessions, session_id, "cancelled", finished_at)?;
             attempts.finish(&record.run_attempt_id, "cancelled", error)?;
-            retries.remove(&record.issue_id)?;
-            pause_gates.remove(db_session_id);
-            audit::log(
-                conn,
-                &project.id,
-                action::ATTEMPT_CANCELLED,
-                Some(&record.issue_id),
-            )?;
+            cancel_retry(retries, &project.id, &record.issue_id, emitter)?;
+            pause_gates.remove(session_id);
+            emitter.running_changed(&project.id);
+            emitter.finished_changed(&project.id);
         }
     }
 
     Ok(())
 }
 
-const CANCEL_BY_OPERATOR: &str = "cancelled_by_operator";
+fn finish_session_if_running(
+    sessions: &AgentSessionRepo<'_>,
+    session_id: &str,
+    status: &str,
+    finished_at: &str,
+) -> DbResult<()> {
+    let Some(session) = sessions.get(session_id)? else {
+        return Ok(());
+    };
+    if session.status != "running" {
+        return Ok(());
+    }
+    sessions.finish(session_id, status, finished_at)?;
+    Ok(())
+}
 
 pub(crate) fn cancel_run_attempt(
     conn: &rusqlite::Connection,
@@ -310,6 +481,7 @@ pub(crate) fn cancel_run_attempt(
     project: &Project,
     run_attempt_id: &str,
     now_iso: &str,
+    emitter: &RuntimeEventEmitter,
 ) -> DbResult<()> {
     let attempt = attempts
         .list_running(&project.id)?
@@ -319,27 +491,21 @@ pub(crate) fn cancel_run_attempt(
             crate::db::error::DbError::NotFound(format!("run attempt {run_attempt_id}"))
         })?;
 
-    let running_sessions: Vec<_> = sessions
+    for session in sessions
         .list_by_run_attempt(run_attempt_id)?
         .into_iter()
         .filter(|session| session.status == "running")
-        .collect();
-
-    for session in &running_sessions {
+    {
         let _ = adapter.cancel_session(&session.id, now_iso, CANCEL_BY_OPERATOR);
-        sessions.finish(&session.id, "cancelled", now_iso)?;
+        finish_session_if_running(sessions, &session.id, "cancelled", now_iso)?;
         pause_gates.remove(&session.id);
     }
 
     attempts.finish(run_attempt_id, "cancelled", Some(CANCEL_BY_OPERATOR))?;
-    retries.remove(&attempt.issue_id)?;
-    audit::log(
-        conn,
-        &project.id,
-        action::ATTEMPT_CANCELLED,
-        Some(&attempt.issue_id),
-    )?;
-
+    cancel_retry(retries, &project.id, &attempt.issue_id, emitter)?;
+    emitter.running_changed(&project.id);
+    emitter.finished_changed(&project.id);
+    let _ = conn;
     Ok(())
 }
 
@@ -362,17 +528,18 @@ fn dispatch_attempt(
     issue_id: &str,
     attempt_number: i32,
     pause_gates: &PauseGateRegistry,
-) -> DbResult<Option<DispatchedRun>> {
+    emitter: &RuntimeEventEmitter,
+) -> DbResult<bool> {
     let issue = issues
         .get(issue_id)?
         .ok_or_else(|| crate::db::error::DbError::NotFound(format!("issue {issue_id}")))?;
 
     let Some(dispatch) = resolve_dispatch_for_issue(conn, issue_id)? else {
-        return Ok(None);
+        return Ok(false);
     };
 
     let Some(workspace_path) = resolve_dispatch_cwd(workspaces, project, issue_id)? else {
-        return Ok(None);
+        return Ok(false);
     };
 
     let attempt = attempts.create_with_attempt_number(issue_id, attempt_number)?;
@@ -394,24 +561,9 @@ fn dispatch_attempt(
 
     pause_gates.register(&session.id, pause_gate);
     debug_assert_eq!(record.session_id, session.id);
-    audit::log(
-        conn,
-        &project.id,
-        &format!(
-            "{} cwd={}",
-            action::ATTEMPT_DISPATCHED,
-            workspace_path.display()
-        ),
-        Some(issue_id),
-    )?;
-
-    Ok(Some(DispatchedRun {
-        issue_id: issue.id,
-        identifier: issue.identifier,
-        run_attempt_id: attempt.id,
-        attempt_number,
-        session_id: record.session_id,
-    }))
+    let _ = emitter;
+    let _ = conn;
+    Ok(true)
 }
 
 fn build_session_input(
@@ -426,10 +578,10 @@ fn build_session_input(
     pause_gate: Arc<dyn PauseGate>,
 ) -> StartRuntimeSessionInput {
     StartRuntimeSessionInput {
+        project_id: project.id.clone(),
         agent_session_id: agent_session_id.into(),
         run_attempt_id: run_attempt_id.into(),
         issue_id: issue.id.clone(),
-        identifier: issue.identifier.clone(),
         title: issue.title.clone(),
         description: issue.description.clone(),
         prompt_template: project.prompt_template.clone(),
@@ -439,5 +591,253 @@ fn build_session_input(
         agent_name,
         pause_gate,
         auto_approve_permissions: issue.auto_approve_permissions,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::acp::types::{AcpAdapter, RuntimeSessionRecord, RuntimeSessionStatus, StartRuntimeSessionInput};
+    use crate::db::fixtures::{open_test_db, seed_minimal_project};
+    use crate::db::repos::agent_session::AgentSessionRepo;
+    use crate::db::repos::issue::IssueRepo;
+    use crate::db::repos::project::ProjectRepo;
+    use crate::db::repos::retry_queue::RetryQueueRepo;
+    use crate::db::repos::run_attempt::RunAttemptRepo;
+    use crate::orchestrator::pause::PauseGateRegistry;
+    use crate::orchestrator::workspace::WorkspaceManager;
+    use crate::types::BoardColumnId;
+
+    struct NoopAdapter;
+
+    impl AcpAdapter for NoopAdapter {
+        fn start_session(&self, input: StartRuntimeSessionInput) -> RuntimeSessionRecord {
+            RuntimeSessionRecord {
+                session_id: input.agent_session_id,
+                run_attempt_id: input.run_attempt_id,
+                issue_id: input.issue_id,
+                attempt_number: input.attempt_number,
+                status: RuntimeSessionStatus::Running,
+                finished_at: None,
+                error_message: None,
+                agent_name: input.agent_name,
+            }
+        }
+
+        fn poll_sessions(&self, _now_iso: &str, _session_ids: &[String]) -> Vec<RuntimeSessionRecord> {
+            Vec::new()
+        }
+
+        fn cancel_session(
+            &self,
+            session_id: &str,
+            now_iso: &str,
+            reason: &str,
+        ) -> Option<RuntimeSessionRecord> {
+            Some(RuntimeSessionRecord {
+                session_id: session_id.to_string(),
+                run_attempt_id: String::new(),
+                issue_id: String::new(),
+                attempt_number: 0,
+                status: RuntimeSessionStatus::Cancelled,
+                finished_at: Some(now_iso.to_string()),
+                error_message: Some(reason.to_string()),
+                agent_name: None,
+            })
+        }
+
+        fn get_session_phase(&self, _session_id: &str) -> Option<RuntimeSessionPhase> {
+            None
+        }
+
+        fn get_last_agent_message(&self, _session_id: &str) -> Option<String> {
+            None
+        }
+
+        fn is_session_paused(&self, _session_id: &str) -> bool {
+            false
+        }
+    }
+
+    fn noop_emitter() -> RuntimeEventEmitter {
+        RuntimeEventEmitter::noop()
+    }
+
+    fn load_project(conn: &rusqlite::Connection, project_id: &str) -> Project {
+        ProjectRepo::new(conn)
+            .get(project_id)
+            .expect("get project")
+            .expect("project exists")
+    }
+
+    #[test]
+    fn try_dispatch_respects_max_concurrency_when_slots_full() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+        conn.execute(
+            "UPDATE projects SET max_concurrency = 1 WHERE id = ?1",
+            [&fixtures.project_id],
+        )
+        .expect("set max concurrency");
+
+        let issues = IssueRepo::new(&conn);
+        let attempts = RunAttemptRepo::new(&conn);
+        let running_issue = issues
+            .create(
+                &fixtures.project_id,
+                "Running issue",
+                None,
+                Some("hermes"),
+                None,
+                &[],
+            )
+            .expect("create running issue");
+        attempts
+            .create_with_attempt_number(&running_issue.id, 1)
+            .expect("create running attempt");
+
+        issues
+            .create(
+                &fixtures.project_id,
+                "Backlog issue",
+                None,
+                Some("hermes"),
+                None,
+                &[],
+            )
+            .expect("create backlog issue");
+
+        let project = load_project(&conn, &fixtures.project_id);
+        try_dispatch(
+            &conn,
+            &NoopAdapter,
+            &attempts,
+            &issues,
+            &AgentSessionRepo::new(&conn),
+            &WorkspaceManager::new("/tmp/opensymphony-test-workspaces"),
+            &project,
+            &PauseGateRegistry::default(),
+            &noop_emitter(),
+        )
+        .expect("try dispatch");
+
+        assert_eq!(
+            attempts
+                .list_running(&fixtures.project_id)
+                .expect("list running")
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn dispatch_retry_skips_ineligible_board_column() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+        let issues = IssueRepo::new(&conn);
+        let attempts = RunAttemptRepo::new(&conn);
+
+        let issue = issues
+            .create(
+                &fixtures.project_id,
+                "Review issue",
+                None,
+                Some("hermes"),
+                None,
+                &[],
+            )
+            .expect("create issue");
+        issues
+            .transition_column(&issue.id, BoardColumnId::Review)
+            .expect("transition to review");
+
+        let project = load_project(&conn, &fixtures.project_id);
+        dispatch_retry(
+            &conn,
+            &NoopAdapter,
+            &attempts,
+            &issues,
+            &AgentSessionRepo::new(&conn),
+            &WorkspaceManager::new("/tmp/opensymphony-test-workspaces"),
+            &project,
+            &issue.id,
+            2,
+            &PauseGateRegistry::default(),
+            &noop_emitter(),
+        )
+        .expect("dispatch retry");
+
+        assert!(
+            attempts
+                .list_running(&fixtures.project_id)
+                .expect("list running")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn sync_session_outcome_is_idempotent_when_attempt_already_finished() {
+        let conn = open_test_db().expect("open db");
+        let fixtures = seed_minimal_project(&conn).expect("seed");
+        let issues = IssueRepo::new(&conn);
+        let attempts = RunAttemptRepo::new(&conn);
+        let sessions = AgentSessionRepo::new(&conn);
+        let retries = RetryQueueRepo::new(&conn);
+
+        let issue = issues
+            .create(
+                &fixtures.project_id,
+                "In progress issue",
+                None,
+                Some("hermes"),
+                None,
+                &[],
+            )
+            .expect("create issue");
+        issues
+            .transition_column(&issue.id, BoardColumnId::InProgress)
+            .expect("transition");
+        let attempt = attempts
+            .create_with_attempt_number(&issue.id, 1)
+            .expect("create attempt");
+        attempts
+            .finish(&attempt.id, "succeeded", None)
+            .expect("finish attempt");
+
+        let project = load_project(&conn, &fixtures.project_id);
+        let record = RuntimeSessionRecord {
+            session_id: "session-1".into(),
+            run_attempt_id: attempt.id.clone(),
+            issue_id: issue.id.clone(),
+            attempt_number: 1,
+            status: RuntimeSessionStatus::Succeeded,
+            finished_at: Some("2099-01-01T00:00:00+00:00".into()),
+            error_message: None,
+            agent_name: None,
+        };
+
+        sync_session_outcome(
+            &conn,
+            &NoopAdapter,
+            &record,
+            &attempts,
+            &issues,
+            &sessions,
+            &retries,
+            &PauseGateRegistry::default(),
+            &project,
+            "2099-01-01T00:00:00+00:00",
+            &noop_emitter(),
+        )
+        .expect("sync outcome");
+
+        let finished_attempt = attempts
+            .get(&attempt.id)
+            .expect("get attempt")
+            .expect("attempt exists");
+        assert_eq!(finished_attempt.status, "succeeded");
+
+        let current_issue = issues.get(&issue.id).expect("get issue").expect("issue exists");
+        assert_eq!(current_issue.board_column, BoardColumnId::InProgress);
     }
 }

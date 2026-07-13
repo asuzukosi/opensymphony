@@ -1,6 +1,9 @@
+import { Suspense } from "react";
+
+import { IssueSheetHost } from "@/components/issue/issue-detail-sheet";
 import { AppShell } from "@/components/layout/app-shell";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { ActiveProjectProvider } from "@/contexts/active-project-context";
-import { IssueSheetProvider } from "@/contexts/issue-sheet-context";
 
 export default function ShellLayout({
   children,
@@ -9,9 +12,12 @@ export default function ShellLayout({
 }>) {
   return (
     <ActiveProjectProvider>
-      <IssueSheetProvider>
-        <AppShell>{children}</AppShell>
-      </IssueSheetProvider>
+      <AppShell>{children}</AppShell>
+      <TooltipProvider delayDuration={300}>
+        <Suspense fallback={null}>
+          <IssueSheetHost />
+        </Suspense>
+      </TooltipProvider>
     </ActiveProjectProvider>
   );
 }

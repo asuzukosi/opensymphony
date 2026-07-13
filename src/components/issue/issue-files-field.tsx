@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { formatFileSize, formatFileTypeLabel } from "@/lib/format-file-size";
 import type { IssueFile } from "@/lib/ipc/types";
 import { pickIssueFiles } from "@/lib/pick-issue-files";
+import { cn, wrapText } from "@/lib/utils";
 
 export type StagedIssueFile = {
   path: string;
@@ -19,6 +20,7 @@ type IssueFilesFieldProps = {
   onAddStagedFiles?: (paths: string[]) => void;
   onRemoveStagedFile?: (path: string) => void;
   disabled?: boolean;
+  readOnly?: boolean;
 };
 
 export function IssueFilesField({
@@ -27,6 +29,7 @@ export function IssueFilesField({
   onAddStagedFiles,
   onRemoveStagedFile,
   disabled = false,
+  readOnly = false,
 }: IssueFilesFieldProps) {
   const canPick = onAddStagedFiles != null;
   const hasFiles = stagedFiles.length > 0 || attachedFiles.length > 0;
@@ -43,25 +46,38 @@ export function IssueFilesField({
 
   return (
     <div className="grid gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <Label>Files</Label>
-        {canPick ? (
-          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => void handlePick()}>
-            Attach files
-          </Button>
-        ) : null}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Attach reference files such as briefs, wireframes, or specs.
-      </p>
+      {readOnly ? (
+        <p className="text-[10px] font-medium text-muted-foreground">Files</p>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <Label>Files</Label>
+            {canPick ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={disabled}
+                onClick={() => void handlePick()}
+              >
+                Attach files
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Attach reference files such as briefs, wireframes, or specs.
+          </p>
+        </>
+      )}
       {hasFiles ? (
-        <div className="space-y-2">
+        <div className={readOnly ? "space-y-0.5" : "space-y-2"}>
           {attachedFiles.map((file) => (
             <FileRow
               key={file.fileId}
               fileName={file.fileName}
               typeLabel={formatFileTypeLabel(file.mimeType, file.fileName)}
               sizeLabel={formatFileSize(file.sizeBytes)}
+              compact={readOnly}
             />
           ))}
           {stagedFiles.map((file) => (
@@ -79,7 +95,9 @@ export function IssueFilesField({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">No files attached.</p>
+        <p className={readOnly ? "text-[10px] text-muted-foreground" : "text-xs text-muted-foreground"}>
+          No files attached.
+        </p>
       )}
     </div>
   );
@@ -90,17 +108,37 @@ type FileRowProps = {
   typeLabel: string;
   sizeLabel: string;
   onRemove?: () => void;
+  compact?: boolean;
 };
 
-function FileRow({ fileName, typeLabel, sizeLabel, onRemove }: FileRowProps) {
+function FileRow({ fileName, typeLabel, sizeLabel, onRemove, compact = false }: FileRowProps) {
+  if (compact) {
+    return (
+      <div className="flex min-w-0 items-start gap-2 py-1">
+        <DocumentTextIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className={cn("text-xs font-medium", wrapText)}>{fileName}</p>
+          <p className={cn("text-[10px] text-muted-foreground", wrapText)}>
+            {typeLabel} · {sizeLabel}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/20 p-3">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-background">
-        <DocumentTextIcon className="h-5 w-5 text-muted-foreground" />
+      <div
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-md bg-background",
+          compact ? "h-8 w-8" : "h-10 w-10",
+        )}
+      >
+        <DocumentTextIcon className={cn("text-muted-foreground", compact ? "h-4 w-4" : "h-5 w-5")} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{fileName}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className={cn("font-medium", compact ? "text-xs" : "text-sm", wrapText)}>{fileName}</p>
+        <p className={cn("text-muted-foreground", compact ? "text-[10px]" : "text-xs", wrapText)}>
           {typeLabel} · {sizeLabel}
         </p>
       </div>

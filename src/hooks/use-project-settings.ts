@@ -3,27 +3,20 @@
 import { useCallback } from "react";
 
 import { useActiveProject } from "@/contexts/active-project-context";
-import {
-  DEFAULT_IPC_POLL_INTERVAL_MS,
-  useIpcMutation,
-  useIpcQuery,
-} from "@/lib/ipc/hooks";
+import { DEFAULT_IPC_POLL_INTERVAL_MS, useIpcMutation, useIpcQuery } from "@/lib/ipc/hooks";
 import type {
   RetryPolicy,
   SetProjectMaxConcurrencyResponse,
-  SetProjectPollIntervalResponse,
   SetProjectRetryPolicyResponse,
 } from "@/lib/ipc/types";
 import { requireProjectId } from "@/lib/require-project-id";
 
 export type ProjectSettings = {
-  pollIntervalMs: number;
   maxConcurrency: number;
   retryPolicy: RetryPolicy;
 };
 
 type ProjectSettingsWriteInput =
-  | { action: "setPollInterval"; pollIntervalMs: number }
   | { action: "setMaxConcurrency"; maxConcurrency: number }
   | { action: "setRetryPolicy"; maxAttempts: number; backoffMs: number };
 
@@ -41,7 +34,6 @@ export type UseProjectSettingsResult = {
   settings: ProjectSettings | undefined;
   error: Error | null;
   isLoading: boolean;
-  setPollInterval: (pollIntervalMs: number) => Promise<void>;
   setMaxConcurrency: (maxConcurrency: number) => Promise<void>;
   setRetryPolicy: (maxAttempts: number, backoffMs: number) => Promise<void>;
   isMutating: boolean;
@@ -49,9 +41,7 @@ export type UseProjectSettingsResult = {
   resetMutation: () => void;
 };
 
-export function useProjectSettings(
-  options?: UseProjectSettingsOptions,
-): UseProjectSettingsResult {
+export function useProjectSettings(options?: UseProjectSettingsOptions): UseProjectSettingsResult {
   const {
     projectId: projectIdOption,
     pollIntervalMs = DEFAULT_IPC_POLL_INTERVAL_MS,
@@ -65,14 +55,12 @@ export function useProjectSettings(
     `project-settings:${projectId ?? "none"}`,
     async (client) => {
       const id = projectId as string;
-      const [pollIntervalMs, maxConcurrency, retryPolicy] = await Promise.all([
-        client.getProjectPollInterval(id),
+      const [maxConcurrency, retryPolicy] = await Promise.all([
         client.getProjectMaxConcurrency(id),
         client.getProjectRetryPolicy(id),
       ]);
 
       return {
-        pollIntervalMs,
         maxConcurrency,
         retryPolicy,
       };
@@ -87,21 +75,13 @@ export function useProjectSettings(
     reset: resetMutation,
   } = useIpcMutation<
     ProjectSettingsWriteMutationInput,
-    | SetProjectPollIntervalResponse
-    | SetProjectMaxConcurrencyResponse
-    | SetProjectRetryPolicyResponse
+    SetProjectMaxConcurrencyResponse | SetProjectRetryPolicyResponse
   >(async (client, input) => {
     switch (input.action) {
-      case "setPollInterval":
-        return client.setProjectPollInterval(input.projectId, input.pollIntervalMs);
       case "setMaxConcurrency":
         return client.setProjectMaxConcurrency(input.projectId, input.maxConcurrency);
       case "setRetryPolicy":
-        return client.setProjectRetryPolicy(
-          input.projectId,
-          input.maxAttempts,
-          input.backoffMs,
-        );
+        return client.setProjectRetryPolicy(input.projectId, input.maxAttempts, input.backoffMs);
     }
   });
 
@@ -112,13 +92,6 @@ export function useProjectSettings(
       await refetch();
     },
     [projectId, refetch, writeSettings],
-  );
-
-  const setPollInterval = useCallback(
-    async (pollIntervalMs: number): Promise<void> => {
-      await mutateAndRefetch({ action: "setPollInterval", pollIntervalMs });
-    },
-    [mutateAndRefetch],
   );
 
   const setMaxConcurrency = useCallback(
@@ -139,7 +112,6 @@ export function useProjectSettings(
     settings: data,
     error,
     isLoading,
-    setPollInterval,
     setMaxConcurrency,
     setRetryPolicy,
     isMutating,

@@ -26,6 +26,7 @@ export interface ProjectBoardIssue {
   issueId: string;
   identifier: string;
   title: string;
+  description: string | null;
   priority: number | null;
   executor: PlatformId | null;
 }
@@ -107,8 +108,6 @@ export interface IssueDetailRunAttempt {
 }
 
 export type CreateIssueResponse = IssueHeader;
-export type UpdateIssueTitleResponse = IssueHeader;
-export type UpdateIssueDescriptionResponse = IssueHeader;
 export type UpdateIssuePriorityResponse = IssueHeader;
 export type TransitionIssueColumnResponse = IssueHeader;
 export type SetIssueExecutorResponse = IssueHeader;
@@ -129,7 +128,7 @@ export interface PendingPermission {
 
 // --- runtime reads ---
 
-export type RuntimeStatus = "idle" | "running" | "stopped";
+export type RuntimeStatus = "idle" | "running";
 
 export type RuntimeSessionPhase =
   | "spawning"
@@ -143,28 +142,23 @@ export type RunAttemptStatus = "succeeded" | "failed" | "cancelled";
 
 export type ReviewStatus = "approved" | "pendingReview";
 
-export interface RuntimeAuditEvent {
-  action: string;
-  issueId: string | null;
-  createdAt: string;
-}
-
 export interface RuntimeRunningEntry {
   runAttemptId: string;
   issueId: string;
-  identifier: string;
+  title: string;
+  description: string | null;
+  executor: PlatformId | null;
   attemptNumber: number;
   startedAt: string;
-  sessionId: string | null;
-  sessionStatus: string | null;
   phase: RuntimeSessionPhase | null;
-  currentActivity: string | null;
   paused: boolean;
 }
 
 export interface RuntimeRetryEntry {
   issueId: string;
-  identifier: string;
+  title: string;
+  description: string | null;
+  executor: PlatformId | null;
   attemptNumber: number;
   dueAt: string;
   errorMessage: string | null;
@@ -173,7 +167,9 @@ export interface RuntimeRetryEntry {
 export interface RuntimeRecentFinishedEntry {
   runAttemptId: string;
   issueId: string;
-  identifier: string;
+  title: string;
+  description: string | null;
+  executor: PlatformId | null;
   attemptNumber: number;
   status: RunAttemptStatus;
   finishedAt: string;
@@ -189,27 +185,15 @@ export interface ActivityTimeRange {
   bucketMs: number;
 }
 
-export type AgentActivityEventKind = Exclude<SessionEventKind, "StreamChunk">;
-
-export type AgentActivityByKind = Partial<Record<AgentActivityEventKind, number>>;
-
 export interface AgentActivityOverTimeBucket {
   bucketStart: string;
   totalEvents: number;
-  byKind?: AgentActivityByKind;
   projectId?: string;
   projectName?: string;
 }
 
-export interface AgentActivitySummary {
-  totalEvents: number;
-  runAttemptCount: number;
-  sessionCount: number;
-}
-
 export interface AgentActivityOverTimeResponse {
   buckets: AgentActivityOverTimeBucket[];
-  summary?: AgentActivitySummary;
 }
 
 // --- project reads ---
@@ -228,7 +212,6 @@ export interface RetryPolicy {
 
 export type CreateProjectResponse = ProjectSummary;
 export type SetProjectNameResponse = string;
-export type SetProjectPollIntervalResponse = number;
 export type SetProjectMaxConcurrencyResponse = number;
 export type SetProjectRetryPolicyResponse = RetryPolicy;
 

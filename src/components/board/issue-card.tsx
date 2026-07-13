@@ -5,7 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { IssuePriorityBadge } from "@/components/issue/issue-priority";
 import { PlatformAvatar } from "@/components/ui/platform-avatar";
 import type { ProjectBoardIssue } from "@/lib/ipc/types";
-import { cn } from "@/lib/utils";
+import { cn, summarizeText, wrapText } from "@/lib/utils";
 
 type IssueCardContentProps = {
   issue: ProjectBoardIssue;
@@ -18,10 +18,12 @@ function IssueCardContent({
   disabled = false,
   onOpen,
 }: IssueCardContentProps) {
+  const summary = issue.description?.trim() ? summarizeText(issue.description, 72) : null;
+
   return (
     <article
       className={cn(
-        "rounded-xl border border-border/50 bg-card p-4 text-card-foreground shadow-sm transition-shadow",
+        "min-w-0 overflow-hidden rounded-xl border border-border/50 bg-card p-3 text-card-foreground shadow-sm transition-shadow",
         onOpen && "cursor-pointer hover:border-border hover:shadow-md",
         disabled && "opacity-60",
       )}
@@ -29,13 +31,21 @@ function IssueCardContent({
         onOpen?.(issue);
       }}
     >
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="min-w-0 flex-1 text-sm font-medium leading-snug">{issue.title}</h3>
-        <IssuePriorityBadge priority={issue.priority} />
+      <div className="flex items-start justify-between gap-2">
+        <h3 className={cn("min-w-0 flex-1 text-xs font-medium leading-snug", wrapText)}>
+          {issue.title}
+        </h3>
+        <IssuePriorityBadge priority={issue.priority} className="shrink-0" />
       </div>
 
+      {summary ? (
+        <p className="mt-1.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+          {summary}
+        </p>
+      ) : null}
+
       {issue.executor != null ? (
-        <div className="mt-4 flex items-center">
+        <div className={cn("flex items-center", summary ? "mt-2" : "mt-2.5")}>
           <PlatformAvatar platformId={issue.executor} size="sm" />
         </div>
       ) : null}
@@ -72,7 +82,7 @@ function DraggableIssueCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={cn("touch-none", isDragging && "opacity-50")}
+      className={cn("touch-none min-w-0", isDragging && "opacity-50")}
       {...listeners}
       {...attributes}
     >

@@ -20,7 +20,9 @@ use tauri::async_runtime::RuntimeHandle;
 
 use crate::db::repos::agent_session::AgentSessionRepo;
 use crate::db::Db;
+use crate::orchestrator::events::OrchestratorEventSender;
 use crate::types::{RuntimeSessionPhase, SessionEventKind};
+use crate::utils::{binary_path, user_path_for_spawn};
 
 use super::client::connect;
 use super::context::{SessionCtx, StoredSession};
@@ -67,6 +69,7 @@ pub struct AcpClientAdapter {
     db: Arc<Db>,
     permission_gate: Arc<PermissionGate>,
     handle: RuntimeHandle,
+    event_tx: OrchestratorEventSender,
     sessions: Mutex<HashMap<String, Arc<Mutex<StoredSession>>>>,
 }
 
@@ -75,11 +78,13 @@ impl AcpClientAdapter {
         db: Arc<Db>,
         permission_gate: Arc<PermissionGate>,
         handle: RuntimeHandle,
+        event_tx: OrchestratorEventSender,
     ) -> Self {
         Self {
             db,
             permission_gate,
             handle,
+            event_tx,
             sessions: Mutex::new(HashMap::new()),
         }
     }
@@ -99,19 +104,55 @@ impl AcpClientAdapter {
             .lock()
             .expect("acp adapter sessions lock")
             .get(session_id)
-            .map(|stored| SessionCtx::new(Arc::clone(&self.db), Arc::clone(stored)))
+            .map(|stored| {
+                SessionCtx::new(
+                    Arc::clone(&self.db),
+                    Arc::clone(stored),
+                    self.event_tx.clone(),
+                )
+            })
+    }
+
+    fn resolve_spawn_command(command: &PathBuf) -> PathBuf {
+        if command.is_file() {
+            return command.clone();
+        }
+        let Some(name) = command.file_name().and_then(|part| part.to_str()) else {
+            return command.clone();
+        };
+        binary_path(name)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| command.clone())
     }
 
     fn spawn_agent_process(
         config: &AcpClientConfig,
         workspace: &str,
     ) -> Result<(tokio::process::ChildStdin, tokio::process::ChildStdout, Child), String> {
-        let mut cmd = Command::new(&config.command);
+        let command = Self::resolve_spawn_command(&config.command);
+        let mut cmd = Command::new(&command);
         cmd.args(&config.args)
             .current_dir(workspace)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stderr(if cfg!(debug_assertions) {
+                Stdio::inherit()
+            } else {
+                Stdio::null()
+            });
+        cmd.env("PATH", user_path_for_spawn());
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.is_empty() {
+                cmd.env("HOME", home);
+            }
+        }
+
+        log::info!(
+            "spawning agent {} {:?} in {}",
+            command.display(),
+            config.args,
+            workspace
+        );
 
         let mut child = cmd
             .spawn()
@@ -156,6 +197,7 @@ impl AcpAdapter for AcpClientAdapter {
             .unwrap_or_else(|err| panic!("invalid acp command: {err}"));
 
         let stored = Arc::new(Mutex::new(StoredSession {
+            project_id: input.project_id.clone(),
             session_id: input.agent_session_id.clone(),
             run_attempt_id: input.run_attempt_id.clone(),
             issue_id: input.issue_id.clone(),
@@ -178,7 +220,11 @@ impl AcpAdapter for AcpClientAdapter {
             .expect("acp adapter sessions lock")
             .insert(input.agent_session_id.clone(), Arc::clone(&stored));
 
-        let ctx = SessionCtx::new(Arc::clone(&self.db), stored);
+        let ctx = SessionCtx::new(
+            Arc::clone(&self.db),
+            stored,
+            self.event_tx.clone(),
+        );
         let ctx_for_return = ctx.clone();
         let ctx_for_fail = ctx.clone();
         let permission_gate = Arc::clone(&self.permission_gate);
@@ -221,10 +267,6 @@ impl AcpAdapter for AcpClientAdapter {
 
     fn get_session_phase(&self, session_id: &str) -> Option<RuntimeSessionPhase> {
         self.ctx(session_id).map(|ctx| ctx.session_phase())
-    }
-
-    fn get_current_activity(&self, session_id: &str) -> Option<String> {
-        self.ctx(session_id).map(|ctx| ctx.current_activity())
     }
 
     fn get_last_agent_message(&self, session_id: &str) -> Option<String> {
