@@ -151,8 +151,8 @@ export function IssuePermissionsPanel({ issueId, attempts }: IssuePermissionsPan
       <AlertTitle className="text-amber-950 dark:text-amber-100">
         Pending agent permissions ({permissions.length})
       </AlertTitle>
-      <AlertDescription className="space-y-3 text-xs">
-        <p className={cn("text-muted-foreground", wrapText)}>
+      <AlertDescription className="space-y-3">
+        <p className="text-muted-foreground">
           Agents are blocked until you approve or deny each permission request for this issue.
         </p>
         <div className="space-y-2">
