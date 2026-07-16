@@ -34,7 +34,10 @@ function IssueSheetLoadingState() {
 }
 
 function IssueDetailSheetContent({ issueId }: { issueId: string }) {
-  const { issue, error, isLoading } = useIssue({ issueId, enabled: true });
+  const { issue, error, isLoading, addComment, isMutating, mutationError } = useIssue({
+    issueId,
+    enabled: true,
+  });
   const isInitialLoading = isLoading && issue === undefined;
 
   if (isInitialLoading) {
@@ -85,7 +88,12 @@ function IssueDetailSheetContent({ issueId }: { issueId: string }) {
 
       <div className="space-y-8 py-6">
         <IssueMetadata issue={issue} />
-        <IssueCommentsSection comments={issue.comments} />
+        <IssueCommentsSection
+          comments={issue.comments}
+          onAddComment={addComment}
+          isPending={isMutating}
+          submitError={mutationError}
+        />
         <IssueRunHistoryTable attempts={issue.attempts} sessionEvents={issue.sessionEvents} />
       </div>
     </article>

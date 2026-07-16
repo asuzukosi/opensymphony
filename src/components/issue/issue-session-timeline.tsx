@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import type { ComponentType, SVGProps } from "react";
+import type { VariantProps } from "class-variance-authority";
 
-import { Badge } from "@/components/ui/badge";
+import { IssueCommentBody } from "@/components/issue/issue-comment-body";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import {
   BoltIcon,
   ChatBubbleLeftIcon,
@@ -13,8 +16,15 @@ import {
 } from "@/components/ui/hero-icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTime } from "@/lib/datetime";
+import type { FormattedToolCall } from "@/lib/format-tool-call";
 import type { SessionEvent, SessionEventKind } from "@/lib/ipc/types";
-import { cn, wrapText, wrapTextPreserve } from "@/lib/utils";
+import {
+  getTimelineMarkdown,
+  getTimelinePreview,
+  isTimelineExpandable,
+  type TimelinePreview,
+} from "@/lib/session-timeline-content";
+import { cn, wrapText } from "@/lib/utils";
 
 type IssueSessionTimelineProps = {
   events: SessionEvent[];
@@ -62,6 +72,27 @@ const timelineKindConfig: Record<Exclude<SessionEventKind, "StreamChunk">, Timel
   },
 };
 
+type ToolStatusBadgeVariant = NonNullable<VariantProps<typeof badgeVariants>["variant"]>;
+
+const TOOL_STATUS_BADGE_VARIANTS: Record<string, ToolStatusBadgeVariant> = {
+  pending: "outline",
+  in_progress: "warning",
+  completed: "success",
+  failed: "destructive",
+};
+
+function formatToolLabel(value: string): string {
+  return value
+    .split("_")
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function toolStatusBadgeVariant(status: string): ToolStatusBadgeVariant {
+  return TOOL_STATUS_BADGE_VARIANTS[status] ?? "outline";
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value != null && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -69,68 +100,18 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
-function truncateText(text: string, maxLength = 240): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-  return `${text.slice(0, maxLength).trimEnd()}...`;
-}
-
-function payloadText(payload: unknown, fallback: string): string {
-  if (typeof payload === "string") {
-    return truncateText(payload);
-  }
-  const record = asRecord(payload);
-  if (record == null) {
-    return fallback;
-  }
-  if (typeof record.text === "string") {
-    return truncateText(record.text);
-  }
-  if (typeof record.message === "string") {
-    return truncateText(record.message);
-  }
-  if (typeof record.body === "string") {
-    return truncateText(record.body);
-  }
-  return fallback;
-}
-
-function formatEventBody(event: SessionEvent): string {
-  switch (event.kind) {
-    case "Prompt":
-      return payloadText(event.payload, "Prompt sent to agent");
-    case "ToolCall":
-      return payloadText(event.payload, "Tool call");
-    case "ToolResult":
-      return payloadText(event.payload, "Tool result");
-    case "PermissionRequest":
-      return payloadText(event.payload, "Permission requested");
-    case "Error":
-      return payloadText(event.payload, "Session error");
-    case "SessionUpdate":
-      return payloadText(event.payload, "Session update");
-    case "Terminal":
-      return payloadText(event.payload, "Terminal event");
-    case "StreamChunk":
-      return payloadText(event.payload, "Stream chunk");
-    default:
-      return "Session event";
-  }
-}
-
-function eventBodyClassName(kind: SessionEventKind): string {
-  if (kind === "Error") {
-    return cn(wrapText, "text-xs text-destructive");
-  }
-  if (kind === "Prompt") {
-    return cn(wrapTextPreserve, "font-mono text-[10px]");
-  }
-  return cn(wrapText, "text-xs");
+function isAgentMessageEvent(event: SessionEvent): boolean {
+  const record = asRecord(event.payload);
+  const update = asRecord(record?.update);
+  return (
+    event.kind === "StreamChunk" &&
+    update?.sessionUpdate === "agent_message" &&
+    typeof asRecord(update.content)?.text === "string"
+  );
 }
 
 function filterTimelineEvents(events: SessionEvent[]): SessionEvent[] {
-  return events.filter((event) => event.kind !== "StreamChunk");
+  return events.filter((event) => event.kind !== "StreamChunk" || isAgentMessageEvent(event));
 }
 
 function sortTimelineEvents(events: SessionEvent[]): SessionEvent[] {
@@ -164,14 +145,54 @@ function TimelineEmptyState({ message }: { message: string }) {
   return <p className="text-xs text-muted-foreground">{message}</p>;
 }
 
+function ToolCallPreviewBody({ tool }: { tool: FormattedToolCall }) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      <Badge
+        variant={toolStatusBadgeVariant(tool.status)}
+        className="h-4 px-1 py-0 text-[8px] font-normal leading-none uppercase"
+      >
+        {formatToolLabel(tool.status)}
+      </Badge>
+    </div>
+  );
+}
+
+function TimelinePreviewBody({ preview }: { preview: TimelinePreview }) {
+  if (preview.tool != null) {
+    return (
+      <div className="space-y-0.5">
+        <p className={cn(wrapText, "text-[10px] text-foreground/90")}>{preview.text}</p>
+        {preview.detail != null ? (
+          <p className={cn(wrapText, "text-[9px] text-muted-foreground")}>{preview.detail}</p>
+        ) : null}
+        <ToolCallPreviewBody tool={preview.tool} />
+      </div>
+    );
+  }
+
+  return <p className={cn(wrapText, "text-[10px] text-foreground/90")}>{preview.text}</p>;
+}
+
 function TimelineItem({ event }: { event: SessionEvent }) {
-  if (event.kind === "StreamChunk") {
+  const [expanded, setExpanded] = useState(false);
+
+  if (event.kind === "StreamChunk" && !isAgentMessageEvent(event)) {
     return null;
   }
 
-  const config = timelineKindConfig[event.kind];
+  const isAgentMessage = isAgentMessageEvent(event);
+  const config = isAgentMessage
+    ? { label: "Message", icon: ChatBubbleLeftIcon }
+    : timelineKindConfig[event.kind as Exclude<SessionEventKind, "StreamChunk">];
   const Icon = config.icon;
-  const body = formatEventBody(event);
+  const preview = getTimelinePreview(event);
+  const markdown = getTimelineMarkdown(event);
+  const expandable = isTimelineExpandable(event);
+
+  if (preview == null) {
+    return null;
+  }
 
   return (
     <li className="relative min-w-0 pl-6">
@@ -181,7 +202,7 @@ function TimelineItem({ event }: { event: SessionEvent }) {
       <div className="min-w-0 space-y-1 overflow-hidden pb-1">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <Badge
-            variant={config.badgeVariant ?? "outline"}
+            variant={"badgeVariant" in config ? (config.badgeVariant ?? "outline") : "outline"}
             className="text-[10px] uppercase"
           >
             {config.label}
@@ -190,7 +211,27 @@ function TimelineItem({ event }: { event: SessionEvent }) {
             {formatDateTime(event.createdAt)}
           </time>
         </div>
-        <p className={eventBodyClassName(event.kind)}>{body}</p>
+        <button
+          type="button"
+          disabled={!expandable}
+          onClick={() => {
+            if (expandable) {
+              setExpanded((current) => !current);
+            }
+          }}
+          className={cn(
+            "w-full rounded-md text-left transition-colors p-1.5",
+            expandable && "cursor-pointer hover:bg-muted/40",
+            expanded && "bg-muted/30 px-2 py-1.5",
+            !expanded && expandable && "p-1.5",
+          )}
+        >
+          {expanded && markdown != null ? (
+            <IssueCommentBody body={markdown} compact />
+          ) : (
+            <TimelinePreviewBody preview={preview} />
+          )}
+        </button>
       </div>
     </li>
   );

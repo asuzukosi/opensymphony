@@ -1,8 +1,9 @@
 "use client";
 
+import type { VariantProps } from "class-variance-authority";
 import { IssueDetailSection } from "@/components/issue/issue-detail-section";
 import { IssueSessionTimeline } from "@/components/issue/issue-session-timeline";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -28,7 +29,10 @@ function formatTimestamp(value: string | null): string {
 
 function statusBadgeVariant(
   status: string,
-): "default" | "secondary" | "destructive" | "outline" {
+): NonNullable<VariantProps<typeof badgeVariants>["variant"]> {
+  if (status === "succeeded") {
+    return "success";
+  }
   if (status === "failed") {
     return "destructive";
   }
@@ -104,13 +108,13 @@ export function IssueRunHistoryTable({
                   key={attempt.runAttemptId}
                   className="border-b border-border/40 hover:bg-transparent"
                 >
-                  <TableCell className="py-2 font-medium tabular-nums">
+                  <TableCell className="p-1.5 text-[10px] tabular-nums text-muted-foreground">
                     #{attempt.attemptNumber}
                   </TableCell>
                   <TableCell className="py-2">
                     <Badge
                       variant={statusBadgeVariant(attempt.status)}
-                      className="text-[10px] font-normal capitalize"
+                      className="h-4 px-1.5 py-0 text-[8px] font-normal capitalize"
                     >
                       {attempt.status}
                     </Badge>

@@ -41,7 +41,7 @@ export function IssueAddCommentForm({
   return (
     <form className="space-y-3" onSubmit={(event) => void handleSubmit(event)}>
       <div className="grid gap-2">
-        <Label htmlFor="issue-comment-body">Add comment</Label>
+        <Label htmlFor="issue-comment-body" className="text-xs">Add comment</Label>
         <Textarea
           id="issue-comment-body"
           value={body}
@@ -51,7 +51,7 @@ export function IssueAddCommentForm({
           rows={3}
         />
       </div>
-      {inputError ? <p className="text-sm text-destructive">{inputError}</p> : null}
+      {inputError ? <p className="text-xs text-destructive">{inputError}</p> : null}
       {submitError ? (
         <Alert variant="destructive">
           <AlertTitle>Comment failed</AlertTitle>

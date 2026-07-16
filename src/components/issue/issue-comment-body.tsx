@@ -8,31 +8,38 @@ import { cn, wrapText, wrapTextPreserve } from "@/lib/utils";
 
 type IssueCommentBodyProps = {
   body: string;
+  compact?: boolean;
 };
 
-const markdownComponents: Components = {
+function createMarkdownComponents(compact: boolean): Components {
+  const textClass = compact ? "text-[10px]" : "text-xs";
+  const headingClass = compact ? "text-[10px]" : "text-xs";
+  const smallHeadingClass = compact ? "text-[10px]" : "text-sm";
+  const codeClass = compact ? "text-[9px]" : "text-[10px]";
+
+  return {
   p: ({ children }) => (
-    <p className={cn("text-xs leading-relaxed text-foreground", wrapTextPreserve)}>{children}</p>
+    <p className={cn(textClass, "leading-relaxed text-foreground", wrapTextPreserve)}>{children}</p>
   ),
   strong: ({ children }) => <strong className="font-medium text-foreground">{children}</strong>,
   em: ({ children }) => <em>{children}</em>,
   h1: ({ children }) => (
-    <h3 className={cn("text-sm font-medium text-foreground", wrapText)}>{children}</h3>
+    <h3 className={cn(smallHeadingClass, "font-medium text-foreground", wrapText)}>{children}</h3>
   ),
   h2: ({ children }) => (
-    <h4 className={cn("text-xs font-medium text-foreground", wrapText)}>{children}</h4>
+    <h4 className={cn(headingClass, "font-medium text-foreground", wrapText)}>{children}</h4>
   ),
   h3: ({ children }) => (
-    <h5 className={cn("text-xs font-medium text-foreground", wrapText)}>{children}</h5>
+    <h5 className={cn(headingClass, "font-medium text-foreground", wrapText)}>{children}</h5>
   ),
   h4: ({ children }) => (
-    <h6 className={cn("text-xs font-medium text-foreground", wrapText)}>{children}</h6>
+    <h6 className={cn(headingClass, "font-medium text-foreground", wrapText)}>{children}</h6>
   ),
   ul: ({ children }) => (
-    <ul className={cn("list-disc space-y-1 pl-4 text-xs text-foreground", wrapText)}>{children}</ul>
+    <ul className={cn("list-disc space-y-1 pl-4 text-foreground", textClass, wrapText)}>{children}</ul>
   ),
   ol: ({ children }) => (
-    <ol className={cn("list-decimal space-y-1 pl-4 text-xs text-foreground", wrapText)}>
+    <ol className={cn("list-decimal space-y-1 pl-4 text-foreground", textClass, wrapText)}>
       {children}
     </ol>
   ),
@@ -40,7 +47,8 @@ const markdownComponents: Components = {
   blockquote: ({ children }) => (
     <blockquote
       className={cn(
-        "border-l-2 border-border/60 pl-3 text-xs italic text-muted-foreground",
+        "border-l-2 border-border/60 pl-3 italic text-muted-foreground",
+        textClass,
         wrapTextPreserve,
       )}
     >
@@ -52,7 +60,7 @@ const markdownComponents: Components = {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="break-all text-xs text-foreground underline underline-offset-2"
+      className={cn("break-all text-foreground underline underline-offset-2", textClass)}
     >
       {children}
     </a>
@@ -65,7 +73,8 @@ const markdownComponents: Components = {
       return (
         <code
           className={cn(
-            "block font-mono text-[10px] leading-relaxed text-foreground",
+            "block font-mono leading-relaxed text-foreground",
+            codeClass,
             wrapTextPreserve,
           )}
         >
@@ -75,7 +84,7 @@ const markdownComponents: Components = {
     }
 
     return (
-      <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-foreground">
+      <code className={cn("rounded bg-muted px-1 py-0.5 font-mono text-foreground", codeClass)}>
         {children}
       </code>
     );
@@ -90,9 +99,12 @@ const markdownComponents: Components = {
       {children}
     </pre>
   ),
-};
+  };
+}
 
-export function IssueCommentBody({ body }: IssueCommentBodyProps) {
+export function IssueCommentBody({ body, compact = false }: IssueCommentBodyProps) {
+  const markdownComponents = createMarkdownComponents(compact);
+
   return (
     <div className={cn("min-w-0 space-y-2", wrapText)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
