@@ -76,7 +76,7 @@ impl<'a> AnalyticsRepo<'a> {
              FROM session_events se
              JOIN agent_sessions s ON s.id = se.session_id
              JOIN run_attempts ra ON ra.id = s.run_attempt_id
-             JOIN issues i ON i.id = ra.issue_id
+             JOIN tasks i ON i.id = ra.task_id
              WHERE i.project_id = ?1
                AND se.kind != 'StreamChunk'
                AND se.created_at >= ?2
@@ -126,7 +126,7 @@ impl<'a> AnalyticsRepo<'a> {
              FROM session_events se
              JOIN agent_sessions s ON s.id = se.session_id
              JOIN run_attempts ra ON ra.id = s.run_attempt_id
-             JOIN issues i ON i.id = ra.issue_id
+             JOIN tasks i ON i.id = ra.task_id
              JOIN projects p ON p.id = i.project_id
              WHERE se.kind != 'StreamChunk'
                AND se.created_at >= ?1
@@ -193,21 +193,21 @@ impl<'a> AnalyticsRepo<'a> {
                         FROM session_events se
                         JOIN agent_sessions s ON s.id = se.session_id
                         JOIN run_attempts ra ON ra.id = s.run_attempt_id
-                        JOIN issues i ON i.id = ra.issue_id
+                        JOIN tasks i ON i.id = ra.task_id
                         WHERE i.project_id = ?1
                           AND se.kind != 'StreamChunk'
                           AND se.created_at >= ?2
                           AND se.created_at < ?3) AS total_events,
                        (SELECT COUNT(DISTINCT ra.id)
                         FROM run_attempts ra
-                        JOIN issues i ON i.id = ra.issue_id
+                        JOIN tasks i ON i.id = ra.task_id
                         WHERE i.project_id = ?1
                           AND ra.started_at >= ?2
                           AND ra.started_at < ?3) AS run_attempt_count,
                        (SELECT COUNT(DISTINCT s.id)
                         FROM agent_sessions s
                         JOIN run_attempts ra ON ra.id = s.run_attempt_id
-                        JOIN issues i ON i.id = ra.issue_id
+                        JOIN tasks i ON i.id = ra.task_id
                         WHERE i.project_id = ?1
                           AND s.started_at >= ?2
                           AND s.started_at < ?3) AS session_count",
@@ -281,21 +281,21 @@ mod tests {
         project_id: &str,
         started_at: &str,
     ) -> (String, String) {
-        let issue_id = Uuid::new_v4().to_string();
+        let task_id = Uuid::new_v4().to_string();
         let attempt_id = Uuid::new_v4().to_string();
         let session_id = Uuid::new_v4().to_string();
-        let identifier = format!("ISS-{}", &issue_id[..8]);
+        let identifier = format!("TSK-{}", &task_id[..8]);
 
         conn.execute(
-            "INSERT INTO issues (id, project_id, identifier, title, executor)
+            "INSERT INTO tasks (id, project_id, identifier, title, executor)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![issue_id, project_id, identifier, "Test issue", "hermes"],
+            params![task_id, project_id, identifier, "Test task", "hermes"],
         )
-        .expect("seed issue");
+        .expect("seed task");
         conn.execute(
-            "INSERT INTO run_attempts (id, issue_id, attempt_number, status, started_at)
+            "INSERT INTO run_attempts (id, task_id, attempt_number, status, started_at)
              VALUES (?1, ?2, 1, 'running', ?3)",
-            params![attempt_id, issue_id, started_at],
+            params![attempt_id, task_id, started_at],
         )
         .expect("seed run attempt");
         conn.execute(

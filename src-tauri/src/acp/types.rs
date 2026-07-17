@@ -29,7 +29,7 @@ pub struct StartRuntimeSessionInput {
     pub project_id: String,
     pub agent_session_id: String,
     pub run_attempt_id: String,
-    pub issue_id: String,
+    pub task_id: String,
     pub title: String,
     pub description: Option<String>,
     pub prompt_template: String,
@@ -45,7 +45,7 @@ pub struct StartRuntimeSessionInput {
 pub struct RuntimeSessionRecord {
     pub session_id: String,
     pub run_attempt_id: String,
-    pub issue_id: String,
+    pub task_id: String,
     pub attempt_number: u32,
     pub status: RuntimeSessionStatus,
     pub finished_at: Option<String>,

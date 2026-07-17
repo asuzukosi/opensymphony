@@ -200,7 +200,7 @@ impl AcpAdapter for AcpClientAdapter {
             project_id: input.project_id.clone(),
             session_id: input.agent_session_id.clone(),
             run_attempt_id: input.run_attempt_id.clone(),
-            issue_id: input.issue_id.clone(),
+            task_id: input.task_id.clone(),
             attempt_number: input.attempt_number,
             agent_name: input.agent_name.clone(),
             finished_at: None,
@@ -287,10 +287,10 @@ async fn run_session(
     input: StartRuntimeSessionInput,
 ) -> Result<(), String> {
     let workspace = input.workspace_path.trim().to_string();
-    let (session_id, issue_id, auto_approve) = ctx.with_mut(|session| {
+    let (session_id, task_id, auto_approve) = ctx.with_mut(|session| {
         (
             session.session_id.clone(),
-            session.issue_id.clone(),
+            session.task_id.clone(),
             session.auto_approve_permissions,
         )
     });
@@ -313,7 +313,7 @@ async fn run_session(
             ctx_permissions,
             permissions_gate,
             session_id,
-            issue_id,
+            task_id,
             auto_approve,
         ),
         move |connection: ConnectionTo<Agent>| {

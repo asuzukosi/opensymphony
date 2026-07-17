@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RetryQueueEntry {
-    pub issue_id: String,
+    pub task_id: String,
     pub attempt_number: i32,
     pub due_at: String,
     pub error_message: Option<String>,

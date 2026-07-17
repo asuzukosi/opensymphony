@@ -5,7 +5,7 @@ import { ColumnTrack, ColumnsScroller } from "@/components/layout/columns-scroll
 import {
   BOARD_COLUMN_IDS,
   type BoardColumnId,
-  type ProjectBoardIssue,
+  type ProjectBoardTask,
 } from "@/lib/ipc/types";
 export type BoardColumnMeta = {
   isLoading: boolean;
@@ -14,20 +14,20 @@ export type BoardColumnMeta = {
 
 type BoardColumnsProps = {
   columnMeta: Record<BoardColumnId, BoardColumnMeta>;
-  getColumnIssues: (columnId: BoardColumnId) => ProjectBoardIssue[] | undefined;
+  getColumnTasks: (columnId: BoardColumnId) => ProjectBoardTask[] | undefined;
   className?: string;
   onAddTask?: (columnId: BoardColumnId) => void;
-  onIssueOpen?: (issue: ProjectBoardIssue) => void;
+  onTaskOpen?: (task: ProjectBoardTask) => void;
   disabled?: boolean;
   dragEnabled?: boolean;
 };
 
 export function BoardColumns({
   columnMeta,
-  getColumnIssues,
+  getColumnTasks,
   className,
   onAddTask,
-  onIssueOpen,
+  onTaskOpen,
   disabled = false,
   dragEnabled = false,
 }: BoardColumnsProps) {
@@ -37,12 +37,12 @@ export function BoardColumns({
         <ColumnTrack key={columnId}>
           <BoardColumn
             columnId={columnId}
-            issues={getColumnIssues(columnId)}
+            tasks={getColumnTasks(columnId)}
             isLoading={columnMeta[columnId].isLoading}
             error={columnMeta[columnId].error}
             disabled={disabled}
             dragEnabled={dragEnabled}
-            onIssueOpen={onIssueOpen}
+            onTaskOpen={onTaskOpen}
             onAddTask={
               onAddTask && columnId === "backlog" ? () => onAddTask(columnId) : undefined
             }

@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 
 import { useActiveProject } from "@/contexts/active-project-context";
-import { groupIssuesByColumn } from "@/lib/group-issues-by-column";
+import { groupTasksByColumn } from "@/lib/group-tasks-by-column";
 import {
   DEFAULT_IPC_POLL_INTERVAL_MS,
   useIpcMutation,
@@ -12,12 +12,12 @@ import {
 import { requireProjectId } from "@/lib/require-project-id";
 import type {
   BoardColumnId,
-  CreateIssueResponse,
+  CreateTaskResponse,
   PlatformId,
-  ProjectBoardIssue,
+  ProjectBoardTask,
 } from "@/lib/ipc/types";
 
-export type CreateIssueInput = {
+export type CreateTaskInput = {
   projectId?: string;
   title: string;
   description?: string | null;
@@ -27,29 +27,29 @@ export type CreateIssueInput = {
   filePaths?: string[];
 };
 
-type TransitionIssueInput = {
-  issueId: string;
+type TransitionTaskInput = {
+  taskId: string;
   column: BoardColumnId;
   actor?: string | null;
 };
 
-type CreateIssueMutationInput = CreateIssueInput & {
+type CreateTaskMutationInput = CreateTaskInput & {
   resolvedProjectId: string;
 };
 
 export type UseBoardResult = {
-  issuesByColumn: Record<BoardColumnId, ProjectBoardIssue[] | undefined>;
+  tasksByColumn: Record<BoardColumnId, ProjectBoardTask[] | undefined>;
   error: Error | null;
   isLoading: boolean;
-  transitionIssue: (
-    issueId: string,
+  transitionTask: (
+    taskId: string,
     column: BoardColumnId,
     actor?: string | null,
   ) => Promise<void>;
   isTransitioning: boolean;
   transitionError: Error | null;
   resetTransition: () => void;
-  createIssue: (input: CreateIssueInput) => Promise<CreateIssueResponse>;
+  createTask: (input: CreateTaskInput) => Promise<CreateTaskResponse>;
   isCreating: boolean;
   createError: Error | null;
   resetCreate: () => void;
@@ -63,36 +63,36 @@ export function useBoard(): UseBoardResult {
     `board:${projectId ?? "none"}`,
     async (client) => {
       const id = projectId as string;
-      const issues = await client.listProjectIssues(id);
-      return groupIssuesByColumn(issues);
+      const tasks = await client.listProjectTasks(id);
+      return groupTasksByColumn(tasks);
     },
     { pollIntervalMs: DEFAULT_IPC_POLL_INTERVAL_MS, enabled },
   );
 
   const {
-    mutateAsync: transitionIssueColumn,
+    mutateAsync: transitionTaskColumn,
     isPending: isTransitioning,
     error: transitionError,
     reset: resetTransition,
-  } = useIpcMutation(async (client, input: TransitionIssueInput) => {
-    await client.transitionIssueColumn(input.issueId, input.column, input.actor ?? null);
+  } = useIpcMutation(async (client, input: TransitionTaskInput) => {
+    await client.transitionTaskColumn(input.taskId, input.column, input.actor ?? null);
   });
 
-  const transitionIssue = useCallback(
-    async (issueId: string, column: BoardColumnId, actor?: string | null): Promise<void> => {
-      await transitionIssueColumn({ issueId, column, actor });
+  const transitionTask = useCallback(
+    async (taskId: string, column: BoardColumnId, actor?: string | null): Promise<void> => {
+      await transitionTaskColumn({ taskId, column, actor });
       await refetch();
     },
-    [refetch, transitionIssueColumn],
+    [refetch, transitionTaskColumn],
   );
 
   const {
-    mutateAsync: createIssueMutation,
+    mutateAsync: createTaskMutation,
     isPending: isCreating,
     error: createError,
     reset: resetCreate,
-  } = useIpcMutation(async (client, input: CreateIssueMutationInput) => {
-    const issue = await client.createIssue(
+  } = useIpcMutation(async (client, input: CreateTaskMutationInput) => {
+    const task = await client.createTask(
       input.resolvedProjectId,
       input.title,
       input.description ?? null,
@@ -102,23 +102,23 @@ export function useBoard(): UseBoardResult {
     );
 
     if (input.filePaths != null && input.filePaths.length > 0) {
-      await client.attachIssueFiles(issue.issueId, input.filePaths);
+      await client.attachTaskFiles(task.taskId, input.filePaths);
     }
 
-    return issue;
+    return task;
   });
 
-  const createIssue = useCallback(
-    async (input: CreateIssueInput): Promise<CreateIssueResponse> => {
+  const createTask = useCallback(
+    async (input: CreateTaskInput): Promise<CreateTaskResponse> => {
       const resolvedProjectId = requireProjectId(input.projectId ?? projectId);
-      const issue = await createIssueMutation({ ...input, resolvedProjectId });
+      const task = await createTaskMutation({ ...input, resolvedProjectId });
       await refetch();
-      return issue;
+      return task;
     },
-    [createIssueMutation, projectId, refetch],
+    [createTaskMutation, projectId, refetch],
   );
 
-  const issuesByColumn = data ?? {
+  const tasksByColumn = data ?? {
     backlog: undefined,
     inProgress: undefined,
     review: undefined,
@@ -126,14 +126,14 @@ export function useBoard(): UseBoardResult {
   };
 
   return {
-    issuesByColumn,
+    tasksByColumn,
     error,
     isLoading,
-    transitionIssue,
+    transitionTask,
     isTransitioning,
     transitionError,
     resetTransition,
-    createIssue,
+    createTask,
     isCreating,
     createError,
     resetCreate,

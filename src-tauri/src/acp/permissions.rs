@@ -39,12 +39,12 @@ impl PermissionGate {
         }
     }
 
-    pub fn list_by_issue(&self, issue_id: &str) -> Vec<PendingPermission> {
+    pub fn list_by_task(&self, task_id: &str) -> Vec<PendingPermission> {
         self.pending
             .lock()
             .expect("permission gate lock")
             .values()
-            .filter(|entry| entry.permission.issue_id == issue_id)
+            .filter(|entry| entry.permission.task_id == task_id)
             .map(|entry| entry.permission.clone())
             .collect()
     }
@@ -52,7 +52,7 @@ impl PermissionGate {
     pub async fn route(
         &self,
         session_id: &str,
-        issue_id: &str,
+        task_id: &str,
         request: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse, String> {
         let summary = request
@@ -68,7 +68,7 @@ impl PermissionGate {
         let permission = PendingPermission {
             id: permission_id.clone(),
             session_id: session_id.to_string(),
-            issue_id: issue_id.to_string(),
+            task_id: task_id.to_string(),
             summary,
             created_at: Utc::now()
                 .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
@@ -104,14 +104,14 @@ pub fn permission_handler(
     ctx: SessionCtx,
     gate: Arc<PermissionGate>,
     session_id: String,
-    issue_id: String,
+    task_id: String,
     auto_approve: bool,
 ) -> RequestPermissionFn {
     Arc::new(move |request| {
         let ctx = ctx.clone();
         let gate = Arc::clone(&gate);
         let session_id = session_id.clone();
-        let issue_id = issue_id.clone();
+        let task_id = task_id.clone();
         Box::pin(async move {
             ctx.wait_pause().await;
             if auto_approve {
@@ -122,7 +122,7 @@ pub fn permission_handler(
             ctx.append_event(SessionEventKind::PermissionRequest, payload);
             let fallback = approve_request(&request);
             let response = gate
-                .route(&session_id, &issue_id, request)
+                .route(&session_id, &task_id, request)
                 .await
                 .unwrap_or(fallback);
             ctx.wait_pause().await;

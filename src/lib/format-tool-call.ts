@@ -85,7 +85,7 @@ function parsePathsFromChanges(value: unknown): string[] {
 }
 
 function parsePathsFromTitle(title: string): string[] {
-  const changesMatch = title.match(/changes:\s*(\[.*\])\s*$/s);
+  const changesMatch = title.match(/changes:\s*(\[[\s\S]*\])\s*$/);
   if (changesMatch != null) {
     try {
       return parsePathsFromChanges(JSON.parse(changesMatch[1]) as unknown);
@@ -161,7 +161,7 @@ function parseBashFields(
         ? record.working_directory
         : null;
 
-  const commandMatch = title.match(/command:\s*(.+?)(?:,\s*cwd:|$)/s);
+  const commandMatch = title.match(/command:\s*([\s\S]+?)(?:,\s*cwd:|$)/);
   const cwdMatch = title.match(/cwd:\s*(.+)$/);
 
   return {
@@ -215,7 +215,7 @@ function formatPatchSummary(
   update: ToolCallUpdatePayload,
   title: string,
 ): { summary: string; detail: string | null } {
-  const changesMatch = title.match(/changes:\s*(\[.*\])\s*$/s);
+  const changesMatch = title.match(/changes:\s*(\[[\s\S]*\])\s*$/);
   if (changesMatch != null) {
     try {
       const changes = JSON.parse(changesMatch[1]) as unknown;
@@ -272,12 +272,11 @@ export function formatToolCallUpdate(update: ToolCallUpdatePayload): FormattedTo
   } else if (toolName === "delete" || kind === "delete") {
     ({ summary, detail } = formatPathList(paths, "Deleted"));
   } else if (toolName === "grep" || toolName === "search" || toolName === "rg" || kind === "search") {
+    const rawInput = asRecord(update.rawInput);
+    const pattern = rawInput?.pattern;
+    const searchQuery = rawInput?.query;
     const query =
-      typeof asRecord(update.rawInput)?.pattern === "string"
-        ? asRecord(update.rawInput)?.pattern
-        : typeof asRecord(update.rawInput)?.query === "string"
-          ? asRecord(update.rawInput)?.query
-          : null;
+      typeof pattern === "string" ? pattern : typeof searchQuery === "string" ? searchQuery : null;
     summary = query != null ? `Searched for "${summarizeText(query, 48)}"` : "Searched codebase";
   } else if (paths.length > 0) {
     const verb = KIND_VERBS[kind] ?? (toolName ? formatToolLabel(toolName) : "Updated");

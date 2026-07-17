@@ -2,7 +2,7 @@ use rusqlite::{params, Connection, Row};
 use uuid::Uuid;
 
 use crate::db::error::{DbError, DbResult};
-use crate::types::IssueComment;
+use crate::types::TaskComment;
 
 pub struct CommentRepo<'a> {
     conn: &'a Connection,
@@ -15,30 +15,30 @@ impl<'a> CommentRepo<'a> {
 
     pub fn append(
         &self,
-        issue_id: &str,
+        task_id: &str,
         body: &str,
         author_id: Option<&str>,
-    ) -> DbResult<IssueComment> {
+    ) -> DbResult<TaskComment> {
         let id = Uuid::new_v4().to_string();
 
         self.conn.execute(
-            "INSERT INTO issue_comments (id, issue_id, body, author_id)
+            "INSERT INTO task_comments (id, task_id, body, author_id)
              VALUES (?1, ?2, ?3, ?4)",
-            params![id, issue_id, body, author_id],
+            params![id, task_id, body, author_id],
         )?;
 
         self.get(&id)?.ok_or_else(|| DbError::Internal("comment missing after append".into()))
     }
 
-    pub fn list_by_issue(&self, issue_id: &str) -> DbResult<Vec<IssueComment>> {
+    pub fn list_by_task(&self, task_id: &str) -> DbResult<Vec<TaskComment>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, issue_id, body, author_id, created_at
-             FROM issue_comments
-             WHERE issue_id = ?1
+            "SELECT id, task_id, body, author_id, created_at
+             FROM task_comments
+             WHERE task_id = ?1
              ORDER BY created_at ASC",
         )?;
 
-        let mut rows = stmt.query([issue_id])?;
+        let mut rows = stmt.query([task_id])?;
         let mut comments = Vec::new();
         while let Some(row) = rows.next()? {
             comments.push(map_comment(row)?);
@@ -46,10 +46,10 @@ impl<'a> CommentRepo<'a> {
         Ok(comments)
     }
 
-    fn get(&self, id: &str) -> DbResult<Option<IssueComment>> {
+    fn get(&self, id: &str) -> DbResult<Option<TaskComment>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, issue_id, body, author_id, created_at
-             FROM issue_comments WHERE id = ?1",
+            "SELECT id, task_id, body, author_id, created_at
+             FROM task_comments WHERE id = ?1",
         )?;
 
         let mut rows = stmt.query([id])?;
@@ -60,10 +60,10 @@ impl<'a> CommentRepo<'a> {
     }
 }
 
-fn map_comment(row: &Row<'_>) -> rusqlite::Result<IssueComment> {
-    Ok(IssueComment {
+fn map_comment(row: &Row<'_>) -> rusqlite::Result<TaskComment> {
+    Ok(TaskComment {
         id: row.get(0)?,
-        issue_id: row.get(1)?,
+        task_id: row.get(1)?,
         body: row.get(2)?,
         author_id: row.get(3)?,
         created_at: row.get(4)?,

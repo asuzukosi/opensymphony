@@ -12,13 +12,13 @@ use tokio::time::{self, MissedTickBehavior};
 use crate::acp::types::AcpAdapter;
 use crate::db::error::{DbError, DbResult};
 use crate::db::repos::agent_session::AgentSessionRepo;
-use crate::db::repos::issue::IssueRepo;
+use crate::db::repos::task::TaskRepo;
 use crate::db::repos::project::ProjectRepo;
 use crate::db::repos::retry_queue::RetryQueueRepo;
 use crate::db::repos::run_attempt::RunAttemptRepo;
 use crate::db::Db;
 use crate::types::{
-    BoardColumnId, Issue, Project, ProjectPatch, RuntimeRecentFinishedEntry, RuntimeRetryEntry,
+    BoardColumnId, Task, Project, ProjectPatch, RuntimeRecentFinishedEntry, RuntimeRetryEntry,
     RuntimeRunningEntry, RuntimeStatus, ReviewStatus, RunAttemptStatus,
 };
 
@@ -188,12 +188,12 @@ impl Manager {
         let attempt = RunAttemptRepo::new(conn)
             .get(run_attempt_id)?
             .ok_or_else(|| DbError::NotFound(format!("run attempt {run_attempt_id}")))?;
-        let issue = IssueRepo::new(conn)
-            .get(&attempt.issue_id)?
-            .ok_or_else(|| DbError::NotFound(format!("issue {}", attempt.issue_id)))?;
+        let task = TaskRepo::new(conn)
+            .get(&attempt.task_id)?
+            .ok_or_else(|| DbError::NotFound(format!("task {}", attempt.task_id)))?;
         let project = ProjectRepo::new(conn)
-            .get(&issue.project_id)?
-            .ok_or_else(|| DbError::NotFound(format!("project {}", issue.project_id)))?;
+            .get(&task.project_id)?
+            .ok_or_else(|| DbError::NotFound(format!("project {}", task.project_id)))?;
 
         self.register_project(&project.id);
         cancel_run_attempt(
@@ -215,14 +215,14 @@ impl Manager {
         conn: &Connection,
         project_id: &str,
     ) -> DbResult<Vec<RuntimeRunningEntry>> {
-        let issue_repo = IssueRepo::new(conn);
+        let task_repo = TaskRepo::new(conn);
         let session_repo = AgentSessionRepo::new(conn);
         let attempts = RunAttemptRepo::new(conn).list_running(project_id)?;
 
         let mut entries = Vec::with_capacity(attempts.len());
         for attempt in attempts {
-            let issue = issue_repo.get(&attempt.issue_id)?;
-            let (title, description, executor) = runtime_issue_summary(issue.as_ref());
+            let task = task_repo.get(&attempt.task_id)?;
+            let (title, description, executor) = runtime_task_summary(task.as_ref());
 
             let running_session = session_repo
                 .list_by_run_attempt(&attempt.id)?
@@ -242,7 +242,7 @@ impl Manager {
 
             entries.push(RuntimeRunningEntry {
                 run_attempt_id: attempt.id,
-                issue_id: attempt.issue_id,
+                task_id: attempt.task_id,
                 title,
                 description,
                 executor,
@@ -260,16 +260,16 @@ impl Manager {
         conn: &Connection,
         project_id: &str,
     ) -> DbResult<Vec<RuntimeRetryEntry>> {
-        let issue_repo = IssueRepo::new(conn);
+        let task_repo = TaskRepo::new(conn);
         let retries = RetryQueueRepo::new(conn).list_for_project(project_id)?;
 
         Ok(retries
             .into_iter()
             .map(|entry| {
-                let issue = issue_repo.get(&entry.issue_id).ok().flatten();
-                let (title, description, executor) = runtime_issue_summary(issue.as_ref());
+                let task = task_repo.get(&entry.task_id).ok().flatten();
+                let (title, description, executor) = runtime_task_summary(task.as_ref());
                 RuntimeRetryEntry {
-                    issue_id: entry.issue_id,
+                    task_id: entry.task_id,
                     title,
                     description,
                     executor,
@@ -287,21 +287,21 @@ impl Manager {
         project_id: &str,
         limit: i32,
     ) -> DbResult<Vec<RuntimeRecentFinishedEntry>> {
-        let issue_repo = IssueRepo::new(conn);
+        let task_repo = TaskRepo::new(conn);
         let attempts = RunAttemptRepo::new(conn).list_recent_finished(project_id, limit)?;
 
         Ok(attempts
             .into_iter()
             .map(|attempt| {
-                let issue = issue_repo.get(&attempt.issue_id).ok().flatten();
-                let (title, description, executor) = runtime_issue_summary(issue.as_ref());
-                let review_status = issue
+                let task = task_repo.get(&attempt.task_id).ok().flatten();
+                let (title, description, executor) = runtime_task_summary(task.as_ref());
+                let review_status = task
                     .as_ref()
                     .and_then(|row| resolve_review_status(&attempt.status, row.board_column));
 
                 RuntimeRecentFinishedEntry {
                     run_attempt_id: attempt.id,
-                    issue_id: attempt.issue_id,
+                    task_id: attempt.task_id,
                     title,
                     description,
                     executor,
@@ -337,8 +337,8 @@ impl Manager {
         self.fill_dispatch_slots(conn, project_id)
     }
 
-    pub fn on_issue_column_changed(&mut self, conn: &Connection, issue: &Issue) -> DbResult<()> {
-        let project_id = issue.project_id.clone();
+    pub fn on_task_column_changed(&mut self, conn: &Connection, task: &Task) -> DbResult<()> {
+        let project_id = task.project_id.clone();
         let now_iso = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         let project = ProjectRepo::new(conn)
             .get(&project_id)?
@@ -347,21 +347,21 @@ impl Manager {
         reconcile_running_attempts(
             self.adapter.as_ref(),
             &RunAttemptRepo::new(conn),
-            &IssueRepo::new(conn),
+            &TaskRepo::new(conn),
             &AgentSessionRepo::new(conn),
             &RetryQueueRepo::new(conn),
             &self.pause_gates,
             &project,
-            Some(issue.id.as_str()),
+            Some(task.id.as_str()),
             &now_iso,
             &self.emitter(),
         )?;
 
-        if issue.board_column == BoardColumnId::Done {
-            let _ = self.workspaces.remove_workspace(&project_id, &issue.id);
+        if task.board_column == BoardColumnId::Done {
+            let _ = self.workspaces.remove_workspace(&project_id, &task.id);
         }
 
-        if issue.board_column == BoardColumnId::Backlog {
+        if task.board_column == BoardColumnId::Backlog {
             self.ensure_runtime_active(conn, &project_id)?;
             self.fill_dispatch_slots(conn, &project_id)?;
         }
@@ -370,7 +370,7 @@ impl Manager {
     }
 
     pub fn project_is_idle(conn: &Connection, project_id: &str) -> DbResult<bool> {
-        if Self::project_has_backlog_issues(conn, project_id)? {
+        if Self::project_has_backlog_tasks(conn, project_id)? {
             return Ok(false);
         }
         if !RunAttemptRepo::new(conn)
@@ -454,7 +454,7 @@ impl Manager {
             self.adapter.as_ref(),
             &record,
             &RunAttemptRepo::new(conn),
-            &IssueRepo::new(conn),
+            &TaskRepo::new(conn),
             &AgentSessionRepo::new(conn),
             &RetryQueueRepo::new(conn),
             &self.pause_gates,
@@ -485,7 +485,7 @@ impl Manager {
             conn,
             self.adapter.as_ref(),
             &RunAttemptRepo::new(conn),
-            &IssueRepo::new(conn),
+            &TaskRepo::new(conn),
             &AgentSessionRepo::new(conn),
             &self.workspaces,
             &project,
@@ -494,9 +494,9 @@ impl Manager {
         )
     }
 
-    fn project_has_backlog_issues(conn: &Connection, project_id: &str) -> DbResult<bool> {
+    fn project_has_backlog_tasks(conn: &Connection, project_id: &str) -> DbResult<bool> {
         let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM issues WHERE project_id = ?1 AND board_column = ?2",
+            "SELECT COUNT(*) FROM tasks WHERE project_id = ?1 AND board_column = ?2",
             rusqlite::params![project_id, BoardColumnId::Backlog.as_str()],
             |row| row.get(0),
         )?;
@@ -525,7 +525,7 @@ impl Manager {
         runtime.status = RuntimeStatus::Running;
 
         if let Some(project) = runtime.config.clone() {
-            let _ = cleanup_done_workspaces(&IssueRepo::new(conn), &self.workspaces, &project)?;
+            let _ = cleanup_done_workspaces(&TaskRepo::new(conn), &self.workspaces, &project)?;
         }
 
         self.spawn_watchdog(project_id)?;
@@ -548,14 +548,14 @@ impl Manager {
         let emitter = self.emitter();
 
         let attempts = RunAttemptRepo::new(conn);
-        let issues = IssueRepo::new(conn);
+        let tasks = TaskRepo::new(conn);
         let sessions = AgentSessionRepo::new(conn);
         let retries = RetryQueueRepo::new(conn);
 
         reconcile_running_attempts(
             self.adapter.as_ref(),
             &attempts,
-            &issues,
+            &tasks,
             &sessions,
             &retries,
             &self.pause_gates,
@@ -569,7 +569,7 @@ impl Manager {
             conn,
             self.adapter.as_ref(),
             &attempts,
-            &issues,
+            &tasks,
             &sessions,
             &retries,
             &self.pause_gates,
@@ -582,7 +582,7 @@ impl Manager {
             conn,
             self.adapter.as_ref(),
             &attempts,
-            &issues,
+            &tasks,
             &sessions,
             &retries,
             &self.workspaces,
@@ -596,7 +596,7 @@ impl Manager {
             conn,
             self.adapter.as_ref(),
             &attempts,
-            &issues,
+            &tasks,
             &sessions,
             &self.workspaces,
             &project,
@@ -604,7 +604,7 @@ impl Manager {
             &emitter,
         )?;
 
-        let _ = cleanup_done_workspaces(&issues, &self.workspaces, &project)?;
+        let _ = cleanup_done_workspaces(&tasks, &self.workspaces, &project)?;
         self.maybe_stop_runtime(conn, project_id)
     }
 
@@ -629,14 +629,14 @@ impl Manager {
     }
 }
 
-fn runtime_issue_summary(issue: Option<&Issue>) -> (String, Option<String>, Option<String>) {
-    match issue {
-        Some(issue) => (
-            issue.title.clone(),
-            issue.description.clone(),
-            issue.executor.clone(),
+fn runtime_task_summary(task: Option<&Task>) -> (String, Option<String>, Option<String>) {
+    match task {
+        Some(task) => (
+            task.title.clone(),
+            task.description.clone(),
+            task.executor.clone(),
         ),
-        None => ("Unknown issue".into(), None, None),
+        None => ("Unknown task".into(), None, None),
     }
 }
 
@@ -713,7 +713,7 @@ fn spawn_watchdog(
 mod tests {
     use super::*;
     use crate::db::fixtures::{open_test_db, seed_minimal_project};
-    use crate::db::repos::issue::IssueRepo;
+    use crate::db::repos::task::TaskRepo;
     use crate::db::repos::retry_queue::RetryQueueRepo;
     use crate::db::repos::run_attempt::RunAttemptRepo;
 
@@ -725,20 +725,20 @@ mod tests {
     }
 
     #[test]
-    fn project_is_not_idle_when_backlog_has_issues() {
+    fn project_is_not_idle_when_backlog_has_tasks() {
         let conn = open_test_db().expect("open db");
         let fixtures = seed_minimal_project(&conn).expect("seed");
 
-        IssueRepo::new(&conn)
+        TaskRepo::new(&conn)
             .create(
                 &fixtures.project_id,
-                "Backlog issue",
+                "Backlog task",
                 None,
                 Some("hermes"),
                 None,
                 &[],
             )
-            .expect("create issue");
+            .expect("create task");
 
         assert!(!Manager::project_is_idle(&conn, &fixtures.project_id).expect("idle check"));
     }
@@ -747,21 +747,21 @@ mod tests {
     fn project_is_not_idle_when_running_attempt_exists() {
         let conn = open_test_db().expect("open db");
         let fixtures = seed_minimal_project(&conn).expect("seed");
-        let issues = IssueRepo::new(&conn);
+        let tasks = TaskRepo::new(&conn);
         let attempts = RunAttemptRepo::new(&conn);
 
-        let issue = issues
+        let task = tasks
             .create(
                 &fixtures.project_id,
-                "Running issue",
+                "Running task",
                 None,
                 Some("hermes"),
                 None,
                 &[],
             )
-            .expect("create issue");
+            .expect("create task");
         attempts
-            .create_with_attempt_number(&issue.id, 1)
+            .create_with_attempt_number(&task.id, 1)
             .expect("create attempt");
 
         assert!(!Manager::project_is_idle(&conn, &fixtures.project_id).expect("idle check"));
@@ -771,21 +771,21 @@ mod tests {
     fn project_is_not_idle_when_retry_queue_has_entries() {
         let conn = open_test_db().expect("open db");
         let fixtures = seed_minimal_project(&conn).expect("seed");
-        let issues = IssueRepo::new(&conn);
+        let tasks = TaskRepo::new(&conn);
         let retries = RetryQueueRepo::new(&conn);
 
-        let issue = issues
+        let task = tasks
             .create(
                 &fixtures.project_id,
-                "Retry issue",
+                "Retry task",
                 None,
                 Some("hermes"),
                 None,
                 &[],
             )
-            .expect("create issue");
+            .expect("create task");
         retries
-            .upsert(&issue.id, 2, "2099-01-01T00:00:00+00:00", Some("retry"))
+            .upsert(&task.id, 2, "2099-01-01T00:00:00+00:00", Some("retry"))
             .expect("queue retry");
 
         assert!(!Manager::project_is_idle(&conn, &fixtures.project_id).expect("idle check"));

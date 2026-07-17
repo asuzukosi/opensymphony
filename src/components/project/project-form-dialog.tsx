@@ -259,12 +259,12 @@ export function ProjectFormDialog({
                     onChange={(workspaceRoot) =>
                       setCreateForm((current) => ({ ...current, workspaceRoot }))
                     }
-                    usePerIssueWorkspaces={createForm.usePerIssueWorkspaces}
-                    onUsePerIssueWorkspacesChange={(usePerIssueWorkspaces) =>
+                    usePerTaskWorkspaces={createForm.usePerTaskWorkspaces}
+                    onUsePerTaskWorkspacesChange={(usePerTaskWorkspaces) =>
                       setCreateForm((current) => ({
                         ...current,
-                        usePerIssueWorkspaces,
-                        useWorktrees: usePerIssueWorkspaces ? current.useWorktrees : false,
+                        usePerTaskWorkspaces,
+                        useWorktrees: usePerTaskWorkspaces ? current.useWorktrees : false,
                       }))
                     }
                     useWorktrees={createForm.useWorktrees}

@@ -11,12 +11,12 @@ use orchestrator::Manager as OrchestratorManager;
 use orchestrator::events::orchestrator_event_channel;
 use orchestrator::workspace::WorkspaceManager;
 use commands::{
-    // issue
-    add_issue_comment, attach_issue_files, create_issue, get_issue_header, list_issue_comments,
-    list_issue_pending_permissions, list_issue_run_attempts, list_project_issues,
-    list_session_events, resolve_session_permission, set_issue_auto_approve_permissions,
-    set_issue_executor, set_issue_tags, transition_issue_column,
-    update_issue_priority,
+    // task
+    add_task_comment, attach_task_files, create_task, get_task_header, list_task_comments,
+    list_task_pending_permissions, list_task_run_attempts, list_project_tasks,
+    list_session_events, resolve_session_permission, set_task_auto_approve_permissions,
+    set_task_executor, set_task_tags, transition_task_column,
+    update_task_priority,
     // runtime
     cancel_run, get_runtime_recent_finished, get_runtime_retrying,
     get_runtime_running, pause_run, resume_run,
@@ -76,21 +76,21 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // issue
-            get_issue_header,
-            list_project_issues,
-            list_issue_comments,
-            list_issue_run_attempts,
+            // task
+            get_task_header,
+            list_project_tasks,
+            list_task_comments,
+            list_task_run_attempts,
             list_session_events,
-            add_issue_comment,
-            attach_issue_files,
-            create_issue,
-            set_issue_executor,
-            set_issue_auto_approve_permissions,
-            set_issue_tags,
-            transition_issue_column,
-            update_issue_priority,
-            list_issue_pending_permissions,
+            add_task_comment,
+            attach_task_files,
+            create_task,
+            set_task_executor,
+            set_task_auto_approve_permissions,
+            set_task_tags,
+            transition_task_column,
+            update_task_priority,
+            list_task_pending_permissions,
             resolve_session_permission,
             // runtime
             get_runtime_running,

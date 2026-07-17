@@ -1,9 +1,9 @@
 pub mod agent_session;
 pub mod analytics;
 pub mod comment;
-pub mod issue;
-pub mod issue_files;
-pub mod issue_tags;
+pub mod task;
+pub mod task_files;
+pub mod task_tags;
 pub mod project;
 pub mod platforms;
 pub mod retry_queue;

@@ -23,7 +23,7 @@ export function PlatformAssignField({
   return (
     <PlatformPickerField
       label="Assign to"
-      description="Platforms enabled for this project. Issues can be dispatched to any assigned platform."
+      description="Platforms enabled for this project. Tasks can be dispatched to any assigned platform."
       selected={value}
       pickable={pickable}
       onSelect={(platformId) => onChange([...value, platformId])}

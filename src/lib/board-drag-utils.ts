@@ -2,27 +2,27 @@ import {
   BOARD_COLUMN_IDS,
   type BoardColumnId,
   type ProjectBoard,
-  type ProjectBoardIssue,
+  type ProjectBoardTask,
 } from "@/lib/ipc/types";
 
 export function isBoardColumnId(value: string): value is BoardColumnId {
   return (BOARD_COLUMN_IDS as readonly string[]).includes(value);
 }
 
-export function findIssueColumn(issueId: string, board: ProjectBoard): BoardColumnId | null {
+export function findTaskColumn(taskId: string, board: ProjectBoard): BoardColumnId | null {
   for (const columnId of BOARD_COLUMN_IDS) {
-    if (board[columnId].issues.some((issue) => issue.issueId === issueId)) {
+    if (board[columnId].tasks.some((task) => task.taskId === taskId)) {
       return columnId;
     }
   }
   return null;
 }
 
-export function findIssueById(issueId: string, board: ProjectBoard): ProjectBoardIssue | null {
+export function findTaskById(taskId: string, board: ProjectBoard): ProjectBoardTask | null {
   for (const columnId of BOARD_COLUMN_IDS) {
-    const issue = board[columnId].issues.find((entry) => entry.issueId === issueId);
-    if (issue) {
-      return issue;
+    const task = board[columnId].tasks.find((entry) => entry.taskId === taskId);
+    if (task) {
+      return task;
     }
   }
   return null;
@@ -35,12 +35,12 @@ export function resolveDropTargetColumnId(
   if (isBoardColumnId(overId)) {
     return overId;
   }
-  return findIssueColumn(overId, board);
+  return findTaskColumn(overId, board);
 }
 
-export function moveIssueBetweenColumns(
+export function moveTaskBetweenColumns(
   board: ProjectBoard,
-  issueId: string,
+  taskId: string,
   sourceColumn: BoardColumnId,
   targetColumn: BoardColumnId,
 ): ProjectBoard {
@@ -48,18 +48,18 @@ export function moveIssueBetweenColumns(
     return board;
   }
 
-  const issue = findIssueById(issueId, board);
-  if (!issue) {
+  const task = findTaskById(taskId, board);
+  if (!task) {
     return board;
   }
 
   return {
     ...board,
     [sourceColumn]: {
-      issues: board[sourceColumn].issues.filter((entry) => entry.issueId !== issueId),
+      tasks: board[sourceColumn].tasks.filter((entry) => entry.taskId !== taskId),
     },
     [targetColumn]: {
-      issues: [...board[targetColumn].issues, issue],
+      tasks: [...board[targetColumn].tasks, task],
     },
   };
 }

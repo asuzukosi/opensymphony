@@ -1,21 +1,21 @@
 export const IPC_CHANNELS = {
-  // issue reads
-  getIssueHeader: "opensymphony:get-issue-header",
-  listProjectIssues: "opensymphony:list-project-issues",
-  listIssueComments: "opensymphony:list-issue-comments",
-  listIssueRunAttempts: "opensymphony:list-issue-run-attempts",
+  // task reads
+  getTaskHeader: "opensymphony:get-task-header",
+  listProjectTasks: "opensymphony:list-project-tasks",
+  listTaskComments: "opensymphony:list-task-comments",
+  listTaskRunAttempts: "opensymphony:list-task-run-attempts",
   listSessionEvents: "opensymphony:list-session-events",
-  // issue writes
-  createIssue: "opensymphony:create-issue",
-  setIssueExecutor: "opensymphony:set-issue-executor",
-  setIssueAutoApprovePermissions: "opensymphony:set-issue-auto-approve-permissions",
-  setIssueTags: "opensymphony:set-issue-tags",
-  attachIssueFiles: "opensymphony:attach-issue-files",
-  updateIssuePriority: "opensymphony:update-issue-priority",
-  transitionIssueColumn: "opensymphony:transition-issue-column",
-  addIssueComment: "opensymphony:add-issue-comment",
+  // task writes
+  createTask: "opensymphony:create-task",
+  setTaskExecutor: "opensymphony:set-task-executor",
+  setTaskAutoApprovePermissions: "opensymphony:set-task-auto-approve-permissions",
+  setTaskTags: "opensymphony:set-task-tags",
+  attachTaskFiles: "opensymphony:attach-task-files",
+  updateTaskPriority: "opensymphony:update-task-priority",
+  transitionTaskColumn: "opensymphony:transition-task-column",
+  addTaskComment: "opensymphony:add-task-comment",
   // permissions reads
-  listIssuePendingPermissions: "opensymphony:list-issue-pending-permissions",
+  listTaskPendingPermissions: "opensymphony:list-task-pending-permissions",
   // permissions writes
   resolveSessionPermission: "opensymphony:resolve-session-permission",
   // runtime reads

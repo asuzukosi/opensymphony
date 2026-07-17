@@ -15,8 +15,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOrchestratorStatus } from "@/hooks/use-orchestrator-status";
 
 import { type BoardColumnMeta, BoardColumns } from "@/components/board/board-columns";
-import { CreateIssueDialog } from "@/components/board/create-issue-dialog";
-import { IssueCard } from "@/components/board/issue-card";
+import { CreateTaskDialog } from "@/components/board/create-task-dialog";
+import { TaskCard } from "@/components/board/task-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageShell } from "@/components/layout/page-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -30,20 +30,20 @@ import {
   PlusIcon,
 } from "@/components/ui/hero-icons";
 import { useActiveProject } from "@/contexts/active-project-context";
-import { type CreateIssueInput, useBoard } from "@/hooks/use-board";
+import { type CreateTaskInput, useBoard } from "@/hooks/use-board";
 import {
-  findIssueById,
-  findIssueColumn,
-  moveIssueBetweenColumns,
+  findTaskById,
+  findTaskColumn,
+  moveTaskBetweenColumns,
   resolveDropTargetColumnId,
 } from "@/lib/board-drag-utils";
 import type {
   BoardColumnId,
   ProjectBoard,
-  ProjectBoardIssue,
+  ProjectBoardTask,
   RuntimeStatus,
 } from "@/lib/ipc/types";
-import { useIssueSheetParams } from "@/lib/issue-sheet-params";
+import { useTaskSheetParams } from "@/lib/task-sheet-params";
 
 function formatOrchestratorStatus(status: string): string {
   return status.replace(/_/g, " ");
@@ -75,42 +75,42 @@ function OrchestratorStatusBadge({ status }: { status: string }) {
 }
 
 function buildSyncedBoard(
-  issuesByColumn: Record<BoardColumnId, ProjectBoardIssue[] | undefined>,
+  tasksByColumn: Record<BoardColumnId, ProjectBoardTask[] | undefined>,
 ): ProjectBoard {
   return {
-    backlog: { issues: issuesByColumn.backlog ?? [] },
-    inProgress: { issues: issuesByColumn.inProgress ?? [] },
-    review: { issues: issuesByColumn.review ?? [] },
-    done: { issues: issuesByColumn.done ?? [] },
+    backlog: { tasks: tasksByColumn.backlog ?? [] },
+    inProgress: { tasks: tasksByColumn.inProgress ?? [] },
+    review: { tasks: tasksByColumn.review ?? [] },
+    done: { tasks: tasksByColumn.done ?? [] },
   };
 }
 
-function countBoardIssues(board: ProjectBoard): { total: number; done: number } {
+function countBoardTasks(board: ProjectBoard): { total: number; done: number } {
   const columns = [board.backlog, board.inProgress, board.review, board.done];
-  const total = columns.reduce((sum, column) => sum + column.issues.length, 0);
-  return { total, done: board.done.issues.length };
+  const total = columns.reduce((sum, column) => sum + column.tasks.length, 0);
+  return { total, done: board.done.tasks.length };
 }
 
 function BoardDnDContent() {
   const { projectId } = useActiveProject();
   const board = useBoard();
 
-  const syncedBoard = useMemo(() => buildSyncedBoard(board.issuesByColumn), [board.issuesByColumn]);
+  const syncedBoard = useMemo(() => buildSyncedBoard(board.tasksByColumn), [board.tasksByColumn]);
 
   const [optimisticBoard, setOptimisticBoard] = useState<ProjectBoard | null>(null);
-  const [activeIssue, setActiveIssue] = useState<ProjectBoardIssue | null>(null);
+  const [activeTask, setActiveTask] = useState<ProjectBoardTask | null>(null);
   const [failedTransition, setFailedTransition] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [failedCreate, setFailedCreate] = useState(false);
-  const { openIssueSheet } = useIssueSheetParams();
+  const { openTaskSheet } = useTaskSheetParams();
 
   useEffect(() => {
     setOptimisticBoard(null);
   }, [
-    board.issuesByColumn.backlog,
-    board.issuesByColumn.inProgress,
-    board.issuesByColumn.review,
-    board.issuesByColumn.done,
+    board.tasksByColumn.backlog,
+    board.tasksByColumn.inProgress,
+    board.tasksByColumn.review,
+    board.tasksByColumn.done,
   ]);
 
   const displayBoard = optimisticBoard ?? syncedBoard;
@@ -125,14 +125,14 @@ function BoardDnDContent() {
     };
   }, [board.error, board.isLoading]);
 
-  const getColumnIssues = useCallback(
-    (columnId: BoardColumnId): ProjectBoardIssue[] | undefined => {
+  const getColumnTasks = useCallback(
+    (columnId: BoardColumnId): ProjectBoardTask[] | undefined => {
       if (optimisticBoard) {
-        return optimisticBoard[columnId].issues;
+        return optimisticBoard[columnId].tasks;
       }
-      return board.issuesByColumn[columnId];
+      return board.tasksByColumn[columnId];
     },
-    [board.issuesByColumn, optimisticBoard],
+    [board.tasksByColumn, optimisticBoard],
   );
 
   const sensors = useSensors(
@@ -142,31 +142,31 @@ function BoardDnDContent() {
   );
 
   const handleDragStart = (event: DragStartEvent): void => {
-    const issue = event.active.data.current?.issue as ProjectBoardIssue | undefined;
-    setActiveIssue(issue ?? findIssueById(String(event.active.id), displayBoard));
+    const task = event.active.data.current?.task as ProjectBoardTask | undefined;
+    setActiveTask(task ?? findTaskById(String(event.active.id), displayBoard));
   };
 
   const handleDragEnd = async (event: DragEndEvent): Promise<void> => {
-    setActiveIssue(null);
+    setActiveTask(null);
 
     if (!event.over) {
       return;
     }
 
-    const issueId = String(event.active.id);
+    const taskId = String(event.active.id);
     const targetColumn = resolveDropTargetColumnId(String(event.over.id), syncedBoard);
-    const sourceColumn = findIssueColumn(issueId, syncedBoard);
+    const sourceColumn = findTaskColumn(taskId, syncedBoard);
 
     if (!targetColumn || !sourceColumn || targetColumn === sourceColumn) {
       return;
     }
 
-    setOptimisticBoard(moveIssueBetweenColumns(syncedBoard, issueId, sourceColumn, targetColumn));
+    setOptimisticBoard(moveTaskBetweenColumns(syncedBoard, taskId, sourceColumn, targetColumn));
     board.resetTransition();
     setFailedTransition(false);
 
     try {
-      await board.transitionIssue(issueId, targetColumn, "operator");
+      await board.transitionTask(taskId, targetColumn, "operator");
       setOptimisticBoard(null);
     } catch {
       setOptimisticBoard(null);
@@ -174,13 +174,13 @@ function BoardDnDContent() {
     }
   };
 
-  const handleCreateIssue = async (input: CreateIssueInput): Promise<void> => {
+  const handleCreateTask = async (input: CreateTaskInput): Promise<void> => {
     board.resetCreate();
     setFailedCreate(false);
-    console.log("handleCreateIssue", input);
+    console.log("handleCreateTask", input);
 
     try {
-      await board.createIssue(input);
+      await board.createTask(input);
     } catch (error) {
       setFailedCreate(true);
       throw error;
@@ -188,7 +188,7 @@ function BoardDnDContent() {
   };
 
   const isMutating = board.isTransitioning || board.isCreating;
-  const { total, done } = useMemo(() => countBoardIssues(displayBoard), [displayBoard]);
+  const { total, done } = useMemo(() => countBoardTasks(displayBoard), [displayBoard]);
 
   const openCreateDialog = (): void => {
     board.resetCreate();
@@ -248,30 +248,30 @@ function BoardDnDContent() {
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <BoardColumns
               columnMeta={columnMeta}
-              getColumnIssues={getColumnIssues}
+              getColumnTasks={getColumnTasks}
               dragEnabled
               disabled={isMutating}
               onAddTask={() => {
                 openCreateDialog();
               }}
-              onIssueOpen={(issue) => {
-                openIssueSheet(issue.issueId);
+              onTaskOpen={(task) => {
+                openTaskSheet(task.taskId);
               }}
               className="min-h-0 flex-1"
             />
           </div>
 
           <DragOverlay>
-            {activeIssue ? <IssueCard issue={activeIssue} isOverlay disabled={isMutating} /> : null}
+            {activeTask ? <TaskCard task={activeTask} isOverlay disabled={isMutating} /> : null}
           </DragOverlay>
         </DndContext>
       </div>
 
       {projectId != null ? (
-        <CreateIssueDialog
+        <CreateTaskDialog
           open={createDialogOpen}
           onOpenChange={setCreateDialogOpen}
-          onCreate={handleCreateIssue}
+          onCreate={handleCreateTask}
           isPending={board.isCreating}
           submitError={failedCreate ? board.createError : null}
         />

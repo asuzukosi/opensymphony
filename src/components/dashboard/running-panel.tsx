@@ -1,7 +1,7 @@
 "use client";
 
 import { PlayCircleIcon } from "@/components/ui/hero-icons";
-import { DashboardIssueCell } from "@/components/dashboard/dashboard-issue-cell";
+import { DashboardTaskCell } from "@/components/dashboard/dashboard-task-cell";
 import {
   BorderedTable,
   tableCellClass,
@@ -68,8 +68,8 @@ export function RunningPanel({
               {running.map((entry) => (
                 <TableRow key={entry.runAttemptId} className="hover:bg-muted/20">
                   <TableCell className={cn(tableCellClass, "max-w-0")}>
-                    <DashboardIssueCell
-                      issueId={entry.issueId}
+                    <DashboardTaskCell
+                      taskId={entry.taskId}
                       title={entry.title}
                       description={entry.description}
                       executor={entry.executor}

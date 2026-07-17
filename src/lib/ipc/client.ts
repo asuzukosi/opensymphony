@@ -2,34 +2,34 @@ import type { CreateProjectInput } from "@/lib/create-project-form";
 import { IPC_CHANNELS } from "@/lib/ipc/channels";
 import type {
   ActivityTimeRange,
-  AddIssueCommentResponse,
+  AddTaskCommentResponse,
   AgentActivityOverTimeResponse,
-  AttachIssueFilesResponse,
+  AttachTaskFilesResponse,
   BoardColumnId,
-  CreateIssueResponse,
+  CreateTaskResponse,
   CreateProjectResponse,
-  IssueComment,
-  IssueDetailRunAttempt,
-  IssueHeader,
+  TaskComment,
+  TaskDetailRunAttempt,
+  TaskHeader,
   PendingPermission,
   PermissionDecision,
   PlatformId,
   PlatformInstallStatus,
-  ProjectIssueListItem,
+  ProjectTaskListItem,
   ProjectSummary,
   RetryPolicy,
   RuntimeRecentFinishedEntry,
   RuntimeRetryEntry,
   RuntimeRunningEntry,
   SessionEvent,
-  SetIssueAutoApprovePermissionsResponse,
-  SetIssueExecutorResponse,
-  SetIssueTagsResponse,
+  SetTaskAutoApprovePermissionsResponse,
+  SetTaskExecutorResponse,
+  SetTaskTagsResponse,
   SetProjectMaxConcurrencyResponse,
   SetProjectNameResponse,
   SetProjectRetryPolicyResponse,
-  TransitionIssueColumnResponse,
-  UpdateIssuePriorityResponse,
+  TransitionTaskColumnResponse,
+  UpdateTaskPriorityResponse,
 } from "@/lib/ipc/types";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
@@ -45,47 +45,47 @@ export function isIpcAvailable(): boolean {
 }
 
 export interface OpenSymphonyDesktopApi {
-  // issue reads
-  getIssueHeader(issueId: string): Promise<IssueHeader>;
-  listProjectIssues(projectId: string): Promise<ProjectIssueListItem[]>;
-  listIssueComments(issueId: string): Promise<IssueComment[]>;
-  listIssueRunAttempts(issueId: string): Promise<IssueDetailRunAttempt[]>;
-  listSessionEvents(issueId: string): Promise<SessionEvent[]>;
-  // issue writes
-  createIssue(
+  // task reads
+  getTaskHeader(taskId: string): Promise<TaskHeader>;
+  listProjectTasks(projectId: string): Promise<ProjectTaskListItem[]>;
+  listTaskComments(taskId: string): Promise<TaskComment[]>;
+  listTaskRunAttempts(taskId: string): Promise<TaskDetailRunAttempt[]>;
+  listSessionEvents(taskId: string): Promise<SessionEvent[]>;
+  // task writes
+  createTask(
     projectId: string,
     title: string,
     description?: string | null,
     executor?: PlatformId | null,
     priority?: number | null,
     tags?: string[],
-  ): Promise<CreateIssueResponse>;
-  setIssueExecutor(
-    issueId: string,
+  ): Promise<CreateTaskResponse>;
+  setTaskExecutor(
+    taskId: string,
     executor?: PlatformId | null,
-  ): Promise<SetIssueExecutorResponse>;
-  setIssueAutoApprovePermissions(
-    issueId: string,
+  ): Promise<SetTaskExecutorResponse>;
+  setTaskAutoApprovePermissions(
+    taskId: string,
     autoApprovePermissions: boolean,
-  ): Promise<SetIssueAutoApprovePermissionsResponse>;
-  setIssueTags(issueId: string, tags: string[]): Promise<SetIssueTagsResponse>;
-  attachIssueFiles(issueId: string, sourcePaths: string[]): Promise<AttachIssueFilesResponse>;
-  updateIssuePriority(
-    issueId: string,
+  ): Promise<SetTaskAutoApprovePermissionsResponse>;
+  setTaskTags(taskId: string, tags: string[]): Promise<SetTaskTagsResponse>;
+  attachTaskFiles(taskId: string, sourcePaths: string[]): Promise<AttachTaskFilesResponse>;
+  updateTaskPriority(
+    taskId: string,
     priority?: number | null,
-  ): Promise<UpdateIssuePriorityResponse>;
-  transitionIssueColumn(
-    issueId: string,
+  ): Promise<UpdateTaskPriorityResponse>;
+  transitionTaskColumn(
+    taskId: string,
     column: BoardColumnId,
     actor?: string | null,
-  ): Promise<TransitionIssueColumnResponse>;
-  addIssueComment(
-    issueId: string,
+  ): Promise<TransitionTaskColumnResponse>;
+  addTaskComment(
+    taskId: string,
     body: string,
     author?: string | null,
-  ): Promise<AddIssueCommentResponse>;
+  ): Promise<AddTaskCommentResponse>;
   // permissions reads
-  listIssuePendingPermissions(issueId: string): Promise<PendingPermission[]>;
+  listTaskPendingPermissions(taskId: string): Promise<PendingPermission[]>;
   // permissions writes
   resolveSessionPermission(permissionId: string, decision: PermissionDecision): Promise<void>;
   // runtime reads
@@ -125,19 +125,19 @@ export interface OpenSymphonyDesktopApi {
 
 function createIpcClient(): OpenSymphonyDesktopApi {
   return {
-    // issue reads
-    getIssueHeader: (issueId) => invoke<IssueHeader>(IPC_CHANNELS.getIssueHeader, { issueId }),
-    listProjectIssues: (projectId) =>
-      invoke<ProjectIssueListItem[]>(IPC_CHANNELS.listProjectIssues, { projectId }),
-    listIssueComments: (issueId) =>
-      invoke<IssueComment[]>(IPC_CHANNELS.listIssueComments, { issueId }),
-    listIssueRunAttempts: (issueId) =>
-      invoke<IssueDetailRunAttempt[]>(IPC_CHANNELS.listIssueRunAttempts, { issueId }),
-    listSessionEvents: (issueId) =>
-      invoke<SessionEvent[]>(IPC_CHANNELS.listSessionEvents, { issueId }),
-    // issue writes
-    createIssue: (projectId, title, description, executor, priority, tags) =>
-      invoke<CreateIssueResponse>(IPC_CHANNELS.createIssue, {
+    // task reads
+    getTaskHeader: (taskId) => invoke<TaskHeader>(IPC_CHANNELS.getTaskHeader, { taskId }),
+    listProjectTasks: (projectId) =>
+      invoke<ProjectTaskListItem[]>(IPC_CHANNELS.listProjectTasks, { projectId }),
+    listTaskComments: (taskId) =>
+      invoke<TaskComment[]>(IPC_CHANNELS.listTaskComments, { taskId }),
+    listTaskRunAttempts: (taskId) =>
+      invoke<TaskDetailRunAttempt[]>(IPC_CHANNELS.listTaskRunAttempts, { taskId }),
+    listSessionEvents: (taskId) =>
+      invoke<SessionEvent[]>(IPC_CHANNELS.listSessionEvents, { taskId }),
+    // task writes
+    createTask: (projectId, title, description, executor, priority, tags) =>
+      invoke<CreateTaskResponse>(IPC_CHANNELS.createTask, {
         projectId,
         title,
         description: description ?? null,
@@ -145,43 +145,43 @@ function createIpcClient(): OpenSymphonyDesktopApi {
         priority: priority ?? null,
         tags: tags ?? [],
       }),
-    setIssueExecutor: (issueId, executor) =>
-      invoke<SetIssueExecutorResponse>(IPC_CHANNELS.setIssueExecutor, {
-        issueId,
+    setTaskExecutor: (taskId, executor) =>
+      invoke<SetTaskExecutorResponse>(IPC_CHANNELS.setTaskExecutor, {
+        taskId,
         executor: executor ?? null,
       }),
-    setIssueAutoApprovePermissions: (issueId, autoApprovePermissions) =>
-      invoke<SetIssueAutoApprovePermissionsResponse>(IPC_CHANNELS.setIssueAutoApprovePermissions, {
-        issueId,
+    setTaskAutoApprovePermissions: (taskId, autoApprovePermissions) =>
+      invoke<SetTaskAutoApprovePermissionsResponse>(IPC_CHANNELS.setTaskAutoApprovePermissions, {
+        taskId,
         autoApprovePermissions,
       }),
-    setIssueTags: (issueId, tags) =>
-      invoke<SetIssueTagsResponse>(IPC_CHANNELS.setIssueTags, { issueId, tags }),
-    attachIssueFiles: (issueId, sourcePaths) =>
-      invoke<AttachIssueFilesResponse>(IPC_CHANNELS.attachIssueFiles, {
-        issueId,
+    setTaskTags: (taskId, tags) =>
+      invoke<SetTaskTagsResponse>(IPC_CHANNELS.setTaskTags, { taskId, tags }),
+    attachTaskFiles: (taskId, sourcePaths) =>
+      invoke<AttachTaskFilesResponse>(IPC_CHANNELS.attachTaskFiles, {
+        taskId,
         sourcePaths,
       }),
-    updateIssuePriority: (issueId, priority) =>
-      invoke<UpdateIssuePriorityResponse>(IPC_CHANNELS.updateIssuePriority, {
-        issueId,
+    updateTaskPriority: (taskId, priority) =>
+      invoke<UpdateTaskPriorityResponse>(IPC_CHANNELS.updateTaskPriority, {
+        taskId,
         priority: priority ?? null,
       }),
-    transitionIssueColumn: (issueId, column, actor) =>
-      invoke<TransitionIssueColumnResponse>(IPC_CHANNELS.transitionIssueColumn, {
-        issueId,
+    transitionTaskColumn: (taskId, column, actor) =>
+      invoke<TransitionTaskColumnResponse>(IPC_CHANNELS.transitionTaskColumn, {
+        taskId,
         column,
         actor: actor ?? null,
       }),
-    addIssueComment: (issueId, body, author) =>
-      invoke<AddIssueCommentResponse>(IPC_CHANNELS.addIssueComment, {
-        issueId,
+    addTaskComment: (taskId, body, author) =>
+      invoke<AddTaskCommentResponse>(IPC_CHANNELS.addTaskComment, {
+        taskId,
         body,
         author: author ?? null,
       }),
     // permissions reads
-    listIssuePendingPermissions: (issueId) =>
-      invoke<PendingPermission[]>(IPC_CHANNELS.listIssuePendingPermissions, { issueId }),
+    listTaskPendingPermissions: (taskId) =>
+      invoke<PendingPermission[]>(IPC_CHANNELS.listTaskPendingPermissions, { taskId }),
     // permissions writes
     resolveSessionPermission: (permissionId, decision) =>
       invoke<void>(IPC_CHANNELS.resolveSessionPermission, { permissionId, decision }),

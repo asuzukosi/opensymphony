@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct PendingPermission {
     pub id: String,
     pub session_id: String,
-    pub issue_id: String,
+    pub task_id: String,
     pub summary: String,
     pub created_at: String,
 }

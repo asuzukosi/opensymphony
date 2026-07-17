@@ -11,7 +11,7 @@ export type ProjectRuntimeFields = {
 export type CreateProjectFormState = {
   name: string;
   workspaceRoot: string;
-  usePerIssueWorkspaces: boolean;
+  usePerTaskWorkspaces: boolean;
   useWorktrees: boolean;
   promptTemplate: string;
   platformIds: PlatformId[];
@@ -23,7 +23,7 @@ export type CreateProjectFormState = {
 export type CreateProjectInput = {
   name: string;
   workspaceRoot: string;
-  usePerIssueWorkspaces: boolean;
+  usePerTaskWorkspaces: boolean;
   useWorktrees: boolean;
   promptTemplate: string;
   platforms: PlatformId[];
@@ -61,7 +61,7 @@ const createProjectFormSchema = z
   .object({
     name: z.string().trim().min(1, "Project name is required"),
     workspaceRoot: z.string().trim().min(1, "Workspace folder is required"),
-    usePerIssueWorkspaces: z.boolean(),
+    usePerTaskWorkspaces: z.boolean(),
     useWorktrees: z.boolean(),
     promptTemplate: z
       .string()
@@ -99,8 +99,8 @@ function toCreateProjectInput(form: CreateProjectFormState): CreateProjectInput 
   return {
     name: form.name.trim(),
     workspaceRoot: form.workspaceRoot.trim(),
-    usePerIssueWorkspaces: form.usePerIssueWorkspaces,
-    useWorktrees: form.usePerIssueWorkspaces ? form.useWorktrees : false,
+    usePerTaskWorkspaces: form.usePerTaskWorkspaces,
+    useWorktrees: form.usePerTaskWorkspaces ? form.useWorktrees : false,
     promptTemplate: form.promptTemplate.trim(),
     platforms: form.platformIds,
     maxConcurrency: form.maxConcurrency,
@@ -154,7 +154,7 @@ export function createInitialProjectFormState(): CreateProjectFormState {
   return {
     name: "",
     workspaceRoot: "",
-    usePerIssueWorkspaces: true,
+    usePerTaskWorkspaces: true,
     useWorktrees: false,
     promptTemplate: DEFAULT_PROJECT_PROMPT_TEMPLATE,
     platformIds: [DEFAULT_PLATFORM],

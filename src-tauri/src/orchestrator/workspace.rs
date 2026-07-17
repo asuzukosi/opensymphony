@@ -17,23 +17,23 @@ impl WorkspaceManager {
         Self::new(app_data_dir.join("workspaces"))
     }
 
-    pub fn workspace_path(&self, project_id: &str, issue_id: &str) -> PathBuf {
-        self.root.join(project_id).join(issue_id)
+    pub fn workspace_path(&self, project_id: &str, task_id: &str) -> PathBuf {
+        self.root.join(project_id).join(task_id)
     }
 
-    pub fn ensure_workspace(&self, project: &Project, issue_id: &str) -> DbResult<PathBuf> {
-        let sandbox = self.workspace_path(&project.id, issue_id);
+    pub fn ensure_workspace(&self, project: &Project, task_id: &str) -> DbResult<PathBuf> {
+        let sandbox = self.workspace_path(&project.id, task_id);
         let workspace_root = Path::new(project.workspace_root.trim());
 
         if project.use_worktrees {
-            ensure_worktree_workspace(workspace_root, &sandbox, issue_id)
+            ensure_worktree_workspace(workspace_root, &sandbox, task_id)
         } else {
             ensure_copy_workspace(workspace_root, &sandbox)
         }
     }
 
-    pub fn remove_workspace(&self, project_id: &str, issue_id: &str) -> DbResult<()> {
-        let workspace_path = self.workspace_path(project_id, issue_id);
+    pub fn remove_workspace(&self, project_id: &str, task_id: &str) -> DbResult<()> {
+        let workspace_path = self.workspace_path(project_id, task_id);
         if workspace_path.exists() {
             std::fs::remove_dir_all(&workspace_path).map_err(|err| {
                 DbError::Internal(format!(
@@ -49,20 +49,20 @@ impl WorkspaceManager {
 pub fn resolve_dispatch_cwd(
     workspaces: &WorkspaceManager,
     project: &Project,
-    issue_id: &str,
+    task_id: &str,
 ) -> DbResult<Option<PathBuf>> {
     let workspace_root = project.workspace_root.trim();
     if workspace_root.is_empty() || !Path::new(workspace_root).is_dir() {
         log::warn!(
-            "skip dispatch for issue {issue_id}: workspace_root missing at {workspace_root}"
+            "skip dispatch for task {task_id}: workspace_root missing at {workspace_root}"
         );
         return Ok(None);
     }
-    if project.use_per_issue_workspaces {
-        match workspaces.ensure_workspace(project, issue_id) {
+    if project.use_per_task_workspaces {
+        match workspaces.ensure_workspace(project, task_id) {
             Ok(path) => Ok(Some(path)),
             Err(err) => {
-                log::warn!("skip dispatch for issue {issue_id}: {err}");
+                log::warn!("skip dispatch for task {task_id}: {err}");
                 Ok(None)
             }
         }
@@ -72,17 +72,17 @@ pub fn resolve_dispatch_cwd(
 }
 
 pub(crate) fn cleanup_done_workspaces(
-    issues: &crate::db::repos::issue::IssueRepo<'_>,
+    tasks: &crate::db::repos::task::TaskRepo<'_>,
     workspaces: &WorkspaceManager,
     project: &Project,
 ) -> DbResult<u32> {
-    if !project.use_per_issue_workspaces {
+    if !project.use_per_task_workspaces {
         return Ok(0);
     }
 
     let mut cleaned = 0u32;
-    for issue in issues.list_by_column(&project.id, crate::types::BoardColumnId::Done)? {
-        workspaces.remove_workspace(&project.id, &issue.issue_id)?;
+    for task in tasks.list_by_column(&project.id, crate::types::BoardColumnId::Done)? {
+        workspaces.remove_workspace(&project.id, &task.task_id)?;
         cleaned = cleaned.saturating_add(1);
     }
     Ok(cleaned)
@@ -106,7 +106,7 @@ fn ensure_copy_workspace(workspace_root: &Path, sandbox: &Path) -> DbResult<Path
 fn ensure_worktree_workspace(
     workspace_root: &Path,
     sandbox: &Path,
-    issue_id: &str,
+    task_id: &str,
 ) -> DbResult<PathBuf> {
     if binary_path("git").is_none() {
         return Err(DbError::Internal(
@@ -127,7 +127,7 @@ fn ensure_worktree_workspace(
 
     remove_stale_worktree(workspace_root, sandbox)?;
 
-    let branch = worktree_branch_name(issue_id);
+    let branch = worktree_branch_name(task_id);
     let sandbox_arg = path_arg(sandbox)?;
     if let Some(parent) = sandbox.parent() {
         std::fs::create_dir_all(parent).map_err(|err| {
@@ -160,8 +160,8 @@ fn ensure_worktree_workspace(
     )))
 }
 
-fn worktree_branch_name(issue_id: &str) -> String {
-    format!("opensymphony/{issue_id}")
+fn worktree_branch_name(task_id: &str) -> String {
+    format!("opensymphony/{task_id}")
 }
 
 fn path_arg(path: &Path) -> DbResult<String> {
@@ -275,7 +275,7 @@ mod tests {
             max_concurrency: 1,
             retry_max_attempts: 3,
             retry_backoff_ms: 1_000,
-            use_per_issue_workspaces: true,
+            use_per_task_workspaces: true,
             use_worktrees: false,
             orchestrator_status: "idle".into(),
             created_at: String::new(),
@@ -284,7 +284,7 @@ mod tests {
 
         let workspaces = WorkspaceManager::new(&sandbox_root);
         let first = workspaces
-            .ensure_workspace(&project, "issue-a")
+            .ensure_workspace(&project, "task-a")
             .expect("first ensure");
         assert_eq!(
             std::fs::read_to_string(first.join("marker.txt")).expect("read sandbox marker"),
@@ -293,7 +293,7 @@ mod tests {
 
         std::fs::write(source.join("marker.txt"), "v2").expect("update source marker");
         let second = workspaces
-            .ensure_workspace(&project, "issue-a")
+            .ensure_workspace(&project, "task-a")
             .expect("second ensure");
         assert_eq!(first, second);
         assert_eq!(

@@ -5,14 +5,14 @@ use thiserror::Error;
 use super::types::StartRuntimeSessionInput;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PromptRenderIssueFields {
+pub struct PromptRenderTaskFields {
     pub title: String,
     pub description: Option<String>,
 }
 
 pub struct RenderPromptInput<'a> {
     pub prompt_template: &'a str,
-    pub issue: &'a PromptRenderIssueFields,
+    pub task: &'a PromptRenderTaskFields,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -37,7 +37,7 @@ pub fn render_prompt_template(input: &RenderPromptInput<'_>) -> Result<String, P
         let raw = &after_open[..end];
         let name = raw.trim();
         if is_template_variable_name(name) {
-            match resolve_prompt_variable(name, input.issue) {
+            match resolve_prompt_variable(name, input.task) {
                 Some(value) => out.push_str(value),
                 None => {
                     return Err(PromptRenderError {
@@ -70,7 +70,7 @@ pub fn render_task_prompt(input: &StartRuntimeSessionInput) -> Result<String, St
 
     render_prompt_template(&RenderPromptInput {
         prompt_template: &input.prompt_template,
-        issue: &PromptRenderIssueFields {
+        task: &PromptRenderTaskFields {
             title: input.title.clone(),
             description: input.description.clone(),
         },
@@ -87,12 +87,12 @@ fn is_template_variable_name(name: &str) -> bool {
 
 fn resolve_prompt_variable<'a>(
     name: &str,
-    issue: &'a PromptRenderIssueFields,
+    task: &'a PromptRenderTaskFields,
 ) -> Option<&'a str> {
     match name {
         "identifier" => Some(""),
-        "title" => Some(issue.title.as_str()),
-        "description" => Some(issue.description.as_deref().unwrap_or("")),
+        "title" => Some(task.title.as_str()),
+        "description" => Some(task.description.as_deref().unwrap_or("")),
         _ => None,
     }
 }

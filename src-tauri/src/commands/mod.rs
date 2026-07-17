@@ -1,15 +1,15 @@
-mod issue;
+mod task;
 mod runtime;
 mod project;
 mod platform;
 mod analytics;
 
-pub use issue::{
-    add_issue_comment, attach_issue_files, create_issue, get_issue_header, list_issue_comments,
-    list_issue_pending_permissions, list_issue_run_attempts, list_project_issues,
-    list_session_events, resolve_session_permission, set_issue_auto_approve_permissions,
-    set_issue_executor, set_issue_tags, transition_issue_column,
-    update_issue_priority,
+pub use task::{
+    add_task_comment, attach_task_files, create_task, get_task_header, list_task_comments,
+    list_task_pending_permissions, list_task_run_attempts, list_project_tasks,
+    list_session_events, resolve_session_permission, set_task_auto_approve_permissions,
+    set_task_executor, set_task_tags, transition_task_column,
+    update_task_priority,
 };
 
 pub use runtime::{

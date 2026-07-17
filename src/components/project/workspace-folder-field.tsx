@@ -12,8 +12,8 @@ type WorkspaceFolderFieldProps = {
   id?: string;
   value: string;
   onChange: (value: string) => void;
-  usePerIssueWorkspaces: boolean;
-  onUsePerIssueWorkspacesChange: (usePerIssueWorkspaces: boolean) => void;
+  usePerTaskWorkspaces: boolean;
+  onUsePerTaskWorkspacesChange: (usePerTaskWorkspaces: boolean) => void;
   useWorktrees: boolean;
   onUseWorktreesChange: (useWorktrees: boolean) => void;
   disabled?: boolean;
@@ -23,8 +23,8 @@ export function WorkspaceFolderField({
   id = "project-workspace-folder",
   value,
   onChange,
-  usePerIssueWorkspaces,
-  onUsePerIssueWorkspacesChange,
+  usePerTaskWorkspaces,
+  onUsePerTaskWorkspacesChange,
   useWorktrees,
   onUseWorktreesChange,
   disabled = false,
@@ -51,7 +51,7 @@ export function WorkspaceFolderField({
     <div className="grid gap-2">
       <Label htmlFor={id}>Workspace folder</Label>
       <p className="text-xs text-muted-foreground">
-        Source repo or folder agents work from. Each issue can use an isolated copy or share this
+        Source repo or folder agents work from. Each task can use an isolated copy or share this
         path directly.
       </p>
       <div className="flex gap-2">
@@ -81,18 +81,18 @@ export function WorkspaceFolderField({
       </div>
       <div className="flex items-center gap-2">
         <Checkbox
-          id={`${id}-per-issue-workspaces`}
-          checked={usePerIssueWorkspaces}
-          onCheckedChange={(checked) => onUsePerIssueWorkspacesChange(checked === true)}
+          id={`${id}-per-task-workspaces`}
+          checked={usePerTaskWorkspaces}
+          onCheckedChange={(checked) => onUsePerTaskWorkspacesChange(checked === true)}
           disabled={disabled}
         />
-        <Label htmlFor={`${id}-per-issue-workspaces`} className="cursor-pointer text-sm font-normal">
-          Per-issue workspaces
+        <Label htmlFor={`${id}-per-task-workspaces`} className="cursor-pointer text-sm font-normal">
+          Per-task workspaces
         </Label>
       </div>
-      {!usePerIssueWorkspaces ? (
+      {!usePerTaskWorkspaces ? (
         <p className="text-xs text-muted-foreground">
-          Agents share the workspace folder. Concurrent issues may modify the same files.
+          Agents share the workspace folder. Concurrent tasks may modify the same files.
         </p>
       ) : null}
       <div className="flex items-center gap-2">
@@ -100,13 +100,13 @@ export function WorkspaceFolderField({
           id={`${id}-worktrees`}
           checked={useWorktrees}
           onCheckedChange={(checked) => onUseWorktreesChange(checked === true)}
-          disabled={disabled || !usePerIssueWorkspaces}
+          disabled={disabled || !usePerTaskWorkspaces}
         />
         <Label
           htmlFor={`${id}-worktrees`}
           className={cn(
             "text-sm font-normal",
-            usePerIssueWorkspaces ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground",
+            usePerTaskWorkspaces ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground",
           )}
         >
           Use worktrees

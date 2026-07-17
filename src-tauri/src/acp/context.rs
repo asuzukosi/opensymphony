@@ -21,7 +21,7 @@ pub(crate) struct StoredSession {
     pub project_id: String,
     pub session_id: String,
     pub run_attempt_id: String,
-    pub issue_id: String,
+    pub task_id: String,
     pub attempt_number: u32,
     pub agent_name: Option<String>,
     pub finished_at: Option<String>,
@@ -269,7 +269,7 @@ fn to_runtime_record(session: &StoredSession) -> RuntimeSessionRecord {
     RuntimeSessionRecord {
         session_id: session.session_id.clone(),
         run_attempt_id: session.run_attempt_id.clone(),
-        issue_id: session.issue_id.clone(),
+        task_id: session.task_id.clone(),
         attempt_number: session.attempt_number,
         status: session.status,
         finished_at: session.finished_at.clone(),

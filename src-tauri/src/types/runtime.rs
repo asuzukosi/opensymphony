@@ -40,7 +40,7 @@ pub enum ReviewStatus {
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeRunningEntry {
     pub run_attempt_id: String,
-    pub issue_id: String,
+    pub task_id: String,
     pub title: String,
     pub description: Option<String>,
     pub executor: Option<String>,
@@ -50,11 +50,11 @@ pub struct RuntimeRunningEntry {
     pub paused: bool,
 }
 
-/// issue waiting for a future retry after backoff.
+/// task waiting for a future retry after backoff.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeRetryEntry {
-    pub issue_id: String,
+    pub task_id: String,
     pub title: String,
     pub description: Option<String>,
     pub executor: Option<String>,
@@ -68,7 +68,7 @@ pub struct RuntimeRetryEntry {
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeRecentFinishedEntry {
     pub run_attempt_id: String,
-    pub issue_id: String,
+    pub task_id: String,
     pub title: String,
     pub description: Option<String>,
     pub executor: Option<String>,

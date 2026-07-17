@@ -43,11 +43,11 @@ impl FromStr for BoardColumnId {
     }
 }
 
-/// issue card on the project board (also used by issue repo list queries).
+/// task card on the project board (also used by task repo list queries).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectBoardIssue {
-    pub issue_id: String,
+pub struct ProjectBoardTask {
+    pub task_id: String,
     pub identifier: String,
     pub title: String,
     pub description: Option<String>,
@@ -57,8 +57,8 @@ pub struct ProjectBoardIssue {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectIssueListItem {
-    pub issue_id: String,
+pub struct ProjectTaskListItem {
+    pub task_id: String,
     pub identifier: String,
     pub title: String,
     pub description: Option<String>,

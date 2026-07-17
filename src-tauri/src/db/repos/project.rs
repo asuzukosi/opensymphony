@@ -25,7 +25,7 @@ impl<'a> ProjectRepo<'a> {
             "INSERT INTO projects (
                 id, name, slug, workspace_root, prompt_template,
                 max_concurrency, retry_max_attempts, retry_backoff_ms,
-                use_per_issue_workspaces, use_worktrees
+                use_per_task_workspaces, use_worktrees
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 id,
@@ -36,7 +36,7 @@ impl<'a> ProjectRepo<'a> {
                 params.max_concurrency,
                 params.retry_max_attempts,
                 params.retry_backoff_ms,
-                i32::from(params.use_per_issue_workspaces),
+                i32::from(params.use_per_task_workspaces),
                 i32::from(params.use_worktrees),
             ],
         )?;
@@ -52,7 +52,7 @@ impl<'a> ProjectRepo<'a> {
         let mut stmt = self.conn.prepare(
             "SELECT id, name, slug, workspace_root, prompt_template,
                     max_concurrency, retry_max_attempts, retry_backoff_ms,
-                    use_per_issue_workspaces, use_worktrees, orchestrator_status, created_at, updated_at
+                    use_per_task_workspaces, use_worktrees, orchestrator_status, created_at, updated_at
              FROM projects WHERE id = ?1",
         )?;
 
@@ -138,7 +138,7 @@ impl<'a> ProjectRepo<'a> {
 }
 
 fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
-    let use_per_issue_workspaces: i32 = row.get(8)?;
+    let use_per_task_workspaces: i32 = row.get(8)?;
     let use_worktrees: i32 = row.get(9)?;
     Ok(Project {
         id: row.get(0)?,
@@ -149,7 +149,7 @@ fn map_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         max_concurrency: row.get(5)?,
         retry_max_attempts: row.get(6)?,
         retry_backoff_ms: row.get(7)?,
-        use_per_issue_workspaces: use_per_issue_workspaces != 0,
+        use_per_task_workspaces: use_per_task_workspaces != 0,
         use_worktrees: use_worktrees != 0,
         orchestrator_status: row.get(10)?,
         created_at: row.get(11)?,

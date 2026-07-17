@@ -14,29 +14,29 @@ impl<'a> RetryQueueRepo<'a> {
 
     pub fn upsert(
         &self,
-        issue_id: &str,
+        task_id: &str,
         attempt_number: i32,
         due_at: &str,
         error_message: Option<&str>,
     ) -> DbResult<()> {
         self.conn.execute(
-            "INSERT INTO retry_queue (issue_id, attempt_number, due_at, error_message)
+            "INSERT INTO retry_queue (task_id, attempt_number, due_at, error_message)
              VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(issue_id) DO UPDATE SET
+             ON CONFLICT(task_id) DO UPDATE SET
                attempt_number = excluded.attempt_number,
                due_at = excluded.due_at,
                error_message = excluded.error_message,
                updated_at = datetime('now')",
-            params![issue_id, attempt_number, due_at, error_message],
+            params![task_id, attempt_number, due_at, error_message],
         )?;
         Ok(())
     }
 
     pub fn list_for_project(&self, project_id: &str) -> DbResult<Vec<RetryQueueEntry>> {
         let mut stmt = self.conn.prepare(
-            "SELECT q.issue_id, q.attempt_number, q.due_at, q.error_message
+            "SELECT q.task_id, q.attempt_number, q.due_at, q.error_message
              FROM retry_queue q
-             JOIN issues i ON i.id = q.issue_id
+             JOIN tasks i ON i.id = q.task_id
              WHERE i.project_id = ?1
              ORDER BY q.due_at ASC",
         )?;
@@ -54,9 +54,9 @@ impl<'a> RetryQueueRepo<'a> {
         now_iso: &str,
     ) -> DbResult<Vec<RetryQueueEntry>> {
         let mut stmt = self.conn.prepare(
-            "SELECT q.issue_id, q.attempt_number, q.due_at, q.error_message
+            "SELECT q.task_id, q.attempt_number, q.due_at, q.error_message
              FROM retry_queue q
-             JOIN issues i ON i.id = q.issue_id
+             JOIN tasks i ON i.id = q.task_id
              WHERE i.project_id = ?1 AND q.due_at <= ?2
              ORDER BY q.due_at ASC",
         )?;
@@ -68,31 +68,31 @@ impl<'a> RetryQueueRepo<'a> {
         Ok(entries)
     }
 
-    pub fn remove(&self, issue_id: &str) -> DbResult<()> {
+    pub fn remove(&self, task_id: &str) -> DbResult<()> {
         self.conn
-            .execute("DELETE FROM retry_queue WHERE issue_id = ?1", [issue_id])?;
+            .execute("DELETE FROM retry_queue WHERE task_id = ?1", [task_id])?;
         Ok(())
     }
 
-    pub fn take(&self, issue_id: &str) -> DbResult<Option<RetryQueueEntry>> {
+    pub fn take(&self, task_id: &str) -> DbResult<Option<RetryQueueEntry>> {
         let mut stmt = self.conn.prepare(
-            "SELECT issue_id, attempt_number, due_at, error_message
+            "SELECT task_id, attempt_number, due_at, error_message
              FROM retry_queue
-             WHERE issue_id = ?1",
+             WHERE task_id = ?1",
         )?;
-        let mut rows = stmt.query([issue_id])?;
+        let mut rows = stmt.query([task_id])?;
         let Some(row) = rows.next()? else {
             return Ok(None);
         };
         let entry = map_retry_queue_entry(&row)?;
-        self.remove(issue_id)?;
+        self.remove(task_id)?;
         Ok(Some(entry))
     }
 }
 
 fn map_retry_queue_entry(row: &Row<'_>) -> rusqlite::Result<RetryQueueEntry> {
     Ok(RetryQueueEntry {
-        issue_id: row.get(0)?,
+        task_id: row.get(0)?,
         attempt_number: row.get(1)?,
         due_at: row.get(2)?,
         error_message: row.get(3)?,

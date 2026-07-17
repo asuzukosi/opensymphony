@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowPathIcon } from "@/components/ui/hero-icons";
-import { DashboardIssueCell } from "@/components/dashboard/dashboard-issue-cell";
+import { DashboardTaskCell } from "@/components/dashboard/dashboard-task-cell";
 import {
   BorderedTable,
   tableCellClass,
@@ -29,7 +29,7 @@ export function RetryPanel({ retrying, isLoading = false }: { retrying?: Runtime
   const pending = isPendingLoad(isLoading, retrying);
 
   return (
-    <PanelSection title="Retry queue" description="Issues waiting to be retried after a failed run attempt.">
+    <PanelSection title="Retry queue" description="Tasks waiting to be retried after a failed run attempt.">
       {pending ? (
         <TableSkeleton columns={4} />
       ) : retrying && retrying.length > 0 ? (
@@ -45,10 +45,10 @@ export function RetryPanel({ retrying, isLoading = false }: { retrying?: Runtime
             </TableHeader>
             <TableBody>
               {retrying.map((entry) => (
-                <TableRow key={`${entry.issueId}-${entry.attemptNumber}`} className="hover:bg-muted/20">
+                <TableRow key={`${entry.taskId}-${entry.attemptNumber}`} className="hover:bg-muted/20">
                   <TableCell className={cn(tableCellClass, "max-w-0")}>
-                    <DashboardIssueCell
-                      issueId={entry.issueId}
+                    <DashboardTaskCell
+                      taskId={entry.taskId}
                       title={entry.title}
                       description={entry.description}
                       executor={entry.executor}

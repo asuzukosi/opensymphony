@@ -1,8 +1,8 @@
-//! dispatch helpers: resolve issue executor to platform acp command.
+//! dispatch helpers: resolve task executor to platform acp command.
 use std::str::FromStr;
 use rusqlite::Connection;
 use crate::db::error::{DbError, DbResult};
-use crate::db::repos::issue::IssueRepo;
+use crate::db::repos::task::TaskRepo;
 use crate::db::repos::platforms::PlatformsRepo;
 use crate::types::Platform;
 
@@ -11,15 +11,15 @@ pub struct DispatchTarget {
     pub acp_command: String,
 }
 
-pub fn resolve_dispatch_for_issue(
+pub fn resolve_dispatch_for_task(
     conn: &Connection,
-    issue_id: &str,
+    task_id: &str,
 ) -> DbResult<Option<DispatchTarget>> {
-    let issue = IssueRepo::new(conn)
-        .get(issue_id)?
-        .ok_or_else(|| DbError::NotFound(format!("issue {issue_id}")))?;
+    let task = TaskRepo::new(conn)
+        .get(task_id)?
+        .ok_or_else(|| DbError::NotFound(format!("task {task_id}")))?;
 
-    let Some(executor) = issue
+    let Some(executor) = task
         .executor
         .as_deref()
         .map(str::trim)
@@ -29,7 +29,7 @@ pub fn resolve_dispatch_for_issue(
     };
 
     let platform = Platform::from_str(executor).map_err(DbError::Internal)?;
-    if !PlatformsRepo::new(conn).is_connected(&issue.project_id, platform.as_str())? {
+    if !PlatformsRepo::new(conn).is_connected(&task.project_id, platform.as_str())? {
         return Ok(None);
     }
 

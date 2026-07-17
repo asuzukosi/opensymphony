@@ -72,16 +72,16 @@ impl<'a> SessionEventRepo<'a> {
         Ok(None)
     }
 
-    pub fn list_by_issue(&self, issue_id: &str) -> DbResult<Vec<SessionEvent>> {
+    pub fn list_by_task(&self, task_id: &str) -> DbResult<Vec<SessionEvent>> {
         let mut stmt = self.conn.prepare(
             "SELECT se.id, se.session_id, se.kind, se.payload_json, se.created_at
              FROM session_events se
              JOIN agent_sessions s ON s.id = se.session_id
              JOIN run_attempts ra ON ra.id = s.run_attempt_id
-             WHERE ra.issue_id = ?1
+             WHERE ra.task_id = ?1
              ORDER BY se.created_at ASC, se.rowid ASC",
         )?;
-        let mut rows = stmt.query([issue_id])?;
+        let mut rows = stmt.query([task_id])?;
         let mut events = Vec::new();
         while let Some(row) = rows.next()? {
             events.push(map_session_event(row)?);

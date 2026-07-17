@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircleIcon } from "@/components/ui/hero-icons";
-import { DashboardIssueCell } from "@/components/dashboard/dashboard-issue-cell";
+import { DashboardTaskCell } from "@/components/dashboard/dashboard-task-cell";
 import {
   BorderedTable,
   tableCellClass,
@@ -71,8 +71,8 @@ export function FinishedPanel({
               {recentFinished.map((entry) => (
                 <TableRow key={entry.runAttemptId} className="hover:bg-muted/20">
                   <TableCell className={cn(tableCellClass, "min-w-[220px]")}>
-                    <DashboardIssueCell
-                      issueId={entry.issueId}
+                    <DashboardTaskCell
+                      taskId={entry.taskId}
                       title={entry.title}
                       description={entry.description}
                       executor={entry.executor}

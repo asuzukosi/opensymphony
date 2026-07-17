@@ -22,15 +22,15 @@ pub(crate) fn on_work_added(
         .map_err(|err| err.to_string())
 }
 
-pub(crate) fn on_issue_column_changed(
+pub(crate) fn on_task_column_changed(
     conn: &Connection,
     manager: &SharedManager,
-    issue: &crate::types::Issue,
+    task: &crate::types::Task,
 ) -> Result<(), String> {
     manager
         .lock()
         .map_err(|_| "orchestrator lock poisoned".to_string())?
-        .on_issue_column_changed(conn, issue)
+        .on_task_column_changed(conn, task)
         .map_err(|err| err.to_string())
 }
 

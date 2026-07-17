@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { IssueSheetHost } from "@/components/issue/issue-detail-sheet";
+import { TaskSheetHost } from "@/components/task/task-detail-sheet";
 import { AppShell } from "@/components/layout/app-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ActiveProjectProvider } from "@/contexts/active-project-context";
@@ -15,7 +15,7 @@ export default function ShellLayout({
       <AppShell>{children}</AppShell>
       <TooltipProvider delayDuration={300}>
         <Suspense fallback={null}>
-          <IssueSheetHost />
+          <TaskSheetHost />
         </Suspense>
       </TooltipProvider>
     </ActiveProjectProvider>

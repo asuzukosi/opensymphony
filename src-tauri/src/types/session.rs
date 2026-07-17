@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-/// acp session event kind for issue attempt timelines.
+/// acp session event kind for task attempt timelines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum SessionEventKind {
@@ -86,7 +86,7 @@ pub struct AgentSession {
 #[serde(rename_all = "camelCase")]
 pub struct RunAttempt {
     pub id: String,
-    pub issue_id: String,
+    pub task_id: String,
     pub attempt_number: i32,
     pub status: String,
     pub started_at: String,

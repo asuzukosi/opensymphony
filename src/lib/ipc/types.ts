@@ -22,8 +22,8 @@ export const BOARD_COLUMN_IDS: readonly BoardColumnId[] = [
   "done",
 ] as const;
 
-export interface ProjectBoardIssue {
-  issueId: string;
+export interface ProjectBoardTask {
+  taskId: string;
   identifier: string;
   title: string;
   description: string | null;
@@ -31,15 +31,15 @@ export interface ProjectBoardIssue {
   executor: PlatformId | null;
 }
 
-export interface ProjectIssueListItem extends ProjectBoardIssue {
+export interface ProjectTaskListItem extends ProjectBoardTask {
   boardColumn: BoardColumnId;
 }
 
 export interface BoardColumn {
-  issues: ProjectBoardIssue[];
+  tasks: ProjectBoardTask[];
 }
 
-/** frontend composite grouped from listProjectIssues. */
+/** frontend composite grouped from listProjectTasks. */
 export interface ProjectBoard {
   backlog: BoardColumn;
   inProgress: BoardColumn;
@@ -47,10 +47,10 @@ export interface ProjectBoard {
   done: BoardColumn;
 }
 
-// --- issue reads ---
+// --- task reads ---
 
-export interface IssueHeader {
-  issueId: string;
+export interface TaskHeader {
+  taskId: string;
   projectId: string;
   identifier: string;
   title: string;
@@ -60,21 +60,21 @@ export interface IssueHeader {
   executor: PlatformId | null;
   autoApprovePermissions: boolean;
   tags: string[];
-  files: IssueFile[];
+  files: TaskFile[];
 }
 
-export interface IssueFile {
+export interface TaskFile {
   fileId: string;
-  issueId: string;
+  taskId: string;
   fileName: string;
   mimeType: string | null;
   sizeBytes: number;
   createdAt: string;
 }
 
-export interface IssueComment {
+export interface TaskComment {
   id: string;
-  issueId: string;
+  taskId: string;
   body: string;
   author: string | null;
   createdAt: string;
@@ -98,7 +98,7 @@ export interface SessionEvent {
   createdAt: string;
 }
 
-export interface IssueDetailRunAttempt {
+export interface TaskDetailRunAttempt {
   runAttemptId: string;
   attemptNumber: number;
   status: string;
@@ -107,21 +107,21 @@ export interface IssueDetailRunAttempt {
   errorMessage: string | null;
 }
 
-export type CreateIssueResponse = IssueHeader;
-export type UpdateIssuePriorityResponse = IssueHeader;
-export type TransitionIssueColumnResponse = IssueHeader;
-export type SetIssueExecutorResponse = IssueHeader;
-export type SetIssueAutoApprovePermissionsResponse = IssueHeader;
-export type SetIssueTagsResponse = IssueHeader;
-export type AttachIssueFilesResponse = IssueFile[];
-export type AddIssueCommentResponse = IssueComment;
+export type CreateTaskResponse = TaskHeader;
+export type UpdateTaskPriorityResponse = TaskHeader;
+export type TransitionTaskColumnResponse = TaskHeader;
+export type SetTaskExecutorResponse = TaskHeader;
+export type SetTaskAutoApprovePermissionsResponse = TaskHeader;
+export type SetTaskTagsResponse = TaskHeader;
+export type AttachTaskFilesResponse = TaskFile[];
+export type AddTaskCommentResponse = TaskComment;
 
 // --- permissions reads ---
 
 export interface PendingPermission {
   id: string;
   sessionId: string;
-  issueId: string;
+  taskId: string;
   summary: string;
   createdAt: string;
 }
@@ -144,7 +144,7 @@ export type ReviewStatus = "approved" | "pendingReview";
 
 export interface RuntimeRunningEntry {
   runAttemptId: string;
-  issueId: string;
+  taskId: string;
   title: string;
   description: string | null;
   executor: PlatformId | null;
@@ -155,7 +155,7 @@ export interface RuntimeRunningEntry {
 }
 
 export interface RuntimeRetryEntry {
-  issueId: string;
+  taskId: string;
   title: string;
   description: string | null;
   executor: PlatformId | null;
@@ -166,7 +166,7 @@ export interface RuntimeRetryEntry {
 
 export interface RuntimeRecentFinishedEntry {
   runAttemptId: string;
-  issueId: string;
+  taskId: string;
   title: string;
   description: string | null;
   executor: PlatformId | null;

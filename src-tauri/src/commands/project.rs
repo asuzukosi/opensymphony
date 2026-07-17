@@ -201,13 +201,13 @@ fn validate_create_project_request(request: CreateProjectRequest) -> Result<Crea
     }
 
     let use_worktrees =
-        resolve_use_worktrees(request.use_per_issue_workspaces, request.use_worktrees);
+        resolve_use_worktrees(request.use_per_task_workspaces, request.use_worktrees);
 
     Ok(CreateProjectParams {
         name: name.to_string(),
         workspace_root,
         prompt_template: prompt_template.to_string(),
-        use_per_issue_workspaces: request.use_per_issue_workspaces,
+        use_per_task_workspaces: request.use_per_task_workspaces,
         use_worktrees,
         max_concurrency: request.max_concurrency,
         retry_max_attempts: request.retry_max_attempts,
@@ -227,8 +227,8 @@ fn validate_workspace_root(workspace_root: &str) -> Result<String, String> {
     Ok(workspace_root.to_string())
 }
 
-fn resolve_use_worktrees(use_per_issue_workspaces: bool, use_worktrees: bool) -> bool {
-    if use_per_issue_workspaces {
+fn resolve_use_worktrees(use_per_task_workspaces: bool, use_worktrees: bool) -> bool {
+    if use_per_task_workspaces {
         use_worktrees
     } else {
         false

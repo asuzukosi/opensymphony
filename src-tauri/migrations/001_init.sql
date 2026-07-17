@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS projects (
   max_concurrency INTEGER NOT NULL DEFAULT 1,
   retry_max_attempts INTEGER NOT NULL DEFAULT 3,
   retry_backoff_ms INTEGER NOT NULL DEFAULT 30000,
-  use_per_issue_workspaces INTEGER NOT NULL DEFAULT 1,
+  use_per_task_workspaces INTEGER NOT NULL DEFAULT 1,
   use_worktrees INTEGER NOT NULL DEFAULT 0,
   orchestrator_status TEXT NOT NULL DEFAULT 'idle'
     CHECK (orchestrator_status IN ('idle', 'running')),
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS platforms (
   FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS issues (
+CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
   identifier TEXT NOT NULL,
@@ -47,43 +47,43 @@ CREATE TABLE IF NOT EXISTS issues (
   FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS issue_tags (
-  issue_id TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS task_tags (
+  task_id TEXT NOT NULL,
   tag TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  PRIMARY KEY (issue_id, tag),
-  FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
+  PRIMARY KEY (task_id, tag),
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS issue_files (
+CREATE TABLE IF NOT EXISTS task_files (
   id TEXT PRIMARY KEY,
-  issue_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
   file_name TEXT NOT NULL,
   stored_path TEXT NOT NULL,
   mime_type TEXT,
   size_bytes INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS issue_comments (
+CREATE TABLE IF NOT EXISTS task_comments (
   id TEXT PRIMARY KEY,
-  issue_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
   body TEXT NOT NULL,
   author_id TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS run_attempts (
   id TEXT PRIMARY KEY,
-  issue_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
   attempt_number INTEGER NOT NULL,
   status TEXT NOT NULL,
   started_at TEXT NOT NULL DEFAULT (datetime('now')),
   finished_at TEXT,
   error_message TEXT,
-  FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS agent_sessions (
@@ -107,22 +107,22 @@ CREATE TABLE IF NOT EXISTS session_events (
 );
 
 CREATE TABLE IF NOT EXISTS retry_queue (
-  issue_id TEXT PRIMARY KEY,
+  task_id TEXT PRIMARY KEY,
   attempt_number INTEGER NOT NULL,
   due_at TEXT NOT NULL,
   error_message TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_platforms_project ON platforms(project_id);
-CREATE INDEX IF NOT EXISTS idx_issues_project_column ON issues(project_id, board_column);
-CREATE INDEX IF NOT EXISTS idx_issues_updated_at ON issues(updated_at);
-CREATE INDEX IF NOT EXISTS idx_issue_tags_issue ON issue_tags(issue_id);
-CREATE INDEX IF NOT EXISTS idx_issue_files_issue ON issue_files(issue_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_issue_comments_issue ON issue_comments(issue_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_run_attempts_issue_started ON run_attempts(issue_id, started_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_column ON tasks(project_id, board_column);
+CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updated_at);
+CREATE INDEX IF NOT EXISTS idx_task_tags_task ON task_tags(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_files_task ON task_files(task_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_task_comments_task ON task_comments(task_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_run_attempts_task_started ON run_attempts(task_id, started_at);
 CREATE INDEX IF NOT EXISTS idx_agent_sessions_attempt ON agent_sessions(run_attempt_id);
 CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events(session_id);
 CREATE INDEX IF NOT EXISTS idx_retry_queue_due_at ON retry_queue(due_at);

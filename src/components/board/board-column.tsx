@@ -5,7 +5,7 @@ import { PlusIcon } from "@/components/ui/hero-icons";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { IssueCard } from "@/components/board/issue-card";
+import { TaskCard } from "@/components/board/task-card";
 import {
   BoardColumnBodySkeleton,
   BoardColumnCountSkeleton,
@@ -14,35 +14,35 @@ import {
   BOARD_COLUMN_COUNT_ICONS,
   BOARD_COLUMN_LABELS,
 } from "@/components/board/board-states";
-import type { BoardColumnId, ProjectBoardIssue } from "@/lib/ipc/types";
+import type { BoardColumnId, ProjectBoardTask } from "@/lib/ipc/types";
 import { cn } from "@/lib/utils";
 
 type BoardColumnProps = {
   columnId: BoardColumnId;
-  issues?: ProjectBoardIssue[];
+  tasks?: ProjectBoardTask[];
   isLoading?: boolean;
   error?: Error | null;
   onAddTask?: () => void;
-  onIssueOpen?: (issue: ProjectBoardIssue) => void;
+  onTaskOpen?: (task: ProjectBoardTask) => void;
   disabled?: boolean;
   dragEnabled?: boolean;
 };
 
 export function BoardColumn({
   columnId,
-  issues,
+  tasks,
   isLoading = false,
   error = null,
   onAddTask,
-  onIssueOpen,
+  onTaskOpen,
   disabled = false,
   dragEnabled = false,
 }: BoardColumnProps) {
   const label = BOARD_COLUMN_LABELS[columnId];
   const CountIcon = BOARD_COLUMN_COUNT_ICONS[columnId];
-  const issueCount = issues?.length ?? 0;
-  const canCreateIssue = columnId === "backlog" && onAddTask != null;
-  const isInitialLoading = isLoading && issues === undefined;
+  const taskCount = tasks?.length ?? 0;
+  const canCreateTask = columnId === "backlog" && onAddTask != null;
+  const isInitialLoading = isLoading && tasks === undefined;
   const { setNodeRef, isOver } = useDroppable({
     id: columnId,
     data: { columnId },
@@ -61,7 +61,7 @@ export function BoardColumn({
             className="h-5 w-fit gap-1 rounded-full px-2 py-0 text-[10px] font-normal tabular-nums"
           >
             <CountIcon data-icon="inline-start" className="size-3" />
-            {issueCount} {issueCount === 1 ? "task" : "tasks"}
+            {taskCount} {taskCount === 1 ? "task" : "tasks"}
           </Badge>
         )}
       </div>
@@ -79,24 +79,24 @@ export function BoardColumn({
               dragEnabled && isOver && "bg-accent/30 ring-1 ring-inset ring-primary/20",
             )}
           >
-            {issueCount === 0 ? (
-              <BoardColumnEmptyState showCreateHint={canCreateIssue} />
+            {taskCount === 0 ? (
+              <BoardColumnEmptyState showCreateHint={canCreateTask} />
             ) : (
               <ul className="space-y-3">
-                {issues?.map((issue) => (
-                  <li key={issue.issueId} className="min-w-0">
-                    <IssueCard
-                      issue={issue}
+                {tasks?.map((task) => (
+                  <li key={task.taskId} className="min-w-0">
+                    <TaskCard
+                      task={task}
                       disabled={disabled}
                       dragEnabled={dragEnabled}
-                      onOpen={onIssueOpen}
+                      onOpen={onTaskOpen}
                     />
                   </li>
                 ))}
               </ul>
             )}
 
-            {canCreateIssue ? (
+            {canCreateTask ? (
               <Button
                 type="button"
                 variant="outline"
