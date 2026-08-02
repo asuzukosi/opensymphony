@@ -1,4 +1,4 @@
-# Open Symphony
+# OpenSymphony: Manage work not prompts for your agents
 
 Open Symphony is a desktop platform that allows you orchestrate complex work projects between your agents. It allows you to build "loop engineering" pipelines around your agents.
 
