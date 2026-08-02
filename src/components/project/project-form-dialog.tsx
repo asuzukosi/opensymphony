@@ -1,4 +1,6 @@
 "use client";
+import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { PlatformAssignField } from "@/components/project/platform-assign-field";
 import { RuntimeFields } from "@/components/project/runtime-fields";
 import { WorkspaceFolderField } from "@/components/project/workspace-folder-field";
@@ -24,9 +26,9 @@ import {
   validateCreateProjectForm,
   validateEditProjectName,
 } from "@/lib/create-project-form";
-import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { PlatformId } from "@/lib/platforms";
 
+// Dynamically import MonacoEditorField with loading skeleton
 const MonacoEditorField = dynamic(
   () =>
     import("@/components/ui/monaco").then((module) => ({
@@ -35,16 +37,10 @@ const MonacoEditorField = dynamic(
   {
     ssr: false,
     loading: () => <Skeleton className="h-[220px] w-full rounded-md" />,
-  },
+  }
 );
 
-function isRadixOverlayTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-  return target.closest("[data-radix-popper-content-wrapper]") != null;
-}
-
+// Types
 type ProjectFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -57,13 +53,166 @@ type ProjectFormDialogProps = {
   submitError?: Error | null;
 };
 
-function FieldError({ message }: { message?: string }) {
-  if (!message) {
-    return null;
-  }
-  return <p className="text-xs text-destructive">{message}</p>;
+// Helpers
+function isRadixOverlayTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.closest("[data-radix-popper-content-wrapper]") != null;
 }
 
+function FieldError({ message }: { message?: string }) {
+  return message ? <p className="text-xs text-destructive">{message}</p> : null;
+}
+
+// Form fields, extracted for structure/readability
+function EditNameField({
+  value,
+  onChange,
+  disabled,
+  error,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+  error?: string;
+}) {
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor="project-name">Name</Label>
+      <Input
+        id="project-name"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Codex"
+        disabled={disabled}
+        autoFocus
+      />
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+function ProjectFormFields({
+  form,
+  setForm,
+  isPending,
+  fieldErrors,
+  isPlatformInstalled,
+  platformStatusesLoading,
+  showRuntimeFields,
+  setShowRuntimeFields,
+}: {
+  form: CreateProjectFormState;
+  setForm: React.Dispatch<React.SetStateAction<CreateProjectFormState>>;
+  isPending: boolean;
+  fieldErrors: Record<string, string | undefined>;
+  isPlatformInstalled: (id: string) => boolean;
+  platformStatusesLoading: boolean;
+  showRuntimeFields: boolean;
+  setShowRuntimeFields: (show: boolean) => void;
+}) {
+  return (
+    <>
+      <div className="grid gap-2">
+        <Label htmlFor="project-name">Name</Label>
+        <Input
+          id="project-name"
+          value={form.name}
+          onChange={(e) =>
+            setForm((current) => ({ ...current, name: e.target.value }))
+          }
+          placeholder="Codex"
+          disabled={isPending}
+          autoFocus
+        />
+        <FieldError message={fieldErrors.name} />
+      </div>
+      <div className="grid gap-2">
+        <PlatformAssignField
+          value={form.platformIds}
+          onChange={(platformIds) =>
+            setForm((current) => ({ ...current, platformIds }))
+          }
+          disabled={isPending}
+          isPlatformInstalled={isPlatformInstalled}
+          statusesLoading={platformStatusesLoading}
+        />
+        <FieldError message={fieldErrors.platformIds} />
+      </div>
+      <div className="grid gap-2">
+        <WorkspaceFolderField
+          value={form.workspaceRoot}
+          onChange={(workspaceRoot) =>
+            setForm((current) => ({ ...current, workspaceRoot }))
+          }
+          usePerTaskWorkspaces={form.usePerTaskWorkspaces}
+          onUsePerTaskWorkspacesChange={(usePerTaskWorkspaces) =>
+            setForm((current) => ({
+              ...current,
+              usePerTaskWorkspaces,
+              useWorktrees: usePerTaskWorkspaces ? current.useWorktrees : false,
+            }))
+          }
+          useWorktrees={form.useWorktrees}
+          onUseWorktreesChange={(useWorktrees) =>
+            setForm((current) => ({ ...current, useWorktrees }))
+          }
+          disabled={isPending}
+        />
+        <FieldError message={fieldErrors.workspaceRoot} />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="project-prompt-template">Prompt template</Label>
+        <p className="text-xs text-muted-foreground">
+          Template sent to agents when a run starts
+        </p>
+        <MonacoEditorField
+          id="project-prompt-template"
+          value={form.promptTemplate}
+          onChange={(promptTemplate) =>
+            setForm((current) => ({ ...current, promptTemplate }))
+          }
+          disabled={isPending}
+          height={220}
+        />
+        <FieldError message={fieldErrors.promptTemplate} />
+      </div>
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="project-configure-runtime"
+          checked={showRuntimeFields}
+          onCheckedChange={(checked) => setShowRuntimeFields(checked === true)}
+          disabled={isPending}
+        />
+        <Label
+          htmlFor="project-configure-runtime"
+          className="cursor-pointer text-sm font-normal"
+        >
+          Configure runtime settings
+        </Label>
+      </div>
+      {showRuntimeFields && (
+        <div className="grid gap-2">
+          <RuntimeFields
+            value={{
+              maxConcurrency: form.maxConcurrency,
+              retryMaxAttempts: form.retryMaxAttempts,
+              retryBackoffMs: form.retryBackoffMs,
+            }}
+            onChange={(runtime) =>
+              setForm((current) => ({ ...current, ...runtime }))
+            }
+            disabled={isPending}
+          />
+          <FieldError message={fieldErrors.maxConcurrency} />
+          <FieldError message={fieldErrors.retryMaxAttempts} />
+          <FieldError message={fieldErrors.retryBackoffMs} />
+        </div>
+      )}
+    </>
+  );
+}
+
+// Main Component
 export function ProjectFormDialog({
   open,
   onOpenChange,
@@ -75,31 +224,37 @@ export function ProjectFormDialog({
   isPending = false,
   submitError = null,
 }: ProjectFormDialogProps) {
+  // State
   const [createForm, setCreateForm] = useState<CreateProjectFormState>(
-    createInitialProjectFormState,
+    createInitialProjectFormState
   );
   const [editName, setEditName] = useState(initialName);
   const [editNameError, setEditNameError] = useState<string | null>(null);
   const [showRuntimeFields, setShowRuntimeFields] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
+  // Platform status
   const { isPlatformInstalled, isLoading: platformStatusesLoading } = usePlatformStatuses();
 
+  // Validation
   const installValidationOptions = useMemo(
     () => (platformStatusesLoading ? undefined : { isPlatformInstalled }),
-    [isPlatformInstalled, platformStatusesLoading],
+    [isPlatformInstalled, platformStatusesLoading]
   );
-
   const createValidation = useMemo(
     () => validateCreateProjectForm(createForm, installValidationOptions),
-    [createForm, installValidationOptions],
+    [createForm, installValidationOptions]
   );
   const fieldErrors = createValidation.success ? {} : createValidation.errors;
   const visibleFieldErrors = submitAttempted ? fieldErrors : {};
 
-  const editNameValidation = useMemo(() => validateEditProjectName(editName), [editName]);
+  const editNameValidation = useMemo(
+    () => validateEditProjectName(editName),
+    [editName]
+  );
   const canSaveEdit = !isPending && editNameValidation.success;
 
+  // Effects
   useEffect(() => {
     if (open) {
       if (mode === "create") {
@@ -114,19 +269,15 @@ export function ProjectFormDialog({
   }, [initialName, mode, open]);
 
   useEffect(() => {
-    if (!open || mode !== "create" || platformStatusesLoading) {
-      return;
-    }
-
+    if (!open || mode !== "create" || platformStatusesLoading) return;
     setCreateForm((current) => {
       const nextPlatformIds = current.platformIds.filter((id) => isPlatformInstalled(id));
-      if (nextPlatformIds.length === current.platformIds.length) {
-        return current;
-      }
+      if (nextPlatformIds.length === current.platformIds.length) return current;
       return { ...current, platformIds: nextPlatformIds };
     });
   }, [open, mode, platformStatusesLoading, isPlatformInstalled]);
 
+  // Handlers
   const handleOpenChange = (nextOpen: boolean): void => {
     if (!nextOpen) {
       if (mode === "create") {
@@ -177,10 +328,7 @@ export function ProjectFormDialog({
   };
 
   const handleDelete = async (): Promise<void> => {
-    if (mode !== "edit" || onDelete == null) {
-      return;
-    }
-
+    if (mode !== "edit" || onDelete == null) return;
     try {
       await onDelete();
       handleOpenChange(false);
@@ -189,12 +337,15 @@ export function ProjectFormDialog({
     }
   };
 
+  // Render
   const isEdit = mode === "edit";
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className={isEdit ? undefined : "max-h-[85vh] max-w-lg overflow-y-auto sm:max-w-lg"}
+        className={
+          isEdit ? undefined : "max-h-[85vh] max-w-lg overflow-y-auto sm:max-w-lg"
+        }
         onCloseAutoFocus={(event) => event.preventDefault()}
         onInteractOutside={(event) => {
           if (isRadixOverlayTarget(event.target)) {
@@ -202,7 +353,7 @@ export function ProjectFormDialog({
           }
         }}
       >
-        <form onSubmit={(event) => void handleSubmit(event)}>
+        <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>{isEdit ? "Edit project" : "New project"}</DialogTitle>
             <DialogDescription>
@@ -213,124 +364,32 @@ export function ProjectFormDialog({
           </DialogHeader>
           <div className="grid gap-4 py-4">
             {isEdit ? (
-              <div className="grid gap-2">
-                <Label htmlFor="project-name">Name</Label>
-                <Input
-                  id="project-name"
-                  value={editName}
-                  onChange={(event) => setEditName(event.target.value)}
-                  placeholder="Codex"
-                  disabled={isPending}
-                  autoFocus
-                />
-                <FieldError message={editNameError ?? undefined} />
-              </div>
+              <EditNameField
+                value={editName}
+                onChange={setEditName}
+                disabled={isPending}
+                error={editNameError ?? undefined}
+              />
             ) : (
-              <>
-                <div className="grid gap-2">
-                  <Label htmlFor="project-name">Name</Label>
-                  <Input
-                    id="project-name"
-                    value={createForm.name}
-                    onChange={(event) =>
-                      setCreateForm((current) => ({ ...current, name: event.target.value }))
-                    }
-                    placeholder="Codex"
-                    disabled={isPending}
-                    autoFocus
-                  />
-                  <FieldError message={visibleFieldErrors.name} />
-                </div>
-                <div className="grid gap-2">
-                  <PlatformAssignField
-                    value={createForm.platformIds}
-                    onChange={(platformIds) =>
-                      setCreateForm((current) => ({ ...current, platformIds }))
-                    }
-                    disabled={isPending}
-                    isPlatformInstalled={isPlatformInstalled}
-                    statusesLoading={platformStatusesLoading}
-                  />
-                  <FieldError message={visibleFieldErrors.platformIds} />
-                </div>
-                <div className="grid gap-2">
-                  <WorkspaceFolderField
-                    value={createForm.workspaceRoot}
-                    onChange={(workspaceRoot) =>
-                      setCreateForm((current) => ({ ...current, workspaceRoot }))
-                    }
-                    usePerTaskWorkspaces={createForm.usePerTaskWorkspaces}
-                    onUsePerTaskWorkspacesChange={(usePerTaskWorkspaces) =>
-                      setCreateForm((current) => ({
-                        ...current,
-                        usePerTaskWorkspaces,
-                        useWorktrees: usePerTaskWorkspaces ? current.useWorktrees : false,
-                      }))
-                    }
-                    useWorktrees={createForm.useWorktrees}
-                    onUseWorktreesChange={(useWorktrees) =>
-                      setCreateForm((current) => ({ ...current, useWorktrees }))
-                    }
-                    disabled={isPending}
-                  />
-                  <FieldError message={visibleFieldErrors.workspaceRoot} />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="project-prompt-template">Prompt template</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Template sent to agents when a run starts
-                  </p>
-                  <MonacoEditorField
-                    id="project-prompt-template"
-                    value={createForm.promptTemplate}
-                    onChange={(promptTemplate) =>
-                      setCreateForm((current) => ({ ...current, promptTemplate }))
-                    }
-                    disabled={isPending}
-                    height={220}
-                  />
-                  <FieldError message={visibleFieldErrors.promptTemplate} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="project-configure-runtime"
-                    checked={showRuntimeFields}
-                    onCheckedChange={(checked) => setShowRuntimeFields(checked === true)}
-                    disabled={isPending}
-                  />
-                  <Label
-                    htmlFor="project-configure-runtime"
-                    className="cursor-pointer text-sm font-normal"
-                  >
-                    Configure runtime settings
-                  </Label>
-                </div>
-                {showRuntimeFields ? (
-                  <div className="grid gap-2">
-                    <RuntimeFields
-                      value={{
-                        maxConcurrency: createForm.maxConcurrency,
-                        retryMaxAttempts: createForm.retryMaxAttempts,
-                        retryBackoffMs: createForm.retryBackoffMs,
-                      }}
-                      onChange={(runtime) =>
-                        setCreateForm((current) => ({ ...current, ...runtime }))
-                      }
-                      disabled={isPending}
-                    />
-                    <FieldError message={visibleFieldErrors.maxConcurrency} />
-                    <FieldError message={visibleFieldErrors.retryMaxAttempts} />
-                    <FieldError message={visibleFieldErrors.retryBackoffMs} />
-                  </div>
-                ) : null}
-              </>
+              <ProjectFormFields
+                form={createForm}
+                setForm={setCreateForm}
+                isPending={isPending}
+                fieldErrors={visibleFieldErrors}
+                isPlatformInstalled={(id) => isPlatformInstalled(id as unknown as PlatformId)}
+                platformStatusesLoading={platformStatusesLoading}
+                showRuntimeFields={showRuntimeFields}
+                setShowRuntimeFields={setShowRuntimeFields}
+              />
             )}
-            {submitError ? (
+            {submitError && (
               <Alert variant="destructive">
-                <AlertTitle>{isEdit ? "Update failed" : "Create failed"}</AlertTitle>
+                <AlertTitle>
+                  {isEdit ? "Update failed" : "Create failed"}
+                </AlertTitle>
                 <AlertDescription>{submitError.message}</AlertDescription>
               </Alert>
-            ) : null}
+            )}
           </div>
           <DialogFooter className="gap-2 sm:justify-between">
             {isEdit && onDelete ? (
@@ -338,7 +397,7 @@ export function ProjectFormDialog({
                 type="button"
                 variant="destructive"
                 disabled={isPending}
-                onClick={() => void handleDelete()}
+                onClick={handleDelete}
               >
                 {isPending ? "Deleting..." : "Delete project"}
               </Button>

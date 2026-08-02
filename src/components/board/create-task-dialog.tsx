@@ -1,7 +1,6 @@
 "use client";
-import { useState } from "react";
 import { TaskExecutorField } from "@/components/task/task-executor-field";
-import { TaskFilesField, type StagedTaskFile } from "@/components/task/task-files-field";
+import { type StagedTaskFile, TaskFilesField } from "@/components/task/task-files-field";
 import { TaskPriorityField } from "@/components/task/task-priority";
 import { TaskTagsField } from "@/components/task/task-tags-field";
 import { Button } from "@/components/ui/button";
@@ -17,11 +16,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useActiveProject } from "@/contexts/active-project-context";
-import { useTaskPlatformPicker } from "@/hooks/use-task-platform-picker";
 import type { CreateTaskInput } from "@/hooks/use-board";
+import { useTaskPlatformPicker } from "@/hooks/use-task-platform-picker";
 import { validateCreateTaskForm } from "@/lib/create-task-form";
 import { fileNameFromPath } from "@/lib/pick-task-files";
 import type { PlatformId } from "@/lib/platforms";
+import { useState } from "react";
 
 type CreateTaskDialogProps = {
   open: boolean;
@@ -39,8 +39,11 @@ export function CreateTaskDialog({
   submitError = null,
 }: CreateTaskDialogProps) {
   const { projectId } = useActiveProject();
-  const { platformIds, isPlatformInstalled, isLoading: platformPickerLoading } =
-    useTaskPlatformPicker(projectId ?? null);
+  const {
+    platformIds,
+    isPlatformInstalled,
+    isLoading: platformPickerLoading,
+  } = useTaskPlatformPicker(projectId ?? null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<number | null>(null);

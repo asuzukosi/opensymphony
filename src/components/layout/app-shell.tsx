@@ -4,12 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType, ReactNode, SVGProps } from "react";
 
-import {
-  BoardIcon,
-  DashboardIcon,
-  SettingsIcon,
-} from "@/components/ui/hero-icons";
 import { ProjectSwitcher } from "@/components/project/project-switcher";
+import { BoardIcon, DashboardIcon, SettingsIcon } from "@/components/ui/hero-icons";
 import {
   Sidebar,
   SidebarContent,
@@ -56,9 +52,7 @@ type SidebarNavLinkProps = NavItem;
 function SidebarNavLink({ href, label, icon: Icon }: SidebarNavLinkProps) {
   const pathname = usePathname();
   const active =
-    href === "/"
-      ? pathname === "/"
-      : pathname === href || pathname.startsWith(`${href}/`);
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <SidebarMenuItem>
@@ -112,7 +106,7 @@ export function AppShell({ children, className }: AppShellProps) {
           </SidebarContent>
         </Sidebar>
         <SidebarInset className="min-h-0 overflow-hidden">
-          <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 md:px-6">
+          <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-md supports-backdrop-filter:bg-background/60 md:px-6">
             <SidebarTrigger className="-ml-1" />
             <div className="h-4 w-px bg-border/60" />
             <div

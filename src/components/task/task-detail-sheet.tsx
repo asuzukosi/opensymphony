@@ -11,12 +11,7 @@ import {
   TaskNotFoundState,
   isTaskNotFoundError,
 } from "@/components/task/task-states";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTask } from "@/hooks/use-task";
 import { useTaskSheetParams } from "@/lib/task-sheet-params";

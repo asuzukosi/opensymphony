@@ -1,82 +1,106 @@
 "use client";
 
-import { ArrowPathIcon } from "@/components/ui/hero-icons";
+import { type ColumnDef, getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { useMemo } from "react";
+
 import { DashboardTaskCell } from "@/components/dashboard/dashboard-task-cell";
-import {
-  BorderedTable,
-  tableCellClass,
-  tableHeadClass,
-  tableHeaderRowClass,
-  tableMutedTextClass,
-} from "@/components/dashboard/shared";
 import { EmptyState } from "@/components/layout/empty-state";
 import { PanelSection } from "@/components/layout/panel-section";
-import { TableSkeleton } from "@/components/layout/table-skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataGrid, DataGridContainer } from "@/components/ui/data-grid/data-grid";
+import { DataGridTable } from "@/components/ui/data-grid/data-grid-table";
+import { ArrowPathIcon } from "@/components/ui/hero-icons";
 import { formatDateTime } from "@/lib/datetime";
-import { isPendingLoad } from "@/lib/is-pending-load";
 import type { RuntimeRetryEntry } from "@/lib/ipc/types";
-import { cn } from "@/lib/utils";
+import { isPendingLoad } from "@/lib/is-pending-load";
 
-export function RetryPanel({ retrying, isLoading = false }: { retrying?: RuntimeRetryEntry[]; isLoading?: boolean }) {
+export function RetryPanel({
+  retrying,
+  isLoading = false,
+}: {
+  retrying?: RuntimeRetryEntry[];
+  isLoading?: boolean;
+}) {
   const pending = isPendingLoad(isLoading, retrying);
+  const rows = retrying ?? [];
+
+  const columns = useMemo<ColumnDef<RuntimeRetryEntry>[]>(
+    () => [
+      {
+        id: "task",
+        header: "Task",
+        cell: ({ row }) => (
+          <DashboardTaskCell
+            taskId={row.original.taskId}
+            title={row.original.title}
+            description={row.original.description}
+            executor={row.original.executor}
+          />
+        ),
+        size: 280,
+      },
+      {
+        accessorKey: "attemptNumber",
+        header: "#",
+        cell: ({ row }) => (
+          <span className="text-[10px] text-muted-foreground tabular-nums">
+            {row.original.attemptNumber}
+          </span>
+        ),
+        size: 40,
+      },
+      {
+        accessorKey: "dueAt",
+        header: "Due",
+        cell: ({ row }) => (
+          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+            {formatDateTime(row.original.dueAt)}
+          </span>
+        ),
+        size: 112,
+      },
+      {
+        accessorKey: "errorMessage",
+        header: "Error",
+        cell: ({ row }) =>
+          row.original.errorMessage ? (
+            <span
+              className="block truncate text-[10px] leading-snug text-destructive"
+              title={row.original.errorMessage}
+            >
+              {row.original.errorMessage}
+            </span>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">No error recorded</span>
+          ),
+        size: 200,
+      },
+    ],
+    [],
+  );
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getRowId: (row) => `${row.taskId}-${row.attemptNumber}`,
+  });
 
   return (
-    <PanelSection title="Retry queue" description="Tasks waiting to be retried after a failed run attempt.">
-      {pending ? (
-        <TableSkeleton columns={4} />
-      ) : retrying && retrying.length > 0 ? (
-        <BorderedTable>
-          <Table className="w-full table-fixed">
-            <TableHeader>
-              <TableRow className={tableHeaderRowClass}>
-                <TableHead className={cn(tableHeadClass, "w-[42%]")}>Task</TableHead>
-                <TableHead className={cn(tableHeadClass, "w-10")}>*</TableHead>
-                <TableHead className={cn(tableHeadClass, "w-28 whitespace-nowrap")}>Due</TableHead>
-                <TableHead className={tableHeadClass}>Error</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {retrying.map((entry) => (
-                <TableRow key={`${entry.taskId}-${entry.attemptNumber}`} className="hover:bg-muted/20">
-                  <TableCell className={cn(tableCellClass, "max-w-0")}>
-                    <DashboardTaskCell
-                      taskId={entry.taskId}
-                      title={entry.title}
-                      description={entry.description}
-                      executor={entry.executor}
-                    />
-                  </TableCell>
-                  <TableCell className={cn(tableCellClass, tableMutedTextClass, "tabular-nums")}>
-                    {entry.attemptNumber}
-                  </TableCell>
-                  <TableCell className={cn(tableCellClass, tableMutedTextClass)}>
-                    {formatDateTime(entry.dueAt)}
-                  </TableCell>
-                  <TableCell className={cn(tableCellClass, "max-w-0")}>
-                    {entry.errorMessage ? (
-                      <span
-                        className="block truncate text-[10px] leading-snug text-destructive"
-                        title={entry.errorMessage}
-                      >
-                        {entry.errorMessage}
-                      </span>
-                    ) : (
-                      <span className={tableMutedTextClass}>No error recorded</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </BorderedTable>
+    <PanelSection
+      title="Retry queue"
+      description="Tasks waiting to be retried after a failed run attempt."
+    >
+      {pending || rows.length > 0 ? (
+        <DataGrid
+          table={table}
+          recordCount={rows.length}
+          isLoading={pending}
+          tableLayout={{ dense: true, width: "fixed" }}
+        >
+          <DataGridContainer>
+            <DataGridTable />
+          </DataGridContainer>
+        </DataGrid>
       ) : (
         <EmptyState
           icon={ArrowPathIcon}

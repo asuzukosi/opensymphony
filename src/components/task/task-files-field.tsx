@@ -1,7 +1,7 @@
 "use client";
 
-import { DocumentTextIcon } from "@/components/ui/hero-icons";
 import { Button } from "@/components/ui/button";
+import { DocumentTextIcon } from "@/components/ui/hero-icons";
 import { Label } from "@/components/ui/label";
 import { formatFileSize, formatFileTypeLabel } from "@/lib/format-file-size";
 import type { TaskFile } from "@/lib/ipc/types";
@@ -95,7 +95,11 @@ export function TaskFilesField({
           ))}
         </div>
       ) : (
-        <p className={readOnly ? "text-[10px] text-muted-foreground" : "text-xs text-muted-foreground"}>
+        <p
+          className={
+            readOnly ? "text-[10px] text-muted-foreground" : "text-xs text-muted-foreground"
+          }
+        >
           No files attached.
         </p>
       )}
@@ -134,7 +138,9 @@ function FileRow({ fileName, typeLabel, sizeLabel, onRemove, compact = false }: 
           compact ? "h-8 w-8" : "h-10 w-10",
         )}
       >
-        <DocumentTextIcon className={cn("text-muted-foreground", compact ? "h-4 w-4" : "h-5 w-5")} />
+        <DocumentTextIcon
+          className={cn("text-muted-foreground", compact ? "h-4 w-4" : "h-5 w-5")}
+        />
       </div>
       <div className="min-w-0 flex-1">
         <p className={cn("font-medium", compact ? "text-xs" : "text-sm", wrapText)}>{fileName}</p>

@@ -1,24 +1,14 @@
 "use client";
 
-import {
-  DndContext,
-  type DragEndEvent,
-  DragOverlay,
-  type DragStartEvent,
-  PointerSensor,
-  closestCorners,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useOrchestratorStatus } from "@/hooks/use-orchestrator-status";
 
 import { type BoardColumnMeta, BoardColumns } from "@/components/board/board-columns";
 import { CreateTaskDialog } from "@/components/board/create-task-dialog";
-import { TaskCard } from "@/components/board/task-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageShell } from "@/components/layout/page-shell";
+import type { KanbanCommitMeta } from "@/components/ui/kanban";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,18 +21,9 @@ import {
 } from "@/components/ui/hero-icons";
 import { useActiveProject } from "@/contexts/active-project-context";
 import { type CreateTaskInput, useBoard } from "@/hooks/use-board";
-import {
-  findTaskById,
-  findTaskColumn,
-  moveTaskBetweenColumns,
-  resolveDropTargetColumnId,
-} from "@/lib/board-drag-utils";
-import type {
-  BoardColumnId,
-  ProjectBoard,
-  ProjectBoardTask,
-  RuntimeStatus,
-} from "@/lib/ipc/types";
+import { findTaskColumn } from "@/lib/board-drag-utils";
+import type { BoardColumnId, ProjectBoard, ProjectBoardTask, RuntimeStatus } from "@/lib/ipc/types";
+import { BOARD_COLUMN_IDS } from "@/lib/ipc/types";
 import { useTaskSheetParams } from "@/lib/task-sheet-params";
 
 function formatOrchestratorStatus(status: string): string {
@@ -74,46 +55,48 @@ function OrchestratorStatusBadge({ status }: { status: string }) {
   );
 }
 
-function buildSyncedBoard(
+function boardToColumns(
   tasksByColumn: Record<BoardColumnId, ProjectBoardTask[] | undefined>,
-): ProjectBoard {
+): Record<BoardColumnId, ProjectBoardTask[]> {
   return {
-    backlog: { tasks: tasksByColumn.backlog ?? [] },
-    inProgress: { tasks: tasksByColumn.inProgress ?? [] },
-    review: { tasks: tasksByColumn.review ?? [] },
-    done: { tasks: tasksByColumn.done ?? [] },
+    backlog: tasksByColumn.backlog ?? [],
+    inProgress: tasksByColumn.inProgress ?? [],
+    review: tasksByColumn.review ?? [],
+    done: tasksByColumn.done ?? [],
   };
 }
 
-function countBoardTasks(board: ProjectBoard): { total: number; done: number } {
-  const columns = [board.backlog, board.inProgress, board.review, board.done];
-  const total = columns.reduce((sum, column) => sum + column.tasks.length, 0);
-  return { total, done: board.done.tasks.length };
+function columnsToBoard(columns: Record<BoardColumnId, ProjectBoardTask[]>): ProjectBoard {
+  return {
+    backlog: { tasks: columns.backlog },
+    inProgress: { tasks: columns.inProgress },
+    review: { tasks: columns.review },
+    done: { tasks: columns.done },
+  };
+}
+
+function countBoardTasks(columns: Record<BoardColumnId, ProjectBoardTask[]>): {
+  total: number;
+  done: number;
+} {
+  const total = BOARD_COLUMN_IDS.reduce((sum, columnId) => sum + columns[columnId].length, 0);
+  return { total, done: columns.done.length };
 }
 
 function BoardDnDContent() {
   const { projectId } = useActiveProject();
   const board = useBoard();
+  const syncedColumns = useMemo(() => boardToColumns(board.tasksByColumn), [board.tasksByColumn]);
 
-  const syncedBoard = useMemo(() => buildSyncedBoard(board.tasksByColumn), [board.tasksByColumn]);
-
-  const [optimisticBoard, setOptimisticBoard] = useState<ProjectBoard | null>(null);
-  const [activeTask, setActiveTask] = useState<ProjectBoardTask | null>(null);
+  const [columns, setColumns] = useState(syncedColumns);
   const [failedTransition, setFailedTransition] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [failedCreate, setFailedCreate] = useState(false);
   const { openTaskSheet } = useTaskSheetParams();
 
   useEffect(() => {
-    setOptimisticBoard(null);
-  }, [
-    board.tasksByColumn.backlog,
-    board.tasksByColumn.inProgress,
-    board.tasksByColumn.review,
-    board.tasksByColumn.done,
-  ]);
-
-  const displayBoard = optimisticBoard ?? syncedBoard;
+    setColumns(syncedColumns);
+  }, [syncedColumns]);
 
   const columnMeta = useMemo((): Record<BoardColumnId, BoardColumnMeta> => {
     const meta = { isLoading: board.isLoading, error: board.error };
@@ -125,59 +108,42 @@ function BoardDnDContent() {
     };
   }, [board.error, board.isLoading]);
 
-  const getColumnTasks = useCallback(
-    (columnId: BoardColumnId): ProjectBoardTask[] | undefined => {
-      if (optimisticBoard) {
-        return optimisticBoard[columnId].tasks;
+  const handleColumnsCommit = useCallback(
+    async (
+      next: Record<BoardColumnId, ProjectBoardTask[]>,
+      meta: KanbanCommitMeta<ProjectBoardTask>,
+    ) => {
+      if (meta.kind !== "item") {
+        return;
       }
-      return board.tasksByColumn[columnId];
+
+      const taskId = String(meta.event.active.id);
+      const targetColumn = meta.overContainer as BoardColumnId;
+      const sourceColumn = findTaskColumn(
+        taskId,
+        columnsToBoard(meta.previousValue as Record<BoardColumnId, ProjectBoardTask[]>),
+      );
+
+      if (!sourceColumn || targetColumn === sourceColumn) {
+        return;
+      }
+
+      board.resetTransition();
+      setFailedTransition(false);
+
+      try {
+        await board.transitionTask(taskId, targetColumn, "operator");
+      } catch {
+        setColumns(meta.previousValue as Record<BoardColumnId, ProjectBoardTask[]>);
+        setFailedTransition(true);
+      }
     },
-    [board.tasksByColumn, optimisticBoard],
+    [board],
   );
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    }),
-  );
-
-  const handleDragStart = (event: DragStartEvent): void => {
-    const task = event.active.data.current?.task as ProjectBoardTask | undefined;
-    setActiveTask(task ?? findTaskById(String(event.active.id), displayBoard));
-  };
-
-  const handleDragEnd = async (event: DragEndEvent): Promise<void> => {
-    setActiveTask(null);
-
-    if (!event.over) {
-      return;
-    }
-
-    const taskId = String(event.active.id);
-    const targetColumn = resolveDropTargetColumnId(String(event.over.id), syncedBoard);
-    const sourceColumn = findTaskColumn(taskId, syncedBoard);
-
-    if (!targetColumn || !sourceColumn || targetColumn === sourceColumn) {
-      return;
-    }
-
-    setOptimisticBoard(moveTaskBetweenColumns(syncedBoard, taskId, sourceColumn, targetColumn));
-    board.resetTransition();
-    setFailedTransition(false);
-
-    try {
-      await board.transitionTask(taskId, targetColumn, "operator");
-      setOptimisticBoard(null);
-    } catch {
-      setOptimisticBoard(null);
-      setFailedTransition(true);
-    }
-  };
 
   const handleCreateTask = async (input: CreateTaskInput): Promise<void> => {
     board.resetCreate();
     setFailedCreate(false);
-    console.log("handleCreateTask", input);
 
     try {
       await board.createTask(input);
@@ -188,7 +154,7 @@ function BoardDnDContent() {
   };
 
   const isMutating = board.isTransitioning || board.isCreating;
-  const { total, done } = useMemo(() => countBoardTasks(displayBoard), [displayBoard]);
+  const { total, done } = useMemo(() => countBoardTasks(columns), [columns]);
 
   const openCreateDialog = (): void => {
     board.resetCreate();
@@ -222,7 +188,7 @@ function BoardDnDContent() {
       </div>
 
       {failedTransition && board.transitionError ? (
-        <Alert variant="destructive" className="shrink-0">
+        <Alert variant="destructive" className="mb-3 shrink-0">
           <AlertTitle>Task update failed</AlertTitle>
           <AlertDescription>
             {board.transitionError.message}. Your change was reverted to the last synced board
@@ -232,40 +198,24 @@ function BoardDnDContent() {
       ) : null}
 
       {failedCreate && board.createError ? (
-        <Alert variant="destructive" className="shrink-0">
+        <Alert variant="destructive" className="mb-3 shrink-0">
           <AlertTitle>Task creation failed</AlertTitle>
           <AlertDescription>{board.createError.message}</AlertDescription>
         </Alert>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragEnd={(event) => void handleDragEnd(event)}
-        >
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <BoardColumns
-              columnMeta={columnMeta}
-              getColumnTasks={getColumnTasks}
-              dragEnabled
-              disabled={isMutating}
-              onAddTask={() => {
-                openCreateDialog();
-              }}
-              onTaskOpen={(task) => {
-                openTaskSheet(task.taskId);
-              }}
-              className="min-h-0 flex-1"
-            />
-          </div>
-
-          <DragOverlay>
-            {activeTask ? <TaskCard task={activeTask} isOverlay disabled={isMutating} /> : null}
-          </DragOverlay>
-        </DndContext>
-      </div>
+      <BoardColumns
+        columns={columns}
+        onColumnsChange={setColumns}
+        onColumnsCommit={(next, meta) => void handleColumnsCommit(next, meta)}
+        columnMeta={columnMeta}
+        disabled={isMutating}
+        onAddTask={openCreateDialog}
+        onTaskOpen={(task) => {
+          openTaskSheet(task.taskId);
+        }}
+        className="min-h-0 flex-1"
+      />
 
       {projectId != null ? (
         <CreateTaskDialog

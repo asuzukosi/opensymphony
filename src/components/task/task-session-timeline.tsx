@@ -1,11 +1,21 @@
 "use client";
 
+import type { VariantProps } from "class-variance-authority";
 import { useState } from "react";
 import type { ComponentType, SVGProps } from "react";
-import type { VariantProps } from "class-variance-authority";
 
+import {
+  Timeline,
+  TimelineContent,
+  TimelineDate,
+  TimelineHeader,
+  TimelineIndicator,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineTitle,
+} from "@/components/ui/timeline";
 import { TaskCommentBody } from "@/components/task/task-comment-body";
-import { Badge, badgeVariants } from "@/components/ui/badge";
+import { Badge, type badgeVariants } from "@/components/ui/badge";
 import {
   BoltIcon,
   ChatBubbleLeftIcon,
@@ -19,10 +29,10 @@ import { formatDateTime } from "@/lib/datetime";
 import type { FormattedToolCall } from "@/lib/format-tool-call";
 import type { SessionEvent, SessionEventKind } from "@/lib/ipc/types";
 import {
+  type TimelinePreview,
   getTimelineMarkdown,
   getTimelinePreview,
   isTimelineExpandable,
-  type TimelinePreview,
 } from "@/lib/session-timeline-content";
 import { cn, wrapText } from "@/lib/utils";
 
@@ -36,7 +46,7 @@ type TaskSessionTimelineProps = {
 type TimelineKindConfig = {
   label: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  badgeVariant?: "outline" | "warning" | "destructive";
+  badgeVariant?: NonNullable<VariantProps<typeof badgeVariants>["variant"]>;
 };
 
 const timelineKindConfig: Record<Exclude<SessionEventKind, "StreamChunk">, TimelineKindConfig> = {
@@ -55,7 +65,7 @@ const timelineKindConfig: Record<Exclude<SessionEventKind, "StreamChunk">, Timel
   PermissionRequest: {
     label: "Permission",
     icon: ShieldExclamationIcon,
-    badgeVariant: "warning",
+    badgeVariant: "warning-light",
   },
   SessionUpdate: {
     label: "Update",
@@ -64,7 +74,7 @@ const timelineKindConfig: Record<Exclude<SessionEventKind, "StreamChunk">, Timel
   Error: {
     label: "Error",
     icon: ExclamationCircleIcon,
-    badgeVariant: "destructive",
+    badgeVariant: "destructive-light",
   },
   Terminal: {
     label: "Terminal",
@@ -76,8 +86,8 @@ type ToolStatusBadgeVariant = NonNullable<VariantProps<typeof badgeVariants>["va
 
 const TOOL_STATUS_BADGE_VARIANTS: Record<string, ToolStatusBadgeVariant> = {
   pending: "outline",
-  in_progress: "warning",
-  completed: "success",
+  in_progress: "warning-light",
+  completed: "success-light",
   failed: "destructive",
 };
 
@@ -141,16 +151,14 @@ function TimelineSkeleton() {
   );
 }
 
-function TimelineEmptyState({ message }: { message: string }) {
-  return <p className="text-xs text-muted-foreground">{message}</p>;
-}
-
 function ToolCallPreviewBody({ tool }: { tool: FormattedToolCall }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       <Badge
         variant={toolStatusBadgeVariant(tool.status)}
-        className="h-4 px-1 py-0 text-[8px] font-normal leading-none uppercase"
+        size="xs"
+        radius="full"
+        className="font-normal uppercase"
       >
         {formatToolLabel(tool.status)}
       </Badge>
@@ -174,7 +182,7 @@ function TimelinePreviewBody({ preview }: { preview: TimelinePreview }) {
   return <p className={cn(wrapText, "text-[10px] text-foreground/90")}>{preview.text}</p>;
 }
 
-function TimelineItem({ event }: { event: SessionEvent }) {
+function SessionTimelineItem({ event, step }: { event: SessionEvent; step: number }) {
   const [expanded, setExpanded] = useState(false);
 
   if (event.kind === "StreamChunk" && !isAgentMessageEvent(event)) {
@@ -195,22 +203,28 @@ function TimelineItem({ event }: { event: SessionEvent }) {
   }
 
   return (
-    <li className="relative min-w-0 pl-6">
-      <span className="absolute left-0 top-1 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-border/60 bg-background">
-        <Icon className="h-2.5 w-2.5 text-muted-foreground" />
-      </span>
-      <div className="min-w-0 space-y-1 overflow-hidden pb-1">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+    <TimelineItem step={step} className="group-data-[orientation=vertical]/timeline:ms-10">
+      <TimelineHeader>
+        <TimelineSeparator className="group-data-[orientation=vertical]/timeline:-left-7" />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <TimelineTitle className="sr-only">{config.label}</TimelineTitle>
           <Badge
             variant={"badgeVariant" in config ? (config.badgeVariant ?? "outline") : "outline"}
-            className="text-[10px] uppercase"
+            size="xs"
+            radius="full"
+            className="font-normal uppercase"
           >
             {config.label}
           </Badge>
-          <time className="shrink-0 text-[10px] text-muted-foreground" dateTime={event.createdAt}>
+          <TimelineDate className="mb-0 mt-0 text-[10px]">
             {formatDateTime(event.createdAt)}
-          </time>
+          </TimelineDate>
         </div>
+        <TimelineIndicator className="group-data-[orientation=vertical]/timeline:-left-7 flex size-6 items-center justify-center border-border/60 bg-background">
+          <Icon className="size-3 text-muted-foreground" />
+        </TimelineIndicator>
+      </TimelineHeader>
+      <TimelineContent>
         <button
           type="button"
           disabled={!expandable}
@@ -220,10 +234,9 @@ function TimelineItem({ event }: { event: SessionEvent }) {
             }
           }}
           className={cn(
-            "w-full rounded-md text-left transition-colors p-1.5",
+            "w-full rounded-md p-1.5 text-left transition-colors",
             expandable && "cursor-pointer hover:bg-muted/40",
             expanded && "bg-muted/30 px-2 py-1.5",
-            !expanded && expandable && "p-1.5",
           )}
         >
           {expanded && markdown != null ? (
@@ -232,8 +245,8 @@ function TimelineItem({ event }: { event: SessionEvent }) {
             <TimelinePreviewBody preview={preview} />
           )}
         </button>
-      </div>
-    </li>
+      </TimelineContent>
+    </TimelineItem>
   );
 }
 
@@ -256,18 +269,18 @@ export function TaskSessionTimeline({
   if (visibleEvents.length === 0) {
     return (
       <div className={className}>
-        <TimelineEmptyState message={emptyMessage} />
+        <p className="text-xs text-muted-foreground">{emptyMessage}</p>
       </div>
     );
   }
 
   return (
     <div className={cn("min-w-0", className)}>
-      <ol className="relative min-w-0 space-y-4 border-l border-border/60">
-        {visibleEvents.map((event) => (
-          <TimelineItem key={event.id} event={event} />
+      <Timeline defaultValue={visibleEvents.length}>
+        {visibleEvents.map((event, index) => (
+          <SessionTimelineItem key={event.id} event={event} step={index + 1} />
         ))}
-      </ol>
+      </Timeline>
     </div>
   );
 }

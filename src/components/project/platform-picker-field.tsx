@@ -1,6 +1,5 @@
 "use client";
 
-import { PlusIcon } from "@/components/ui/hero-icons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -8,9 +7,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PlusIcon } from "@/components/ui/hero-icons";
 import { Label } from "@/components/ui/label";
 import { PlatformAvatar } from "@/components/ui/platform-avatar";
-import { getPlatform, resolvePlatformInstalled, type PlatformId } from "@/lib/platforms";
+import { type PlatformId, getPlatform, resolvePlatformInstalled } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 
 const addButtonClassName = "h-8 w-8 shrink-0 rounded-full";
@@ -113,14 +113,18 @@ export function PlatformPickerField({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="z-[60] w-52"
+              className="z-60 w-52"
               onCloseAutoFocus={(event) => event.preventDefault()}
             >
               {pickable.map((platformId) => (
                 <PlatformPickerMenuItem
                   key={platformId}
                   platformId={platformId}
-                  installed={resolvePlatformInstalled(platformId, isPlatformInstalled, statusesLoading)}
+                  installed={resolvePlatformInstalled(
+                    platformId,
+                    isPlatformInstalled,
+                    statusesLoading,
+                  )}
                   onSelect={onSelect}
                 />
               ))}

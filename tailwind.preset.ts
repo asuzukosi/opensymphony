@@ -2,7 +2,7 @@ import type { Config } from "tailwindcss";
 import tailwindcssAnimate from "tailwindcss-animate";
 
 const preset = {
-  darkMode: ["class"],
+  darkMode: "class",
   theme: {
     extend: {
       fontFamily: {
@@ -72,6 +72,10 @@ const preset = {
         info: {
           DEFAULT: "hsl(var(--info))",
           foreground: "hsl(var(--info-foreground))",
+        },
+        invert: {
+          DEFAULT: "hsl(var(--invert))",
+          foreground: "hsl(var(--invert-foreground))",
         },
         chart: {
           "1": "hsl(var(--chart-1))",

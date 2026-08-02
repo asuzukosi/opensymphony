@@ -1,6 +1,5 @@
 "use client";
 
-import type { ComponentType, SVGProps } from "react";
 import {
   ArchiveBoxArrowDownIcon,
   ClipboardDocumentCheckIcon,
@@ -8,6 +7,7 @@ import {
   DocumentDuplicateIcon,
   ExclamationCircleIcon,
 } from "@/components/ui/hero-icons";
+import type { ComponentType, SVGProps } from "react";
 
 import { EmptyState } from "@/components/layout/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -38,9 +38,9 @@ export function BoardColumnCountSkeleton() {
 export function BoardColumnBodySkeleton() {
   return (
     <div className="space-y-3">
-      <Skeleton className="h-[7.5rem] w-full rounded-xl" />
-      <Skeleton className="h-[7.5rem] w-full rounded-xl" />
-      <Skeleton className="h-[7.5rem] w-full rounded-xl" />
+      <Skeleton className="h-30 w-full rounded-xl" />
+      <Skeleton className="h-30 w-full rounded-xl" />
+      <Skeleton className="h-30 w-full rounded-xl" />
     </div>
   );
 }
@@ -54,12 +54,10 @@ export function BoardColumnEmptyState({ showCreateHint = false }: BoardColumnEmp
     <EmptyState
       compact
       icon={ArchiveBoxArrowDownIcon}
-      className="min-h-[10rem] rounded-xl border-border/70 bg-card/40"
+      className="min-h-40 rounded-xl border-border/70 bg-card/40"
       title="No tasks"
       description={
-        showCreateHint
-          ? "Drop a task here or use Add below"
-          : "Drop a task here to move it"
+        showCreateHint ? "Drop a task here or use Add below" : "Drop a task here to move it"
       }
     />
   );

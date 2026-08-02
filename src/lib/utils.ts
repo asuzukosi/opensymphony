@@ -5,10 +5,10 @@ export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
-export const wrapText = "min-w-0 max-w-full break-words [overflow-wrap:anywhere]";
+export const wrapText = "min-w-0 max-w-full wrap-break-word wrap-anywhere";
 
 export const wrapTextPreserve =
-  "min-w-0 max-w-full break-words [overflow-wrap:anywhere] whitespace-pre-wrap";
+  "min-w-0 max-w-full wrap-break-word wrap-anywhere whitespace-pre-wrap";
 
 export function summarizeText(text: string, maxLength = 72): string {
   const trimmed = text.trim().replace(/\s+/g, " ");

@@ -5,7 +5,7 @@ resolver = "2"
 [package]
 name = "opensymphony"
 version = "0.1.0"
-description = "Agent orchestation runtime manager"
+description = "agent orchestation runtime manager"
 license = "MIT"
 repository = ""
 edition = "2021"

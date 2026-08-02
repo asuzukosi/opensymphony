@@ -1,5 +1,14 @@
 import type { ComponentType, ReactNode, SVGProps } from "react";
 
+import { IconTile } from "@/components/ui/icon-tile";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 
 type EmptyStateProps = {
@@ -20,35 +29,36 @@ export function EmptyState({
   compact = false,
 }: EmptyStateProps) {
   return (
-    <div
+    <Empty
       className={cn(
-        "flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/20 text-center",
-        compact ? "px-4 py-8" : "px-6 py-10",
+        "border border-dashed border-border/70 bg-muted/20",
+        compact ? "gap-3 p-4 md:p-6" : "gap-4 p-6 md:p-10",
         className,
       )}
     >
-      {Icon ? (
-        <div
-          className={cn(
-            "mb-2 flex items-center justify-center rounded-full border border-border/40 bg-background text-muted-foreground",
-            compact ? "h-8 w-8" : "mb-3 h-10 w-10",
-          )}
-        >
-          <Icon className={compact ? "size-4" : "h-5 w-5"} />
-        </div>
-      ) : null}
-      <p className={cn(compact ? "text-xs font-medium" : "text-sm font-normal")}>{title}</p>
-      {description ? (
-        <p
-          className={cn(
-            "mt-1 max-w-sm text-muted-foreground",
-            compact ? "text-[10px] leading-snug" : "text-sm",
-          )}
-        >
-          {description}
-        </p>
-      ) : null}
-      {action ? <div className={cn(compact ? "mt-3" : "mt-4")}>{action}</div> : null}
-    </div>
+      <EmptyHeader className={cn(compact && "gap-1.5")}>
+        {Icon ? (
+          <EmptyMedia>
+            <IconTile
+              variant="frame"
+              size={compact ? "sm" : "default"}
+              radius="full"
+              aria-hidden="true"
+            >
+              <Icon />
+            </IconTile>
+          </EmptyMedia>
+        ) : null}
+        <EmptyTitle className={cn(compact ? "text-xs font-medium" : "text-sm font-normal")}>
+          {title}
+        </EmptyTitle>
+        {description ? (
+          <EmptyDescription className={cn(compact ? "text-[10px] leading-snug" : "text-sm")}>
+            {description}
+          </EmptyDescription>
+        ) : null}
+      </EmptyHeader>
+      {action ? <EmptyContent className={cn(compact && "gap-2")}>{action}</EmptyContent> : null}
+    </Empty>
   );
 }

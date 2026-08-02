@@ -1,8 +1,8 @@
 "use client";
 
 import { PlatformAvatar } from "@/components/ui/platform-avatar";
-import { useTaskSheetParams } from "@/lib/task-sheet-params";
 import type { PlatformId } from "@/lib/platforms";
+import { useTaskSheetParams } from "@/lib/task-sheet-params";
 import { cn, summarizeText } from "@/lib/utils";
 
 type DashboardTaskCellProps = {
@@ -33,7 +33,12 @@ export function DashboardTaskCell({
       )}
     >
       {executor != null ? (
-        <PlatformAvatar platformId={executor} size="sm" tooltip={false} className="mt-0.5 shrink-0" />
+        <PlatformAvatar
+          platformId={executor}
+          size="sm"
+          tooltip={false}
+          className="mt-0.5 shrink-0"
+        />
       ) : (
         <span className="mt-1 h-5 w-5 shrink-0 rounded-full border border-dashed border-border/80" />
       )}
@@ -42,7 +47,7 @@ export function DashboardTaskCell({
           {title}
         </span>
         {summary ? (
-          <span className="mt-0.5 block line-clamp-2 break-words text-[10px] leading-snug text-muted-foreground">
+          <span className="mt-0.5 block line-clamp-2 wrap-break-word text-[10px] leading-snug text-muted-foreground">
             {summary}
           </span>
         ) : null}

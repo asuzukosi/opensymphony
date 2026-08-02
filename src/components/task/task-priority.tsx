@@ -2,7 +2,6 @@
 
 import type { VariantProps } from "class-variance-authority";
 
-import { PlusIcon } from "@/components/ui/hero-icons";
 import { Badge, type badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PlusIcon } from "@/components/ui/hero-icons";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
@@ -25,14 +25,13 @@ type TaskPriorityOption = {
 };
 
 export const TASK_PRIORITY_OPTIONS: readonly TaskPriorityOption[] = [
-  { value: 0, label: "Urgent", badgeVariant: "priorityUrgent" },
-  { value: 1, label: "High", badgeVariant: "priorityHigh" },
-  { value: 2, label: "Medium", badgeVariant: "priorityMedium" },
-  { value: 3, label: "Low", badgeVariant: "priorityLow" },
+  { value: 0, label: "Urgent", badgeVariant: "destructive-light" },
+  { value: 1, label: "High", badgeVariant: "warning-light" },
+  { value: 2, label: "Medium", badgeVariant: "warning-outline" },
+  { value: 3, label: "Low", badgeVariant: "info-light" },
 ] as const;
 
-export const compactPriorityBadgeClass =
-  "h-4 min-h-0 rounded-full px-1.5 py-0 text-[9px] font-normal leading-none shadow-none";
+export const compactPriorityBadgeClass = "font-normal";
 
 const addButtonClassName = "h-8 w-8 shrink-0 rounded-full";
 
@@ -55,7 +54,12 @@ export function TaskPriorityBadge({ priority, className }: TaskPriorityBadgeProp
   }
 
   return (
-    <Badge variant={option.badgeVariant} className={cn(compactPriorityBadgeClass, className)}>
+    <Badge
+      variant={option.badgeVariant}
+      size="xs"
+      radius="full"
+      className={cn(compactPriorityBadgeClass, className)}
+    >
       {option.label}
     </Badge>
   );
@@ -88,7 +92,7 @@ export function TaskPriorityField({
             title={`${selected.label} — click to remove`}
             aria-label={`${selected.label} priority — click to remove`}
             onClick={() => onChange(null)}
-            className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <TaskPriorityBadge priority={selected.value} />
           </button>
@@ -109,14 +113,11 @@ export function TaskPriorityField({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="z-[60] w-40"
+              className="z-60 w-40"
               onCloseAutoFocus={(event) => event.preventDefault()}
             >
               {pickable.map((option) => (
-                <DropdownMenuItem
-                  key={option.value}
-                  onSelect={() => onChange(option.value)}
-                >
+                <DropdownMenuItem key={option.value} onSelect={() => onChange(option.value)}>
                   <TaskPriorityBadge priority={option.value} />
                 </DropdownMenuItem>
               ))}

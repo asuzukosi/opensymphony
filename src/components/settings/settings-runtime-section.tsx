@@ -4,10 +4,16 @@ import { useEffect, useState } from "react";
 
 import { FormRow } from "@/components/layout/form-row";
 import { SurfaceCard } from "@/components/layout/surface-card";
+import {
+  NumberField,
+  NumberFieldDecrement,
+  NumberFieldGroup,
+  NumberFieldIncrement,
+  NumberFieldInput,
+} from "@/components/ui/number-field";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { RetryPolicy } from "@/lib/ipc/types";
 import { backoffMsToSeconds, backoffSecondsToMs } from "@/lib/retry-backoff";
@@ -22,17 +28,6 @@ type SettingsRuntimeSectionProps = {
   retryPolicyError?: Error | null;
 };
 
-function parsePositiveInt(value: string): number | null {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-  if (parsed < 0) {
-    return null;
-  }
-  return parsed;
-}
-
 export function SettingsRuntimeSection({
   maxConcurrency,
   retryPolicy,
@@ -42,58 +37,51 @@ export function SettingsRuntimeSection({
   maxConcurrencyError = null,
   retryPolicyError = null,
 }: SettingsRuntimeSectionProps) {
-  const [maxConcurrencyInput, setMaxConcurrencyInput] = useState(String(maxConcurrency));
-  const [maxAttemptsInput, setMaxAttemptsInput] = useState(String(retryPolicy.maxAttempts));
-  const [backoffSecondsInput, setBackoffSecondsInput] = useState(
-    String(backoffMsToSeconds(retryPolicy.backoffMs)),
+  const [maxConcurrencyValue, setMaxConcurrencyValue] = useState(maxConcurrency);
+  const [maxAttemptsValue, setMaxAttemptsValue] = useState(retryPolicy.maxAttempts);
+  const [backoffSecondsValue, setBackoffSecondsValue] = useState(
+    backoffMsToSeconds(retryPolicy.backoffMs),
   );
   const [maxConcurrencyInputError, setMaxConcurrencyInputError] = useState<string | null>(null);
   const [retryPolicyInputError, setRetryPolicyInputError] = useState<string | null>(null);
 
   useEffect(() => {
-    setMaxConcurrencyInput(String(maxConcurrency));
+    setMaxConcurrencyValue(maxConcurrency);
   }, [maxConcurrency]);
 
   useEffect(() => {
-    setMaxAttemptsInput(String(retryPolicy.maxAttempts));
-    setBackoffSecondsInput(String(backoffMsToSeconds(retryPolicy.backoffMs)));
+    setMaxAttemptsValue(retryPolicy.maxAttempts);
+    setBackoffSecondsValue(backoffMsToSeconds(retryPolicy.backoffMs));
   }, [retryPolicy.backoffMs, retryPolicy.maxAttempts]);
 
-  const maxConcurrencyDirty = Number.parseInt(maxConcurrencyInput, 10) !== maxConcurrency;
+  const maxConcurrencyDirty = maxConcurrencyValue !== maxConcurrency;
   const retryPolicyDirty =
-    Number.parseInt(maxAttemptsInput, 10) !== retryPolicy.maxAttempts ||
-    Number.parseInt(backoffSecondsInput, 10) !== backoffMsToSeconds(retryPolicy.backoffMs);
+    maxAttemptsValue !== retryPolicy.maxAttempts ||
+    backoffSecondsValue !== backoffMsToSeconds(retryPolicy.backoffMs);
 
   const handleSaveMaxConcurrency = async (): Promise<void> => {
-    const parsed = parsePositiveInt(maxConcurrencyInput);
-    if (parsed == null || parsed < 1) {
+    if (maxConcurrencyValue < 1) {
       setMaxConcurrencyInputError("Max concurrency must be at least 1");
       return;
     }
 
     setMaxConcurrencyInputError(null);
     try {
-      await onSaveMaxConcurrency(parsed);
+      await onSaveMaxConcurrency(maxConcurrencyValue);
     } catch {
       // api error surfaced via maxConcurrencyError
     }
   };
 
   const handleSaveRetryPolicy = async (): Promise<void> => {
-    const maxAttempts = parsePositiveInt(maxAttemptsInput);
-    const backoffSeconds = parsePositiveInt(backoffSecondsInput);
-    if (maxAttempts == null || maxAttempts < 1) {
+    if (maxAttemptsValue < 1) {
       setRetryPolicyInputError("Max attempts must be at least 1");
-      return;
-    }
-    if (backoffSeconds == null) {
-      setRetryPolicyInputError("Backoff must be a number of seconds");
       return;
     }
 
     setRetryPolicyInputError(null);
     try {
-      await onSaveRetryPolicy(maxAttempts, backoffSecondsToMs(backoffSeconds));
+      await onSaveRetryPolicy(maxAttemptsValue, backoffSecondsToMs(backoffSecondsValue));
     } catch {
       // api error surfaced via retryPolicyError
     }
@@ -116,16 +104,23 @@ export function SettingsRuntimeSection({
             description="Maximum number of agent runs dispatched at once."
             htmlFor="max-concurrency"
           >
-            <Input
+            <NumberField
               id="max-concurrency"
-              type="number"
+              value={maxConcurrencyValue}
               min={1}
-              step={1}
-              value={maxConcurrencyInput}
-              onChange={(event) => setMaxConcurrencyInput(event.target.value)}
               disabled={isPending}
-              className="font-mono tabular-nums"
-            />
+              onValueChange={(next) => {
+                if (next != null) {
+                  setMaxConcurrencyValue(next);
+                }
+              }}
+            >
+              <NumberFieldGroup>
+                <NumberFieldDecrement />
+                <NumberFieldInput className="font-mono" />
+                <NumberFieldIncrement />
+              </NumberFieldGroup>
+            </NumberField>
           </FormRow>
           {maxConcurrencyInputError ? (
             <p className="text-sm text-destructive">{maxConcurrencyInputError}</p>
@@ -155,31 +150,45 @@ export function SettingsRuntimeSection({
                 <Label htmlFor="retry-max-attempts" className="text-xs">
                   Max attempts
                 </Label>
-                <Input
+                <NumberField
                   id="retry-max-attempts"
-                  type="number"
+                  value={maxAttemptsValue}
                   min={1}
-                  step={1}
-                  value={maxAttemptsInput}
-                  onChange={(event) => setMaxAttemptsInput(event.target.value)}
                   disabled={isPending}
-                  className="font-mono tabular-nums"
-                />
+                  onValueChange={(next) => {
+                    if (next != null) {
+                      setMaxAttemptsValue(next);
+                    }
+                  }}
+                >
+                  <NumberFieldGroup>
+                    <NumberFieldDecrement />
+                    <NumberFieldInput className="font-mono" />
+                    <NumberFieldIncrement />
+                  </NumberFieldGroup>
+                </NumberField>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="retry-backoff-seconds" className="text-xs">
                   Backoff (seconds)
                 </Label>
-                <Input
+                <NumberField
                   id="retry-backoff-seconds"
-                  type="number"
+                  value={backoffSecondsValue}
                   min={0}
-                  step={1}
-                  value={backoffSecondsInput}
-                  onChange={(event) => setBackoffSecondsInput(event.target.value)}
                   disabled={isPending}
-                  className="font-mono tabular-nums"
-                />
+                  onValueChange={(next) => {
+                    if (next != null) {
+                      setBackoffSecondsValue(next);
+                    }
+                  }}
+                >
+                  <NumberFieldGroup>
+                    <NumberFieldDecrement />
+                    <NumberFieldInput className="font-mono" />
+                    <NumberFieldIncrement />
+                  </NumberFieldGroup>
+                </NumberField>
               </div>
             </div>
           </FormRow>

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 
-import { XMarkIcon } from "@/components/ui/hero-icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { XMarkIcon } from "@/components/ui/hero-icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -59,9 +59,7 @@ export function TaskTagsField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>Tags</Label>
-      <p className="text-xs text-muted-foreground">
-        Add labels to group and filter tasks later.
-      </p>
+      <p className="text-xs text-muted-foreground">Add labels to group and filter tasks later.</p>
       <div className="flex gap-2">
         <Input
           id={id}
@@ -76,7 +74,12 @@ export function TaskTagsField({
           placeholder="Add a tag"
           disabled={disabled}
         />
-        <Button type="button" variant="outline" disabled={disabled || !input.trim()} onClick={addTag}>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled || !input.trim()}
+          onClick={addTag}
+        >
           Add
         </Button>
       </div>

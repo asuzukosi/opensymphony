@@ -1,24 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+
 import { ProjectFormDialog } from "@/components/project/project-form-dialog";
+import {
+  Autocomplete,
+  AutocompleteContent,
+  AutocompleteEmpty,
+  AutocompleteInput,
+  AutocompleteItem,
+  AutocompleteList,
+} from "@/components/ui/autocomplete";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  CheckIcon,
-  ChevronsUpDownIcon,
-  FolderIcon,
-  PlusIcon,
-} from "@/components/ui/hero-icons";
+import { PlusIcon } from "@/components/ui/hero-icons";
 import { useActiveProject } from "@/contexts/active-project-context";
-import { cn } from "@/lib/utils";
+
+type ProjectOption = {
+  id: string;
+  value: string;
+  name: string;
+};
 
 export function ProjectSwitcher() {
   const {
@@ -37,9 +38,18 @@ export function ProjectSwitcher() {
   const [dialogMode, setDialogMode] = useState<"create" | "edit" | null>(null);
 
   const activeProject = projects?.find((project) => project.id === projectId);
-  const label = isLoading ? "Loading projects..." : (activeProject?.name ?? "Select project");
   const dialogOpen = dialogMode != null;
   const isPending = isMutatingProject;
+
+  const items = useMemo<ProjectOption[]>(
+    () =>
+      (projects ?? []).map((project) => ({
+        id: project.id,
+        value: project.name,
+        name: project.name,
+      })),
+    [projects],
+  );
 
   const closeDialog = (): void => {
     setDialogMode(null);
@@ -47,66 +57,65 @@ export function ProjectSwitcher() {
   };
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isLoading || isPending}
-            className="h-9 w-full justify-between gap-2 border-sidebar-border bg-sidebar px-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <FolderIcon />
-              <span className="truncate text-left">{label}</span>
-            </span>
-            <ChevronsUpDownIcon className="h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
-          <DropdownMenuLabel>Projects</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {!isLoading && projects?.length === 0 ? (
-            <DropdownMenuItem disabled>No projects</DropdownMenuItem>
-          ) : null}
-          {projects?.map((project) => {
-            const isActive = project.id === projectId;
+    <div className="space-y-2">
+      <Autocomplete
+        items={items}
+        value={activeProject?.name ?? ""}
+        disabled={isLoading || isPending}
+        onValueChange={(next) => {
+          const match = items.find((item) => item.value === next || item.name === next);
+          if (match) {
+            void setProjectId(match.id);
+          }
+        }}
+      >
+        <AutocompleteInput
+          placeholder={isLoading ? "Loading projects..." : "Select project"}
+          className="h-9 border-sidebar-border bg-sidebar"
+        />
+        <AutocompleteContent>
+          <AutocompleteEmpty>No projects found.</AutocompleteEmpty>
+          <AutocompleteList>
+            {(item) => (
+              <AutocompleteItem key={item.id} value={item.value}>
+                {item.name}
+              </AutocompleteItem>
+            )}
+          </AutocompleteList>
+        </AutocompleteContent>
+      </Autocomplete>
 
-            return (
-              <DropdownMenuItem
-                key={project.id}
-                disabled={isPending}
-                onSelect={() => void setProjectId(project.id)}
-              >
-                <span className="truncate">{project.name}</span>
-                <CheckIcon className={cn("ml-auto h-4 w-4", isActive ? "opacity-100" : "opacity-0")} />
-              </DropdownMenuItem>
-            );
-          })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 flex-1"
+          disabled={isPending}
+          onClick={() => {
+            resetProjectMutation();
+            setDialogMode("create");
+          }}
+        >
+          <PlusIcon className="size-3.5" />
+          New
+        </Button>
+        {activeProject ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8"
             disabled={isPending}
-            onSelect={() => {
+            onClick={() => {
               resetProjectMutation();
-              setDialogMode("create");
+              setDialogMode("edit");
             }}
           >
-            <PlusIcon className="mr-2 h-4 w-4" />
-            New project
-          </DropdownMenuItem>
-          {activeProject ? (
-            <DropdownMenuItem
-              disabled={isPending}
-              onSelect={() => {
-                resetProjectMutation();
-                setDialogMode("edit");
-              }}
-            >
-              Edit project
-            </DropdownMenuItem>
-          ) : null}
-        </DropdownMenuContent>
-      </DropdownMenu>
+            Edit
+          </Button>
+        ) : null}
+      </div>
 
       <ProjectFormDialog
         open={dialogOpen}
@@ -135,6 +144,6 @@ export function ProjectSwitcher() {
             : undefined
         }
       />
-    </>
+    </div>
   );
 }

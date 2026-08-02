@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 
-import { Label } from "@/components/ui/label";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
 type FormRowProps = {
@@ -13,19 +19,21 @@ type FormRowProps = {
 
 export function FormRow({ label, description, htmlFor, children, className }: FormRowProps) {
   return (
-    <div
-      className={cn(
-        "grid gap-4 lg:grid-cols-[minmax(12rem,16rem)_minmax(0,18rem)] lg:items-start lg:gap-8",
-        className,
-      )}
-    >
-      <div className="min-w-0 space-y-1 text-xs">
-        <Label htmlFor={htmlFor}>{label}</Label>
-        {description ? (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        ) : null}
-      </div>
-      <div className="min-w-0">{children}</div>
-    </div>
+    <FieldGroup>
+      <Field
+        orientation="responsive"
+        className={cn("@md/field-group:items-start @md/field-group:gap-8", className)}
+      >
+        <FieldContent className="min-w-0 @md/field-group:max-w-64">
+          <FieldLabel htmlFor={htmlFor} className="text-xs">
+            {label}
+          </FieldLabel>
+          {description ? (
+            <FieldDescription className="text-xs">{description}</FieldDescription>
+          ) : null}
+        </FieldContent>
+        <div className="min-w-0 @md/field-group:max-w-72">{children}</div>
+      </Field>
+    </FieldGroup>
   );
 }

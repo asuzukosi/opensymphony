@@ -19,7 +19,7 @@ export function TaskCommentsList({ comments }: TaskCommentsListProps) {
           className="min-w-0 space-y-1 border-b border-border/40 pb-4 last:border-0 last:pb-0"
         >
           <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-            <span className="min-w-0 break-words">{comment.author ?? "Unknown author"}</span>
+            <span className="min-w-0 wrap-break-word">{comment.author ?? "Unknown author"}</span>
             <time className="shrink-0" dateTime={comment.createdAt}>
               {formatDateTime(comment.createdAt)}
             </time>

@@ -41,7 +41,9 @@ export function TaskAddCommentForm({
   return (
     <form className="space-y-3" onSubmit={(event) => void handleSubmit(event)}>
       <div className="grid gap-2">
-        <Label htmlFor="task-comment-body" className="text-xs">Add comment</Label>
+        <Label htmlFor="task-comment-body" className="text-xs">
+          Add comment
+        </Label>
         <Textarea
           id="task-comment-body"
           value={body}

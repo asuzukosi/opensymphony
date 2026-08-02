@@ -13,7 +13,7 @@ import {
 } from "@/hooks/use-task-permissions";
 import { formatDateTime } from "@/lib/datetime";
 import { DEFAULT_IPC_POLL_INTERVAL_MS } from "@/lib/ipc/hooks";
-import type { TaskDetailRunAttempt, PendingPermission, PermissionDecision } from "@/lib/ipc/types";
+import type { PendingPermission, PermissionDecision, TaskDetailRunAttempt } from "@/lib/ipc/types";
 import { cn, wrapText } from "@/lib/utils";
 
 type TaskPermissionsPanelProps = {
@@ -59,12 +59,16 @@ function PermissionItem({
               Awaiting decision
             </Badge>
           </div>
-          <dl className={cn("grid gap-1 text-[10px] text-muted-foreground sm:grid-cols-2", wrapText)}>
+          <dl
+            className={cn("grid gap-1 text-[10px] text-muted-foreground sm:grid-cols-2", wrapText)}
+          >
             <div className="sm:col-span-2">
               <dt className="sr-only">Session</dt>
               <dd>
                 Session{" "}
-                <span className="font-mono text-foreground">{truncateSessionId(permission.sessionId)}</span>
+                <span className="font-mono text-foreground">
+                  {truncateSessionId(permission.sessionId)}
+                </span>
               </dd>
             </div>
             <div className="sm:col-span-2">
@@ -117,7 +121,10 @@ export function TaskPermissionsPanel({ taskId, attempts }: TaskPermissionsPanelP
   const [resolvingDecision, setResolvingDecision] = useState<PermissionDecision | null>(null);
   const [failedResolve, setFailedResolve] = useState(false);
 
-  const handleResolve = async (permissionId: string, decision: PermissionDecision): Promise<void> => {
+  const handleResolve = async (
+    permissionId: string,
+    decision: PermissionDecision,
+  ): Promise<void> => {
     resetResolve();
     setFailedResolve(false);
     setResolvingId(permissionId);

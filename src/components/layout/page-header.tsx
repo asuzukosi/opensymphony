@@ -1,6 +1,6 @@
-import type { ComponentType, ReactNode, SVGProps } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import type { ComponentType, ReactNode, SVGProps } from "react";
 
 type PageHeaderProps = {
   eyebrow?: string;
@@ -40,7 +40,9 @@ export function PageHeader({
             </>
           ) : (
             <>
-              <h1 className={cn("text-base font-medium tracking-tight", titleClassName)}>{title}</h1>
+              <h1 className={cn("text-base font-medium tracking-tight", titleClassName)}>
+                {title}
+              </h1>
               {description ? (
                 <p className="max-w-lg text-xs text-muted-foreground">{description}</p>
               ) : null}
